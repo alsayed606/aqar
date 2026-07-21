@@ -26,6 +26,31 @@ export const UNIT_STATUS_TONE: Record<string, string> = {
   out_of_service: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
 };
 
+export const CONTRACT_STATUS_AR: Record<string, string> = {
+  draft: "مسودة",
+  active: "نشط",
+  expired: "منتهٍ",
+  terminated: "مُنهى",
+  cancelled: "ملغى",
+};
+
+export const CONTRACT_STATUS_TONE: Record<string, string> = {
+  draft: "bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300",
+  active: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+  expired: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  terminated: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+  cancelled: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+};
+
+export const FREQUENCY_AR: Record<string, string> = {
+  monthly: "شهري",
+  quarterly: "ربع سنوي",
+  semi_annual: "نصف سنوي",
+  annual: "سنوي",
+  one_time: "دفعة واحدة",
+  custom: "مخصّص",
+};
+
 export const ROLE_AR: Record<string, string> = {
   owner: "مالك",
   admin: "مدير",
