@@ -1,0 +1,1361 @@
+[
+  {
+    "n": 1,
+    "url": "https://amlak.one/",
+    "status": 200,
+    "finalUrl": "https://amlak.one/",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "private, no-cache, no-store, max-age=0, must-revalidate",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "a1e79f71fbea7914-DMM",
+      "content-encoding": "zstd",
+      "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' https: wss:; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Tue, 21 Jul 2026 04:57:05 GMT",
+      "link": "<https://amlak.one/>; rel=\"alternate\"; hreflang=\"ar\", <https://amlak.one/en>; rel=\"alternate\"; hreflang=\"en\", <https://amlak.one/>; rel=\"alternate\"; hreflang=\"x-default\"\n</_next/static/media/vazirmatn_arabic-s.p.369bbc1f.woff2>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", </_next/static/media/vazirmatn_latin-s.p.99bb5c83.woff2>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", </_next/static/media/vazirmatn_latin_ext-s.p.9d26c5da.woff2>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", </_next/static/chunks/dffc13871507575b.css>; rel=preload; as=\"style\", </_next/static/chunks/3813ef05deaa36e0.css>; rel=preload; as=\"style\"",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "referrer-policy": "strict-origin-when-cross-origin\nstrict-origin-when-cross-origin",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=JZzsS7ww1vmmlcZCIWeg6B%2BP5Zk%2FcFVD4MMp39GCbVLfkOQ33Fi8d%2FStyAikueiddR1pMJ4Qpo2ayMYHDoIEWmPdTcC3dgGVqKvhC5iIqzz3UC%2FDbikrS1OabJhQr3M8NO7H1EWXDK0%3D\"}]}",
+      "server": "cloudflare",
+      "server-timing": "cfCacheStatus;desc=\"DYNAMIC\"\ncfEdge;dur=11,cfOrigin;dur=73",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding",
+      "x-content-type-options": "nosniff\nnosniff",
+      "x-frame-options": "SAMEORIGIN\nSAMEORIGIN",
+      "x-middleware-rewrite": "/ar",
+      "x-powered-by": "Next.js",
+      "x-xss-protection": "1; mode=block"
+    },
+    "slug": "home",
+    "title": "أملاك — منصة إدارة العقارات الذكية | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "منصة متكاملة لإدارة العقارات ومزودي الخدمات وشركات التسويق في المملكة العربية السعودية",
+      "ogTitle": "أملاك — منصة إدارة العقارات الذكية",
+      "ogDescription": "منصة متكاملة لإدارة العقارات ومزودي الخدمات وشركات التسويق في المملكة العربية السعودية",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/"
+      }
+    ],
+    "h": [
+      "H1: أدِر عقاراتك بكفاءة لا مثيل لها",
+      "H2: مصمّم لكل قطاعات العقار",
+      "H3: شركات العقارات",
+      "H3: مزودو الخدمات",
+      "H3: شركات التسويق",
+      "H2: كل ما تحتاجه في مكان واحد",
+      "H3: إدارة العقارات والوحدات",
+      "H3: عقود الإيجار الذكية",
+      "H3: نظام الحجوزات",
+      "H3: معارض الوحدات العامة",
+      "H3: إدارة طلبات الخدمة",
+      "H3: تقارير وتحليلات متقدمة",
+      "H2: عملك بالكامل في نافذة واحدة",
+      "H2: ماذا يقول عملاؤنا",
+      "H2: جاهز لتحويل إدارة عقاراتك؟",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 3133,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 2,
+    "url": "https://amlak.one/",
+    "status": 200,
+    "finalUrl": "https://amlak.one/",
+    "skipped": "duplicate-after-redirect"
+  },
+  {
+    "n": 3,
+    "url": "https://amlak.one/en",
+    "status": 200,
+    "finalUrl": "https://amlak.one/en",
+    "slug": "en",
+    "title": "Amlak — The Smart Property Management Platform | أملاك",
+    "lang": "en",
+    "dir": "ltr",
+    "meta": {
+      "description": "An integrated platform for managing real estate, service providers, and marketing companies in Saudi Arabia",
+      "ogTitle": "Amlak — The Smart Property Management Platform",
+      "ogDescription": "An integrated platform for managing real estate, service providers, and marketing companies in Saudi Arabia",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/en",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/"
+      }
+    ],
+    "h": [
+      "H1: Manage Your Properties with Unmatched Efficiency",
+      "H2: Built for Every Real Estate Sector",
+      "H3: Real Estate Companies",
+      "H3: Service Providers",
+      "H3: Marketing Companies",
+      "H2: Everything You Need in One Place",
+      "H3: Property & Unit Management",
+      "H3: Smart Lease Contracts",
+      "H3: Reservations System",
+      "H3: Public Unit Showcases",
+      "H3: Service Request Management",
+      "H3: Advanced Reports & Analytics",
+      "H2: The whole operation, in one window",
+      "H2: What Our Customers Say",
+      "H2: Ready to Transform Your Property Management?",
+      "H3: Solutions",
+      "H3: Company",
+      "H3: Legal",
+      "H3: Follow Us"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 3942,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 4,
+    "url": "https://amlak.one/browse",
+    "status": 200,
+    "finalUrl": "https://amlak.one/browse",
+    "slug": "browse",
+    "title": "تصفّح العقارات | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "اعثر على منزلك أو مكتبك أو إقامتك القادمة في جميع أنحاء المملكة.",
+      "ogTitle": "تصفّح العقارات",
+      "ogDescription": "اعثر على منزلك أو مكتبك أو إقامتك القادمة في جميع أنحاء المملكة.",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/browse",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/browse"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/browse"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/browse"
+      }
+    ],
+    "h": [
+      "H1: تصفّح العقارات",
+      "H3: 1",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 944,
+    "thirdPartyHosts": [
+      "",
+      "static.cloudflareinsights.com",
+      "tile.openstreetmap.org"
+    ]
+  },
+  {
+    "n": 5,
+    "url": "https://amlak.one/en/browse",
+    "status": 200,
+    "finalUrl": "https://amlak.one/en/browse",
+    "slug": "en_browse",
+    "title": "Browse properties | أملاك",
+    "lang": "en",
+    "dir": "ltr",
+    "meta": {
+      "description": "Find your next home, office, or stay across Saudi Arabia.",
+      "ogTitle": "Browse properties",
+      "ogDescription": "Find your next home, office, or stay across Saudi Arabia.",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/en/browse",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/browse"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/browse"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/browse"
+      }
+    ],
+    "h": [
+      "H1: Browse properties",
+      "H3: 1",
+      "H3: Solutions",
+      "H3: Company",
+      "H3: Legal",
+      "H3: Follow Us"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1011,
+    "thirdPartyHosts": [
+      "",
+      "static.cloudflareinsights.com",
+      "tile.openstreetmap.org"
+    ]
+  },
+  {
+    "n": 6,
+    "url": "https://amlak.one/en/unit/1-1",
+    "status": 500,
+    "finalUrl": "https://amlak.one/en/unit/1-1",
+    "slug": "en_unit_1-1",
+    "title": "",
+    "lang": null,
+    "dir": null,
+    "meta": {},
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 21,
+    "thirdPartyHosts": []
+  },
+  {
+    "n": 7,
+    "url": "https://amlak.one/pricing",
+    "status": 200,
+    "finalUrl": "https://amlak.one/pricing",
+    "slug": "pricing",
+    "title": "الأسعار والخطط — أملاك | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "اختر الخطة المناسبة لعملك — باقات مرنة لشركات العقارات ومزودي الخدمات وشركات التسويق",
+      "ogTitle": "الأسعار والخطط — أملاك",
+      "ogDescription": "اختر الخطة المناسبة لعملك — باقات مرنة لشركات العقارات ومزودي الخدمات وشركات التسويق",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/pricing",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/pricing"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/pricing"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/pricing"
+      }
+    ],
+    "h": [
+      "H2: خطط بسيطة وشفافة",
+      "H2: الأسئلة الشائعة",
+      "H2: جاهز لتحويل إدارة عقاراتك؟",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1786,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 8,
+    "url": "https://amlak.one/en/pricing",
+    "status": 200,
+    "finalUrl": "https://amlak.one/en/pricing",
+    "slug": "en_pricing",
+    "title": "Pricing & Plans — Amlak | أملاك",
+    "lang": "en",
+    "dir": "ltr",
+    "meta": {
+      "description": "Choose the right plan for your business — flexible packages for real estate companies, service providers, and marketing firms",
+      "ogTitle": "Pricing & Plans — Amlak",
+      "ogDescription": "Choose the right plan for your business — flexible packages for real estate companies, service providers, and marketing firms",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/en/pricing",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/pricing"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/pricing"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/pricing"
+      }
+    ],
+    "h": [
+      "H2: Simple and Transparent Plans",
+      "H2: Frequently Asked Questions",
+      "H2: Ready to Transform Your Property Management?",
+      "H3: Solutions",
+      "H3: Company",
+      "H3: Legal",
+      "H3: Follow Us"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 2177,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 9,
+    "url": "https://amlak.one/about",
+    "status": 200,
+    "finalUrl": "https://amlak.one/about",
+    "slug": "about",
+    "title": "من نحن — أملاك | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "تعرّف على قصة أملاك ورؤيتها في تحويل إدارة العقارات",
+      "ogTitle": "من نحن — أملاك",
+      "ogDescription": "تعرّف على قصة أملاك ورؤيتها في تحويل إدارة العقارات",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/about",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/about"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/about"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/about"
+      }
+    ],
+    "h": [
+      "H1: نبنى للمحترفين الذين يديرون العقارات بجدية",
+      "H2: قيمنا",
+      "H3: البساطة أولاً",
+      "H3: موثوقية لا تتزعزع",
+      "H3: بيانات آمنة دائماً",
+      "H3: دعم حقيقي",
+      "H3: تطوير مستمر",
+      "H3: محلية بامتياز",
+      "H2: جاهز لتحويل إدارة عقاراتك؟",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1344,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 10,
+    "url": "https://amlak.one/en/about",
+    "status": 200,
+    "finalUrl": "https://amlak.one/en/about",
+    "slug": "en_about",
+    "title": "About Us — Amlak | أملاك",
+    "lang": "en",
+    "dir": "ltr",
+    "meta": {
+      "description": "Learn about Amlak's story and vision for transforming property management",
+      "ogTitle": "About Us — Amlak",
+      "ogDescription": "Learn about Amlak's story and vision for transforming property management",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/en/about",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/about"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/about"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/about"
+      }
+    ],
+    "h": [
+      "H1: Built for Professionals Who Take Property Management Seriously",
+      "H2: Our Values",
+      "H3: Simplicity First",
+      "H3: Unwavering Reliability",
+      "H3: Always Secure",
+      "H3: Real Support",
+      "H3: Continuous Improvement",
+      "H3: Built for Saudi Arabia",
+      "H2: Ready to Transform Your Property Management?",
+      "H3: Solutions",
+      "H3: Company",
+      "H3: Legal",
+      "H3: Follow Us"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1717,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 11,
+    "url": "https://amlak.one/real-estate",
+    "status": 200,
+    "finalUrl": "https://amlak.one/real-estate",
+    "slug": "real-estate",
+    "title": "أملاك للعقارات — إدارة محفظتك العقارية بذكاء | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "إدارة كاملة للوحدات والمستأجرين والعقود والتقارير المالية",
+      "ogTitle": "أملاك للعقارات — إدارة محفظتك العقارية بذكاء",
+      "ogDescription": "إدارة كاملة للوحدات والمستأجرين والعقود والتقارير المالية",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/real-estate",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/real-estate"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/real-estate"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/real-estate"
+      }
+    ],
+    "h": [
+      "H1: إدارة محفظتك العقارية بكفاءة لا مثيل لها",
+      "H2: تحديات تواجهها شركات العقارات",
+      "H2: ما يقدمه أملاك لشركتك العقارية",
+      "H3: إدارة الوحدات والعقارات",
+      "H3: عقود الإيجار والتجديد",
+      "H3: تتبع المدفوعات",
+      "H3: إدارة المستأجرين",
+      "H3: تقارير مالية",
+      "H3: نظام الحجوزات",
+      "H2: جاهز لتحويل إدارة عقاراتك؟",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1263,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 12,
+    "url": "https://amlak.one/en/real-estate",
+    "status": 200,
+    "finalUrl": "https://amlak.one/en/real-estate",
+    "slug": "en_real-estate",
+    "title": "Amlak for Real Estate — Manage Your Portfolio Intelligently | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Complete management of units, tenants, contracts, and financial reports",
+      "ogTitle": "Amlak for Real Estate — Manage Your Portfolio Intelligently",
+      "ogDescription": "Complete management of units, tenants, contracts, and financial reports",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/en/real-estate",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/real-estate"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/real-estate"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/real-estate"
+      }
+    ],
+    "h": [
+      "H1: Manage Your Real Estate Portfolio with Unmatched Efficiency",
+      "H2: Challenges Facing Real Estate Companies",
+      "H2: What Amlak Offers Your Real Estate Company",
+      "H3: Unit & Property Management",
+      "H3: Lease Contracts & Renewal",
+      "H3: Payment Tracking",
+      "H3: Tenant Management",
+      "H3: Financial Reports",
+      "H3: Reservations System",
+      "H2: Ready to Transform Your Property Management?",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1557,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 13,
+    "url": "https://amlak.one/service-providers",
+    "status": 200,
+    "finalUrl": "https://amlak.one/service-providers",
+    "slug": "service-providers",
+    "title": "أملاك للخدمات — إدارة طلبات الخدمة والعملاء | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "تنظيم الطلبات والفواتير وإدارة العملاء بكفاءة عالية",
+      "ogTitle": "أملاك للخدمات — إدارة طلبات الخدمة والعملاء",
+      "ogDescription": "تنظيم الطلبات والفواتير وإدارة العملاء بكفاءة عالية",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/service-providers",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/service-providers"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/service-providers"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/service-providers"
+      }
+    ],
+    "h": [
+      "H1: أدِر طلبات الخدمة وعملاءك باحترافية",
+      "H2: تحديات مزودي الخدمات",
+      "H2: ما يقدمه أملاك لمزود الخدمات",
+      "H3: صندوق وارد الطلبات",
+      "H3: إدارة المنتجات والخدمات",
+      "H3: الفواتير والمدفوعات",
+      "H3: قاعدة العملاء",
+      "H3: تقارير الأداء",
+      "H3: التواصل مع شركات العقارات",
+      "H2: جاهز لتحويل إدارة عقاراتك؟",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1229,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 14,
+    "url": "https://amlak.one/en/service-providers",
+    "status": 200,
+    "finalUrl": "https://amlak.one/en/service-providers",
+    "slug": "en_service-providers",
+    "title": "Amlak for Services — Manage Service Requests and Clients | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Organize requests, invoices, and client management with high efficiency",
+      "ogTitle": "Amlak for Services — Manage Service Requests and Clients",
+      "ogDescription": "Organize requests, invoices, and client management with high efficiency",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/en/service-providers",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/service-providers"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/service-providers"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/service-providers"
+      }
+    ],
+    "h": [
+      "H1: Manage Service Requests and Clients Professionally",
+      "H2: Challenges for Service Providers",
+      "H2: What Amlak Offers Service Providers",
+      "H3: Request Inbox",
+      "H3: Product & Service Management",
+      "H3: Invoices & Payments",
+      "H3: Client Database",
+      "H3: Performance Reports",
+      "H3: Communication with Real Estate Companies",
+      "H2: Ready to Transform Your Property Management?",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1484,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 15,
+    "url": "https://amlak.one/marketing",
+    "status": 200,
+    "finalUrl": "https://amlak.one/marketing",
+    "slug": "marketing",
+    "title": "أملاك للتسويق — معارض الوحدات وعقود التسويق | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "معارض وحدات تفاعلية وإدارة عقود التسويق",
+      "ogTitle": "أملاك للتسويق — معارض الوحدات وعقود التسويق",
+      "ogDescription": "معارض وحدات تفاعلية وإدارة عقود التسويق",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/marketing",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/marketing"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/marketing"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/marketing"
+      }
+    ],
+    "h": [
+      "H1: معارض وحدات تفاعلية تبيع نيابةً عنك",
+      "H2: المعرض العام التفاعلي",
+      "H2: تحديات شركات التسويق العقاري",
+      "H2: ما يقدمه أملاك لشركة التسويق",
+      "H3: معارض وحدات تفاعلية",
+      "H3: نظام طلبات المستأجرين",
+      "H3: عقود التسويق",
+      "H3: لوحة تحكم التسويق",
+      "H3: مشاركة المعارض",
+      "H3: تقارير التحويل",
+      "H2: جاهز لتحويل إدارة عقاراتك؟",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1479,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 16,
+    "url": "https://amlak.one/en/marketing",
+    "status": 200,
+    "finalUrl": "https://amlak.one/en/marketing",
+    "slug": "en_marketing",
+    "title": "Amlak for Marketing — Unit Showcases and Marketing Contracts | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Interactive unit showcases and marketing contract management",
+      "ogTitle": "Amlak for Marketing — Unit Showcases and Marketing Contracts",
+      "ogDescription": "Interactive unit showcases and marketing contract management",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/en/marketing",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/marketing"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/marketing"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/marketing"
+      }
+    ],
+    "h": [
+      "H1: Interactive Unit Showcases That Sell on Your Behalf",
+      "H2: Interactive Public Showcase",
+      "H2: Challenges for Real Estate Marketing Companies",
+      "H2: What Amlak Offers Marketing Companies",
+      "H3: Interactive Unit Showcases",
+      "H3: Tenant Request System",
+      "H3: Marketing Contracts",
+      "H3: Marketing Dashboard",
+      "H3: Showcase Sharing",
+      "H3: Conversion Reports",
+      "H2: Ready to Transform Your Property Management?",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1861,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 17,
+    "url": "https://amlak.one/contact",
+    "status": 200,
+    "finalUrl": "https://amlak.one/contact",
+    "slug": "contact",
+    "title": "تواصل معنا — أملاك | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "تواصل مع فريق أملاك لأي استفسار أو طلب دعم",
+      "ogTitle": "تواصل معنا — أملاك",
+      "ogDescription": "تواصل مع فريق أملاك لأي استفسار أو طلب دعم",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/contact",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/contact"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/contact"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/contact"
+      }
+    ],
+    "h": [
+      "H2: تواصل معنا",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 567,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 18,
+    "url": "https://amlak.one/en/contact",
+    "status": 200,
+    "finalUrl": "https://amlak.one/en/contact",
+    "slug": "en_contact",
+    "title": "Contact Us — Amlak | أملاك",
+    "lang": "en",
+    "dir": "ltr",
+    "meta": {
+      "description": "Reach the Amlak team for any inquiry or support request",
+      "ogTitle": "Contact Us — Amlak",
+      "ogDescription": "Reach the Amlak team for any inquiry or support request",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/en/contact",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/contact"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/contact"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/contact"
+      }
+    ],
+    "h": [
+      "H2: Contact Us",
+      "H3: Solutions",
+      "H3: Company",
+      "H3: Legal",
+      "H3: Follow Us"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 646,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 19,
+    "url": "https://amlak.one/blog",
+    "status": 200,
+    "finalUrl": "https://amlak.one/blog",
+    "slug": "blog",
+    "title": "المدونة | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "آخر الأخبار والمقالات حول إدارة العقارات في المملكة",
+      "ogTitle": "المدونة",
+      "ogDescription": "آخر الأخبار والمقالات حول إدارة العقارات في المملكة",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/blog",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/blog"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/blog"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/blog"
+      }
+    ],
+    "h": [
+      "H1: رؤى ومستجدات في إدارة الأملاك والعقارات",
+      "H2: قريباً",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 544,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 20,
+    "url": "https://amlak.one/en/blog",
+    "status": 200,
+    "finalUrl": "https://amlak.one/en/blog",
+    "slug": "en_blog",
+    "title": "Blog | أملاك",
+    "lang": "en",
+    "dir": "ltr",
+    "meta": {
+      "description": "Latest news and articles about real estate management in Saudi Arabia",
+      "ogTitle": "Blog",
+      "ogDescription": "Latest news and articles about real estate management in Saudi Arabia",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/en/blog",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/blog"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/blog"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/blog"
+      }
+    ],
+    "h": [
+      "H1: Insights and updates on property management",
+      "H2: Coming Soon",
+      "H3: Solutions",
+      "H3: Company",
+      "H3: Legal",
+      "H3: Follow Us"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 618,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 21,
+    "url": "https://amlak.one/support",
+    "status": 200,
+    "finalUrl": "https://amlak.one/support",
+    "slug": "support",
+    "title": "الدعم — أملاك | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "احصل على المساعدة من فريق أملاك — الدعم التقني، الفواتير، الأمان، والاستفسارات العامة.",
+      "ogTitle": "الدعم — أملاك",
+      "ogDescription": "احصل على المساعدة من فريق أملاك — الدعم التقني، الفواتير، الأمان، والاستفسارات العامة.",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/support",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/support"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/support"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/support"
+      }
+    ],
+    "h": [
+      "H2: نحن هنا لمساعدتك",
+      "H2: اختر الموضوع",
+      "H3: الدعم التقني",
+      "H3: الفواتير والمدفوعات",
+      "H3: الأمان والخصوصية",
+      "H3: استفسارات عامة",
+      "H2: أرسل لنا رسالة",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1058,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 22,
+    "url": "https://amlak.one/support?topic=technical",
+    "status": 200,
+    "finalUrl": "https://amlak.one/support?topic=technical",
+    "slug": "support_q_topic_technical",
+    "title": "الدعم — أملاك | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "احصل على المساعدة من فريق أملاك — الدعم التقني، الفواتير، الأمان، والاستفسارات العامة.",
+      "ogTitle": "الدعم — أملاك",
+      "ogDescription": "احصل على المساعدة من فريق أملاك — الدعم التقني، الفواتير، الأمان، والاستفسارات العامة.",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/support",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/support"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/support"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/support"
+      }
+    ],
+    "h": [
+      "H2: نحن هنا لمساعدتك",
+      "H2: اختر الموضوع",
+      "H3: الدعم التقني",
+      "H3: الفواتير والمدفوعات",
+      "H3: الأمان والخصوصية",
+      "H3: استفسارات عامة",
+      "H2: أرسل لنا رسالة",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1058,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 23,
+    "url": "https://amlak.one/support?topic=billing",
+    "status": 200,
+    "finalUrl": "https://amlak.one/support?topic=billing",
+    "slug": "support_q_topic_billing",
+    "title": "الدعم — أملاك | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "احصل على المساعدة من فريق أملاك — الدعم التقني، الفواتير، الأمان، والاستفسارات العامة.",
+      "ogTitle": "الدعم — أملاك",
+      "ogDescription": "احصل على المساعدة من فريق أملاك — الدعم التقني، الفواتير، الأمان، والاستفسارات العامة.",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/support",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/support"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/support"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/support"
+      }
+    ],
+    "h": [
+      "H2: نحن هنا لمساعدتك",
+      "H2: اختر الموضوع",
+      "H3: الدعم التقني",
+      "H3: الفواتير والمدفوعات",
+      "H3: الأمان والخصوصية",
+      "H3: استفسارات عامة",
+      "H2: أرسل لنا رسالة",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1058,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  },
+  {
+    "n": 24,
+    "url": "https://amlak.one/support?topic=security",
+    "status": 200,
+    "finalUrl": "https://amlak.one/support?topic=security",
+    "slug": "support_q_topic_security",
+    "title": "الدعم — أملاك | أملاك",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "احصل على المساعدة من فريق أملاك — الدعم التقني، الفواتير، الأمان، والاستفسارات العامة.",
+      "ogTitle": "الدعم — أملاك",
+      "ogDescription": "احصل على المساعدة من فريق أملاك — الدعم التقني، الفواتير، الأمان، والاستفسارات العامة.",
+      "ogImage": "https://amlak.one/Amlak-Icon-Black.png"
+    },
+    "canonical": "https://amlak.one/support",
+    "hreflang": [
+      {
+        "hreflang": "ar",
+        "href": "https://amlak.one/support"
+      },
+      {
+        "hreflang": "en",
+        "href": "https://amlak.one/en/support"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://amlak.one/support"
+      }
+    ],
+    "h": [
+      "H2: نحن هنا لمساعدتك",
+      "H2: اختر الموضوع",
+      "H3: الدعم التقني",
+      "H3: الفواتير والمدفوعات",
+      "H3: الأمان والخصوصية",
+      "H3: استفسارات عامة",
+      "H2: أرسل لنا رسالة",
+      "H3: حلولنا",
+      "H3: الشركة",
+      "H3: قانوني",
+      "H3: تابعنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": false,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1058,
+    "thirdPartyHosts": [
+      "static.cloudflareinsights.com"
+    ]
+  }
+]

@@ -1,0 +1,21 @@
+User-agent: *
+# Block private pages
+Disallow: /confirmation/
+Disallow: /TermsPolicy/
+Disallow: /RealStatePublic/
+Disallow: /forget-password/
+Disallow: /dashboard/
+Disallow: /properties/
+Disallow: /tasks/
+Disallow: /contacts/
+Disallow: /archive/
+Disallow: /profile/
+Disallow: /contactUs/
+Disallow: /playground/
+Disallow: /properties/
+Disallow: /PaymentStatus/
+Disallow: /login/
+# Allow pages
+Allow: /landing/
+Allow: /sitemap/
+Sitemap: https://amlak.rawaf.ai/sitemap.xml

@@ -1,0 +1,11 @@
+{
+  "server": "nginx/1.20.1",
+  "date": "Mon, 20 Jul 2026 22:20:35 GMT",
+  "content-type": "text/html",
+  "transfer-encoding": "chunked",
+  "connection": "keep-alive",
+  "last-modified": "Sun, 05 Jul 2026 10:34:45 GMT",
+  "etag": "W/\"6a4a3345-dce\"",
+  "content-encoding": "gzip",
+  "strict-transport-security": "max-age=31536000; includeSubDomains"
+}

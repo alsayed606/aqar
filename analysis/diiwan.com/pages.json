@@ -1,0 +1,765 @@
+[
+  {
+    "n": 1,
+    "url": "https://diiwan.com/",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/",
+    "headers": {
+      "connection": "keep-alive",
+      "content-encoding": "gzip",
+      "content-type": "text/html",
+      "date": "Mon, 20 Jul 2026 21:27:01 GMT",
+      "etag": "W/\"6a5cbe07-61f\"",
+      "last-modified": "Sun, 19 Jul 2026 12:07:35 GMT",
+      "server": "nginx/1.24.0 (Ubuntu)",
+      "transfer-encoding": "chunked"
+    },
+    "slug": "home",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [
+      "H1: إدارة أذكى حياة أسهل",
+      "H2: عن المنصة",
+      "H2: لماذا تختار منصتنا",
+      "H2: حل إدارة شامل",
+      "H2: أتمتة تحصيل الإيجارات",
+      "H2: رؤى مالية في الوقت الفعلي",
+      "H2: نظام طلبات صيانة مبسَّط",
+      "H2: حماية بيانات آمنة وموثوقة",
+      "H3: باقة النخبة",
+      "H3: باقة النخبة",
+      "H3: باقة النخبة",
+      "H3: باقة النخبة",
+      "H2: تواصل معنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1690,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 2,
+    "url": "https://diiwan.com/packages",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/packages",
+    "slug": "packages",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [
+      "H3: الباقة المميزة",
+      "H3: باقة ديوان",
+      "H3: باقة النخبة",
+      "H3: الباقة المميزة",
+      "H3: باقة ديوان",
+      "H3: باقة النخبة",
+      "H3: الباقة المميزة",
+      "H3: باقة ديوان",
+      "H3: باقة النخبة",
+      "H3: الباقة المميزة",
+      "H3: باقة ديوان",
+      "H3: باقة النخبة"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 1194,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 3,
+    "url": "https://diiwan.com/marketing",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/marketing",
+    "slug": "marketing",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [
+      "H1: انضم إلى برنامج التسويق الخاص بنا",
+      "H2: كيف يعمل برنامج المسوقين؟",
+      "H2: كم يمكنني أن أكسب؟",
+      "H2: متى يمكنني سحب أرباحي؟",
+      "H2: هل هناك رسوم للاشتراك؟"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 623,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 4,
+    "url": "https://diiwan.com/custom-package",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/custom-package",
+    "slug": "custom-package",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 728,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 5,
+    "url": "https://diiwan.com/terms-conditions",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/terms-conditions",
+    "slug": "terms-conditions",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 4311,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 6,
+    "url": "https://diiwan.com/help",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/help",
+    "slug": "help",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 296,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 7,
+    "url": "https://diiwan.com/pricing",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/pricing",
+    "slug": "pricing",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 272,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 8,
+    "url": "https://diiwan.com/plans",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/plans",
+    "slug": "plans",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 272,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 9,
+    "url": "https://diiwan.com/features",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/features",
+    "slug": "features",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 272,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 10,
+    "url": "https://diiwan.com/about",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/about",
+    "slug": "about",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [
+      "H2: عن المنصة",
+      "H2: لماذا تختار منصتنا",
+      "H2: حل إدارة شامل",
+      "H2: أتمتة تحصيل الإيجارات",
+      "H2: رؤى مالية في الوقت الفعلي",
+      "H2: نظام طلبات صيانة مبسَّط",
+      "H2: حماية بيانات آمنة وموثوقة"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 958,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 11,
+    "url": "https://diiwan.com/contact",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/contact",
+    "slug": "contact",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [
+      "H2: تواصل معنا"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 429,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 12,
+    "url": "https://diiwan.com/blog",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/blog",
+    "slug": "blog",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 272,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 13,
+    "url": "https://diiwan.com/faq",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/faq",
+    "slug": "faq",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 272,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 14,
+    "url": "https://diiwan.com/privacy-policy",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/privacy-policy",
+    "slug": "privacy-policy",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 272,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 15,
+    "url": "https://diiwan.com/privacy",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/privacy",
+    "slug": "privacy",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 272,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 16,
+    "url": "https://diiwan.com/terms",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/terms",
+    "slug": "terms",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 272,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 17,
+    "url": "https://diiwan.com/register",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/register",
+    "slug": "register",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [
+      "H3: أنشئ حساب جديد"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 294,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 18,
+    "url": "https://diiwan.com/signup",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/signup",
+    "slug": "signup",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 272,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 19,
+    "url": "https://diiwan.com/login",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/login",
+    "slug": "login",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [
+      "H3: تسجيل الدخول"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 325,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 20,
+    "url": "https://diiwan.com/forget-password",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/forget-password",
+    "slug": "forget-password",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [
+      "H3: هل تواجه مشكلة في تسجيل الدخول؟"
+    ],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 406,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 21,
+    "url": "https://diiwan.com/en",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/en",
+    "slug": "en",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 272,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  },
+  {
+    "n": 22,
+    "url": "https://diiwan.com/ar",
+    "status": 200,
+    "finalUrl": "https://diiwan.com/ar",
+    "slug": "ar",
+    "title": "Diiwan Amlak",
+    "lang": "ar",
+    "dir": "rtl",
+    "meta": {
+      "description": "Diiwan Property Management Software: Manage rental properties, tenants, financials, and maintenance in one place. Simplify your landlord operations with effortless tools."
+    },
+    "canonical": null,
+    "hreflang": [],
+    "h": [],
+    "fw": {
+      "next": false,
+      "nuxt": false,
+      "flutter": false,
+      "angular": false,
+      "gatsby": false,
+      "wp": false,
+      "vite": true,
+      "reactHints": false
+    },
+    "generator": null,
+    "textLength": 272,
+    "thirdPartyHosts": [
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "name": "pmsaas-datalayer-localtests",
+  "private": true,
+  "type": "module",
+  "description": "Runnable behavioural verification of the data layer against a throwaway PostgreSQL 17 (no Supabase or pgTAP required).",
+  "scripts": {
+    "verify": "node verify.mjs"
+  },
+  "dependencies": {
+    "embedded-postgres": "17.10.0-beta.17",
+    "pg": "^8.13.0"
+  }
+}
