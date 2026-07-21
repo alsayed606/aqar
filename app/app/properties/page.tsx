@@ -21,13 +21,27 @@ export default async function PropertiesPage() {
   if (!activeOrg) redirect("/app");
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("property")
-    .select("id, name, property_kind, city, district, deed_number")
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
+  const [{ data, error }, { data: ownerData }] = await Promise.all([
+    supabase
+      .from("property")
+      .select("id, name, property_kind, city, district, deed_number")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("owner")
+      .select("id, is_self, party:party_id(display_name)")
+      .is("deleted_at", null)
+      .order("is_self", { ascending: false }),
+  ]);
 
   const properties = (data ?? []) as PropertyRow[];
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const owners = (ownerData ?? []).map((o: any) => ({
+    id: o.id,
+    label: o.is_self
+      ? "المنشأة (مالك ذاتي)"
+      : (Array.isArray(o.party) ? o.party[0]?.display_name : o.party?.display_name) ?? "مالك",
+  }));
 
   return (
     <div className="space-y-6">
@@ -38,7 +52,7 @@ export default async function PropertiesPage() {
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
         <h2 className="mb-4 text-base font-semibold">إضافة عقار</h2>
-        <PropertyForm />
+        <PropertyForm owners={owners} />
       </section>
 
       {error ? (

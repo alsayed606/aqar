@@ -6,7 +6,9 @@ import { PROPERTY_KIND_AR } from "@/lib/labels";
 
 const initial: PropState = {};
 
-export function PropertyForm() {
+type OwnerOption = { id: string; label: string };
+
+export function PropertyForm({ owners = [] }: { owners?: OwnerOption[] }) {
   const [state, action, pending] = useActionState(createProperty, initial);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -28,6 +30,25 @@ export function PropertyForm() {
           className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700"
         />
       </div>
+
+      {owners.length > 0 && (
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-sm font-medium" htmlFor="owner_id">
+            المالك
+          </label>
+          <select
+            id="owner_id"
+            name="owner_id"
+            className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700"
+          >
+            {owners.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div>
         <label className="mb-1 block text-sm font-medium" htmlFor="property_kind">

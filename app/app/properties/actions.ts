@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { parseArabicNumber, parseArabicInt } from "@/lib/num";
@@ -25,19 +26,23 @@ export async function createProperty(
 
   const supabase = await createClient();
 
-  // Default owner = the organization's auto self-owner (the office managing its own record).
-  const { data: owner, error: ownerErr } = await supabase
-    .from("owner")
-    .select("id")
-    .eq("is_self", true)
-    .limit(1)
-    .maybeSingle();
-  if (ownerErr) return { error: ownerErr.message };
-  if (!owner) return { error: "تعذّر إيجاد المالك الافتراضي للمنشأة" };
+  // Owner: use the selected owner; otherwise fall back to the org's auto self-owner.
+  let owner_id = String(formData.get("owner_id") ?? "").trim();
+  if (!owner_id) {
+    const { data: self, error: selfErr } = await supabase
+      .from("owner")
+      .select("id")
+      .eq("is_self", true)
+      .limit(1)
+      .maybeSingle();
+    if (selfErr) return { error: selfErr.message };
+    if (!self) return { error: "تعذّر إيجاد المالك الافتراضي للمنشأة" };
+    owner_id = self.id;
+  }
 
   const { error } = await supabase.from("property").insert({
     org_id: activeOrg,
-    owner_id: owner.id,
+    owner_id,
     name,
     property_kind,
     city,
@@ -48,6 +53,18 @@ export async function createProperty(
 
   revalidatePath("/app/properties");
   return { ok: true };
+}
+
+// Reassign a property to a different owner (e.g., from the self-owner to a real client).
+export async function changePropertyOwner(formData: FormData) {
+  const property_id = String(formData.get("property_id") ?? "");
+  const owner_id = String(formData.get("owner_id") ?? "");
+  if (!property_id || !owner_id) redirect(`/app/properties/${property_id}`);
+  const supabase = await createClient();
+  const { error } = await supabase.from("property").update({ owner_id }).eq("id", property_id);
+  if (error) redirect(`/app/properties/${property_id}?error=${encodeURIComponent(error.message)}`);
+  revalidatePath(`/app/properties/${property_id}`);
+  redirect(`/app/properties/${property_id}`);
 }
 
 export async function createUnit(

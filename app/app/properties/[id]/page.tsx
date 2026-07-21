@@ -3,9 +3,15 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { UnitForm } from "@/components/unit-form";
+import { changePropertyOwner } from "../actions";
 import { PROPERTY_KIND_AR, UNIT_STATUS_AR, UNIT_STATUS_TONE } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const firstOf = (x: any) => (Array.isArray(x) ? x[0] : x);
+const ownerLabel = (o: any) =>
+  o?.is_self ? "المنشأة (مالك ذاتي)" : firstOf(o?.party)?.display_name ?? "مالك";
 
 type UnitRow = {
   id: string;
@@ -19,10 +25,13 @@ type UnitRow = {
 
 export default async function PropertyDetail({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const { id } = await params;
+  const { error: flashError } = await searchParams;
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
 
@@ -30,21 +39,31 @@ export default async function PropertyDetail({
 
   const { data: property } = await supabase
     .from("property")
-    .select("id, name, property_kind, city, district, deed_number")
+    .select(
+      "id, name, property_kind, city, district, deed_number, owner_id, owner:owner_id(is_self, party:party_id(display_name))",
+    )
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();
 
   if (!property) notFound();
 
-  const { data: unitData } = await supabase
-    .from("unit")
-    .select("id, unit_number, floor, area_sqm, bedrooms, bathrooms, current_status")
-    .eq("property_id", id)
-    .is("deleted_at", null)
-    .order("unit_number", { ascending: true });
+  const [{ data: unitData }, { data: ownerData }] = await Promise.all([
+    supabase
+      .from("unit")
+      .select("id, unit_number, floor, area_sqm, bedrooms, bathrooms, current_status")
+      .eq("property_id", id)
+      .is("deleted_at", null)
+      .order("unit_number", { ascending: true }),
+    supabase
+      .from("owner")
+      .select("id, is_self, party:party_id(display_name)")
+      .is("deleted_at", null)
+      .order("is_self", { ascending: false }),
+  ]);
 
   const units = (unitData ?? []) as UnitRow[];
+  const owners = ownerData ?? [];
 
   return (
     <div className="space-y-6">
@@ -54,6 +73,12 @@ export default async function PropertyDetail({
         </Link>{" "}
         / <span className="text-neutral-700 dark:text-neutral-300">{property.name}</span>
       </nav>
+
+      {flashError && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
+          {flashError}
+        </p>
+      )}
 
       <header className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
         <div className="flex items-center justify-between">
@@ -70,6 +95,36 @@ export default async function PropertyDetail({
             صك: {property.deed_number}
           </p>
         )}
+
+        <form
+          action={changePropertyOwner}
+          className="mt-4 flex flex-wrap items-end gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-800"
+        >
+          <input type="hidden" name="property_id" value={property.id} />
+          <div>
+            <label className="mb-1 block text-xs text-neutral-500" htmlFor="owner_id">
+              المالك
+            </label>
+            <select
+              id="owner_id"
+              name="owner_id"
+              defaultValue={property.owner_id}
+              className="rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
+            >
+              {owners.map((o: any) => (
+                <option key={o.id} value={o.id}>
+                  {ownerLabel(o)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
+            حفظ المالك
+          </button>
+          <span className="self-center text-xs text-neutral-400">
+            الحالي: {ownerLabel((property as any).owner)}
+          </span>
+        </form>
       </header>
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
