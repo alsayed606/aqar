@@ -21,6 +21,8 @@
 
 ### بنية — النشر على Vercel وتشغيل البيئة الحيّة
 - ضبط `NEXT_PUBLIC_SUPABASE_URL` و`NEXT_PUBLIC_SUPABASE_ANON_KEY` في مشروع Vercel `aqar` (production + preview) وإطلاق نشر جديد.
+- **الرابط الحيّ: https://aqar-eta.vercel.app** — فحص `/api/health` يُرجع `ok:true` (الاتصال بـ Supabase سليم، RLS تعمل).
+- تعطيل حماية النشر (Vercel Authentication) مؤقتاً ليكون الرابط قابلاً للعرض/المشاركة. **يُنصح بإعادة تفعيلها قبل إدخال بيانات حقيقية** (Vercel ← المشروع ← Settings ← Deployment Protection).
 - تطبيق الهجرتين `0017` و`0018` على القاعدة، وتفعيل مزوّد الجوال + رقم تجريبي — أصبح تسجيل الدخول يعمل على الرابط الحيّ.
 
 ### توثيق — دليل المستخدم وسجل التحديثات
