@@ -10,22 +10,36 @@
 -- ---------------------------------------------------------------------------
 create schema if not exists auth;
 
+-- IMPORTANT: On Supabase, auth.uid()/auth.role() already exist and are owned by
+-- supabase_auth_admin — we must NOT replace them (permission error + would clobber Supabase Auth).
+-- We only install a compatible shim when the function is ABSENT (bare Postgres / CI). Supabase's
+-- native versions read the same request.jwt.claims, so behaviour is identical either way.
 -- nullif(...,'') BEFORE ::json so an empty GUC ('' vs absent) can never raise "invalid json".
-create or replace function auth.uid() returns uuid
-language sql stable as $$
-  select nullif(
-    nullif(current_setting('request.jwt.claims', true), '')::json ->> 'sub',
-    ''
-  )::uuid;
-$$;
+do $do$
+begin
+  if not exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'auth' and p.proname = 'uid' and p.pronargs = 0
+  ) then
+    execute $fn$
+      create function auth.uid() returns uuid language sql stable as $body$
+        select nullif(nullif(current_setting('request.jwt.claims', true), '')::json ->> 'sub', '')::uuid;
+      $body$;
+    $fn$;
+  end if;
 
-create or replace function auth.role() returns text
-language sql stable as $$
-  select coalesce(
-    nullif(current_setting('request.jwt.claims', true), '')::json ->> 'role',
-    'anon'
-  );
-$$;
+  if not exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'auth' and p.proname = 'role' and p.pronargs = 0
+  ) then
+    execute $fn$
+      create function auth.role() returns text language sql stable as $body$
+        select coalesce(nullif(current_setting('request.jwt.claims', true), '')::json ->> 'role', 'anon');
+      $body$;
+    $fn$;
+  end if;
+end
+$do$;
 
 -- ---------------------------------------------------------------------------
 -- Digit folding: Arabic-Indic (٠-٩) and Extended/Persian (۰-۹) to ASCII 0-9.
