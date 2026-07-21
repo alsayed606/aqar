@@ -7,6 +7,7 @@ A Saudi property-management SaaS. This repository currently contains:
 
 | المسار | الوصف |
 |---|---|
+| [`app/`](app/), [`lib/`](lib/), [`middleware.ts`](middleware.ts) | تطبيق Next.js (App Router, RTL عربي) + عملاء Supabase (SSR) مع تمرير `x-active-org` |
 | [`SCHEMA.md`](SCHEMA.md) | توثيق طبقة البيانات (المرحلة الأولى) + القرارات المؤجّلة — Data-layer design + Deferred Decisions |
 | [`supabase/migrations/`](supabase/migrations/) | 16 هجرة SQL: المخطط، RLS، دوال SECURITY DEFINER، المصادقة/OTP، المالية، الاستيراد |
 | [`supabase/tests/`](supabase/tests/) | اختبارات pgTAP للاختبارات الإلزامية ١–١٣ |
@@ -23,13 +24,17 @@ Phase 1 — data layer only, verified on PostgreSQL 17 (all 16 migrations load c
 ## البدء | Getting started
 
 ```bash
-cp .env.example .env          # fill in Supabase keys (do not commit .env)
+# 1) Web app (Next.js)
+cp .env.example .env.local     # set NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY
+npm install
+npm run dev                    # http://localhost:3000  (see connection status on the home page)
 
-# apply migrations
-supabase db reset             # or: for f in supabase/migrations/*.sql; do psql "$DATABASE_URL" -f "$f"; done
+# 2) Database
+#    Migrations are already applied to the Supabase project. To re-apply on a fresh DB, run
+#    supabase/schema_all.sql in the SQL Editor, or apply supabase/migrations/*.sql in order.
+#    IMPORTANT: expose the `app` schema — Supabase → Settings → API → Exposed schemas → add `app`.
 
-# run tests
-supabase test db              # pgTAP (needs: create extension pgtap;)
+# 3) Tests
 cd supabase/tests/local && npm install && npm run verify   # -> 36 passed, 0 failed
 ```
 
