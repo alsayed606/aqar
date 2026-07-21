@@ -25,11 +25,17 @@ export default async function Home() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-8 px-6 py-16">
-      <header className="space-y-2">
+      <header className="space-y-3">
         <h1 className="text-4xl font-bold tracking-tight">عقار</h1>
         <p className="text-neutral-600 dark:text-neutral-400">
           منصة إدارة الأملاك — المرحلة الثانية: إعداد التطبيق وربطه بقاعدة البيانات.
         </p>
+        <a
+          href="/login"
+          className="inline-block rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-fg"
+        >
+          تسجيل الدخول
+        </a>
       </header>
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
