@@ -15,6 +15,9 @@ A Saudi property-management SaaS. This repository currently contains:
 | [`supabase/functions/import-excel/`](supabase/functions/import-excel/) | Edge Function لاستيراد Excel |
 | [`supabase/templates/`](supabase/templates/) | قوالب استيراد عربية (.xlsx) |
 | [`analysis/`](analysis/) | تحليل المنافسين (Diiwan، Rawaf Amlak، Amlak One) — [`analysis/REPORT.md`](analysis/REPORT.md) |
+| [`CHANGELOG.md`](CHANGELOG.md) | سجل تحديثات المشروع — يُحدَّث مع كل تغيير |
+| [`docs/user-guide/`](docs/user-guide/) | دليل استخدام المنصة للمستخدمين (عربي) |
+| [`docs/deployment-checklist.md`](docs/deployment-checklist.md) | قائمة مهام النشر لفريق التطوير |
 
 ## الحالة | Status
 
