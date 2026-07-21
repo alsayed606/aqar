@@ -1,8 +1,9 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { switchOrg, signOut } from "./actions";
+import { getActiveOrg } from "@/lib/supabase/active-org";
+import { switchOrg } from "./actions";
 import { CreateOrgForm } from "@/components/create-org-form";
+import { ROLE_AR } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -10,59 +11,45 @@ type MembershipRow = {
   id: string;
   org_id: string;
   role: string;
-  status: string;
   organization: { name: string } | { name: string }[] | null;
-};
-
-const ROLE_AR: Record<string, string> = {
-  owner: "مالك",
-  admin: "مدير",
-  manager: "مدير محفظة",
-  accountant: "محاسب",
-  staff: "موظف",
-  viewer: "مطّلع",
 };
 
 export default async function AppHome() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const activeOrg = (await cookies()).get("active-org")?.value ?? null;
+  const activeOrg = await getActiveOrg();
 
   const { data } = await supabase
     .from("membership")
-    .select("id, org_id, role, status, organization(name)")
+    .select("id, org_id, role, organization(name)")
     .eq("status", "active");
 
   const memberships = (data ?? []) as MembershipRow[];
   const orgName = (m: MembershipRow) =>
     (Array.isArray(m.organization) ? m.organization[0]?.name : m.organization?.name) ??
-    "منظمة";
+    "منشأة";
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-12">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">عقار</h1>
-          <p className="text-sm text-neutral-500" dir="ltr">
-            {user.phone ?? user.email}
+    <div className="space-y-6">
+      {activeOrg && (
+        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+          <h2 className="mb-1 text-lg font-semibold">ابدأ إدارة عقاراتك</h2>
+          <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+            أضِف عقاراتك ووحداتها لتبدأ ببناء سجلّك.
           </p>
-        </div>
-        <form action={signOut}>
-          <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
-            تسجيل الخروج
-          </button>
-        </form>
-      </header>
+          <Link
+            href="/app/properties"
+            className="inline-block rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-fg"
+          >
+            الانتقال إلى العقارات ←
+          </Link>
+        </section>
+      )}
 
       {memberships.length === 0 ? (
         <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
           <h2 className="mb-1 text-lg font-semibold">أنشئ منشأتك للبدء</h2>
           <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
-            لست عضواً في أي منشأة بعد. أنشئ مكتبك لتبدأ بإدارة العقارات والوحدات والعقود.
+            لست عضواً في أي منشأة بعد. أنشئ مكتبك لتبدأ.
           </p>
           <CreateOrgForm />
         </section>
@@ -104,12 +91,6 @@ export default async function AppHome() {
           </div>
         </section>
       )}
-
-      {activeOrg && (
-        <section className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-neutral-500 dark:border-neutral-700">
-          سجل الحقيقة (العقارات · الوحدات · العقود · الاستيراد) — الخطوة التالية.
-        </section>
-      )}
-    </main>
+    </div>
   );
 }
