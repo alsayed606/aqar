@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
-import { activateContract, recordPayment } from "../actions";
+import { activateContract, recordPayment, issueInvoice } from "../actions";
 import {
   CONTRACT_STATUS_AR,
   CONTRACT_STATUS_TONE,
@@ -93,6 +93,18 @@ export default async function ContractDetail({
       if (p && !map.has(p.id)) map.set(p.id, p);
     }
     payments = [...map.values()].sort((a, b) => (a.received_at < b.received_at ? 1 : -1));
+  }
+
+  // Issued invoices for this contract → map by charge_id.
+  const { data: invData } = await supabase
+    .from("invoice")
+    .select("id, charge_id, invoice_no")
+    .eq("contract_id", id)
+    .eq("status", "issued")
+    .is("deleted_at", null);
+  const invoiceByCharge = new Map<string, { id: string; invoice_no: string | null }>();
+  for (const r of (invData ?? []) as any[]) {
+    if (r.charge_id) invoiceByCharge.set(r.charge_id, { id: r.id, invoice_no: r.invoice_no });
   }
 
   const unit = first((contract as any).unit);
@@ -188,6 +200,7 @@ export default async function ContractDetail({
                     <th className="px-3 py-2 text-right font-medium">المسدّد</th>
                     <th className="px-3 py-2 text-right font-medium">المتبقّي</th>
                     <th className="px-3 py-2 text-right font-medium">الحالة</th>
+                    <th className="px-3 py-2 text-right font-medium">الفاتورة</th>
                     <th className="px-3 py-2 text-right font-medium">تسجيل دفعة</th>
                   </tr>
                 </thead>
@@ -211,6 +224,25 @@ export default async function ContractDetail({
                           <span className={"rounded-full px-2.5 py-0.5 text-xs font-medium " + tone}>
                             {label}
                           </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          {invoiceByCharge.has(c.charge_id) ? (
+                            <Link
+                              href={`/app/invoices/${invoiceByCharge.get(c.charge_id)!.id}`}
+                              className="font-mono text-xs text-brand hover:underline"
+                              dir="ltr"
+                            >
+                              {invoiceByCharge.get(c.charge_id)!.invoice_no ?? "عرض"}
+                            </Link>
+                          ) : (
+                            <form action={issueInvoice}>
+                              <input type="hidden" name="contract_id" value={contract.id} />
+                              <input type="hidden" name="charge_id" value={c.charge_id} />
+                              <button className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
+                                إصدار
+                              </button>
+                            </form>
+                          )}
                         </td>
                         <td className="px-3 py-2">
                           {c.is_settled ? (

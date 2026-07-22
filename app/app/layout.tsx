@@ -53,6 +53,9 @@ export default async function AppLayout({
                 <Link href="/app/contracts" className="hover:text-brand">
                   العقود
                 </Link>
+                <Link href="/app/invoices" className="hover:text-brand">
+                  الفواتير
+                </Link>
                 <Link href="/app/receipts" className="hover:text-brand">
                   السندات
                 </Link>

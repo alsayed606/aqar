@@ -62,6 +62,28 @@ export async function createOwner(
   return { ok: true };
 }
 
+// Set the owner's tax identity (VAT + CR numbers) — used as the supplier on their properties' invoices.
+export async function setOwnerTaxInfo(formData: FormData) {
+  const owner_id = String(formData.get("owner_id") ?? "");
+  if (!owner_id) redirect(`/app/owners/${owner_id}`);
+
+  const vat_number = String(formData.get("vat_number") ?? "").trim().replace(/\s+/g, "") || null;
+  const cr_number = String(formData.get("cr_number") ?? "").trim().replace(/\s+/g, "") || null;
+  if (vat_number && !/^\d{15}$/.test(vat_number)) {
+    redirect(`/app/owners/${owner_id}?error=${encodeURIComponent("الرقم الضريبي يجب أن يكون 15 رقماً")}`);
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("owner")
+    .update({ vat_number, cr_number })
+    .eq("id", owner_id);
+  if (error) redirect(`/app/owners/${owner_id}?error=${encodeURIComponent(error.message)}`);
+
+  revalidatePath(`/app/owners/${owner_id}`);
+  redirect(`/app/owners/${owner_id}`);
+}
+
 // Set the owner's management fee (% of collection) — replaces any existing percentage agreement.
 export async function setOwnerFee(formData: FormData) {
   const activeOrg = await getActiveOrg();

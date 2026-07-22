@@ -87,6 +87,23 @@ export async function activateContract(formData: FormData) {
   redirect(`/app/contracts/${contract_id}`);
 }
 
+export async function issueInvoice(formData: FormData) {
+  const contract_id = String(formData.get("contract_id") ?? "");
+  const charge_id = String(formData.get("charge_id") ?? "");
+  if (!charge_id) {
+    redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent("استحقاق غير صالح")}`);
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("issue_invoice", { p_charge: charge_id });
+  if (error) {
+    const msg = /ALREADY_INVOICED/i.test(error.message)
+      ? "توجد فاتورة لهذا الاستحقاق بالفعل"
+      : error.message;
+    redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent(msg)}`);
+  }
+  redirect(`/app/invoices/${data}`);
+}
+
 export async function recordPayment(formData: FormData) {
   const contract_id = String(formData.get("contract_id") ?? "");
   const charge_id = String(formData.get("charge_id") ?? "");

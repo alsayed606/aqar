@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
-import { setOwnerFee } from "../actions";
+import { setOwnerFee, setOwnerTaxInfo } from "../actions";
 import { halalasToSar } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +44,7 @@ export default async function OwnerDetail({
 
   const { data: owner } = await supabase
     .from("owner")
-    .select("id, is_self, iban, bank_name, party:party_id(display_name, national_id, phone_e164)")
+    .select("id, is_self, iban, bank_name, vat_number, cr_number, party:party_id(display_name, national_id, phone_e164)")
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();
@@ -123,6 +123,43 @@ export default async function OwnerDetail({
             <span className="text-xs text-neutral-400">
               النسبة الحالية: {currentPct}%
             </span>
+          </form>
+        )}
+
+        {!owner.is_self && (
+          <form action={setOwnerTaxInfo} className="mt-4 flex flex-wrap items-end gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-800">
+            <input type="hidden" name="owner_id" value={owner.id} />
+            <div>
+              <label className="mb-1 block text-xs text-neutral-500" htmlFor="vat_number">
+                الرقم الضريبي (15 رقماً)
+              </label>
+              <input
+                id="vat_number"
+                name="vat_number"
+                inputMode="numeric"
+                dir="ltr"
+                defaultValue={(owner as any).vat_number ?? ""}
+                placeholder="3XXXXXXXXXXXXX3"
+                className="w-52 rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-neutral-500" htmlFor="cr_number">
+                السجل التجاري
+              </label>
+              <input
+                id="cr_number"
+                name="cr_number"
+                dir="ltr"
+                defaultValue={(owner as any).cr_number ?? ""}
+                placeholder="10XXXXXXXX"
+                className="w-40 rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
+              />
+            </div>
+            <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
+              حفظ البيانات الضريبية
+            </button>
+            <span className="text-xs text-neutral-400">تُستخدم كمورّد على فواتير عقارات هذا المالك.</span>
           </form>
         )}
       </header>
