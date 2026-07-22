@@ -1,11 +1,35 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { normalizeSaudiPhone } from "@/lib/phone";
 
 export type TenantState = { error?: string; ok?: boolean };
+export type TenantInviteState = { error?: string; link?: string };
+
+// Mint a portal invite for a tenant; the raw token is returned once as a join link (kept out of the URL).
+export async function createTenantInvite(
+  _prev: TenantInviteState,
+  formData: FormData,
+): Promise<TenantInviteState> {
+  const tenant_id = String(formData.get("tenant_id") ?? "");
+  if (!tenant_id) return { error: "مستأجر غير صالح" };
+
+  const supabase = await createClient();
+  const { data: token, error } = await supabase.rpc("create_tenant_invitation", { p_tenant: tenant_id });
+  if (error) {
+    if (/TENANT_NO_CONTACT/i.test(error.message)) return { error: "أضِف جوالاً أو بريداً للمستأجر أولاً" };
+    if (/FORBIDDEN/i.test(error.message)) return { error: "متاح للمدراء فقط" };
+    return { error: error.message };
+  }
+
+  const h = await headers();
+  const host = h.get("host") ?? "";
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  return { link: `${proto}://${host}/portal/join?token=${token}` };
+}
 
 export async function createTenant(
   _prev: TenantState,

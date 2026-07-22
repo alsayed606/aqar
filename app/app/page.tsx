@@ -29,19 +29,22 @@ export default async function AppHome() {
     (Array.isArray(m.organization) ? m.organization[0]?.name : m.organization?.name) ??
     "منشأة";
 
-  const { data: ownerLinks } = await supabase.rpc("my_owner_links");
-  const hasOwnerLinks = (ownerLinks ?? []).length > 0;
+  const [{ data: ownerLinks }, { data: tenantLinks }] = await Promise.all([
+    supabase.rpc("my_owner_links"),
+    supabase.rpc("my_tenant_links"),
+  ]);
+  const hasPortalLinks = (ownerLinks ?? []).length > 0 || (tenantLinks ?? []).length > 0;
 
   return (
     <div className="space-y-6">
       {activeOrg && <Dashboard />}
 
-      {hasOwnerLinks && (
+      {hasPortalLinks && (
         <Link
           href="/portal"
           className="block rounded-2xl border border-brand/30 bg-brand/5 p-4 text-sm hover:border-brand dark:bg-brand/10"
         >
-          <span className="font-medium">بوابة المالك</span> — لك ملفات مالك لدى مكتب إدارة. اطّلع على كشوفك وتوريداتك ←
+          <span className="font-medium">بوابتك</span> — لك ملفات (كمالك أو مستأجر) لدى مكتب إدارة. اطّلع على بياناتك ←
         </Link>
       )}
 

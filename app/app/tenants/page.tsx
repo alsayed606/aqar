@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { TenantForm } from "@/components/tenant-form";
+import { TenantPortalInvite } from "@/components/tenant-portal-invite";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ export default async function TenantsPage() {
                 <th className="px-4 py-2 text-right font-medium">الاسم</th>
                 <th className="px-4 py-2 text-right font-medium">رقم الهوية / الإقامة</th>
                 <th className="px-4 py-2 text-right font-medium">الجوال</th>
+                <th className="px-4 py-2 text-right font-medium">بوابة المستأجر</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
@@ -68,6 +70,9 @@ export default async function TenantsPage() {
                     </td>
                     <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300" dir="ltr">
                       {p?.phone_e164 ?? "—"}
+                    </td>
+                    <td className="px-4 py-2">
+                      <TenantPortalInvite tenantId={t.id} />
                     </td>
                   </tr>
                 );
