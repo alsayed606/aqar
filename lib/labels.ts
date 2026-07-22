@@ -75,3 +75,17 @@ export const ROLE_AR: Record<string, string> = {
   staff: "موظف",
   viewer: "مطّلع",
 };
+
+export const MEMBER_STATUS_AR: Record<string, string> = {
+  invited: "مدعو",
+  active: "نشط",
+  suspended: "موقوف",
+  revoked: "ملغى",
+};
+
+export const MEMBER_STATUS_TONE: Record<string, string> = {
+  invited: "bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300",
+  active: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+  suspended: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  revoked: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+};

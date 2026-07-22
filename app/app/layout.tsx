@@ -62,6 +62,9 @@ export default async function AppLayout({
                 <Link href="/app/import" className="hover:text-brand">
                   الاستيراد
                 </Link>
+                <Link href="/app/team" className="hover:text-brand">
+                  الفريق
+                </Link>
               </nav>
             )}
           </div>
