@@ -51,6 +51,16 @@ export const FREQUENCY_AR: Record<string, string> = {
   custom: "مخصّص",
 };
 
+export const PAYMENT_METHOD_AR: Record<string, string> = {
+  cash: "نقداً",
+  bank_transfer: "تحويل بنكي",
+  mada: "مدى",
+  apple_pay: "Apple Pay",
+  sadad: "سداد",
+  cheque: "شيك",
+  card: "بطاقة",
+};
+
 export const ROLE_AR: Record<string, string> = {
   owner: "مالك",
   admin: "مدير",

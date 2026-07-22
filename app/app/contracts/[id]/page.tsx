@@ -7,6 +7,7 @@ import {
   CONTRACT_STATUS_AR,
   CONTRACT_STATUS_TONE,
   FREQUENCY_AR,
+  PAYMENT_METHOD_AR,
 } from "@/lib/labels";
 import { halalasToSar } from "@/lib/money";
 
@@ -33,6 +34,14 @@ type ChargeBal = {
   balance_halalas: number;
   is_settled: boolean;
   is_overdue: boolean;
+};
+
+type PaymentLine = {
+  id: string;
+  receipt_no: string | null;
+  amount_halalas: number;
+  method: string;
+  received_at: string;
 };
 
 export default async function ContractDetail({
@@ -69,6 +78,23 @@ export default async function ContractDetail({
     .order("due_date", { ascending: true });
 
   const charges = (chargeData ?? []) as ChargeBal[];
+
+  // Payments allocated to this contract's charges → their receipt vouchers.
+  const chargeIds = charges.map((c) => c.charge_id);
+  let payments: PaymentLine[] = [];
+  if (chargeIds.length > 0) {
+    const { data: allocRows } = await supabase
+      .from("payment_allocation")
+      .select("payment:payment_id(id, receipt_no, amount_halalas, method, received_at)")
+      .in("charge_id", chargeIds);
+    const map = new Map<string, PaymentLine>();
+    for (const r of (allocRows ?? []) as any[]) {
+      const p = first(r.payment) as PaymentLine | undefined;
+      if (p && !map.has(p.id)) map.set(p.id, p);
+    }
+    payments = [...map.values()].sort((a, b) => (a.received_at < b.received_at ? 1 : -1));
+  }
+
   const unit = first((contract as any).unit);
   const tenant = first((contract as any).tenant);
 
@@ -223,6 +249,40 @@ export default async function ContractDetail({
               </table>
             </div>
           )}
+        </section>
+      )}
+
+      {contract.status !== "draft" && payments.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-base font-semibold">الدفعات المستلمة</h2>
+          <div className="overflow-x-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
+            <table className="w-full text-sm">
+              <thead className="bg-neutral-50 text-neutral-500 dark:bg-neutral-900">
+                <tr>
+                  <th className="px-3 py-2 text-right font-medium">رقم السند</th>
+                  <th className="px-3 py-2 text-right font-medium">التاريخ</th>
+                  <th className="px-3 py-2 text-right font-medium">المبلغ (ر.س)</th>
+                  <th className="px-3 py-2 text-right font-medium">الطريقة</th>
+                  <th className="px-3 py-2 text-right font-medium">سند القبض</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                {payments.map((p) => (
+                  <tr key={p.id}>
+                    <td className="px-3 py-2 font-mono font-medium" dir="ltr">{p.receipt_no ?? "—"}</td>
+                    <td className="px-3 py-2" dir="ltr">{new Date(p.received_at).toISOString().slice(0, 10)}</td>
+                    <td className="px-3 py-2 font-medium">{halalasToSar(p.amount_halalas)}</td>
+                    <td className="px-3 py-2 text-neutral-600 dark:text-neutral-300">{PAYMENT_METHOD_AR[p.method] ?? p.method}</td>
+                    <td className="px-3 py-2">
+                      <Link href={`/app/receipts/${p.id}`} className="text-brand hover:underline">
+                        عرض / طباعة ←
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
     </div>

@@ -30,7 +30,7 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+      <header className="no-print border-b border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-5">
             <Link href="/app" className="text-lg font-bold">
@@ -52,6 +52,9 @@ export default async function AppLayout({
                 </Link>
                 <Link href="/app/contracts" className="hover:text-brand">
                   العقود
+                </Link>
+                <Link href="/app/receipts" className="hover:text-brand">
+                  السندات
                 </Link>
                 <Link href="/app/import" className="hover:text-brand">
                   الاستيراد

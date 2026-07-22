@@ -21,3 +21,18 @@ body {
     @apply bg-neutral-950 text-neutral-100;
   }
 }
+
+/* Print: hide app chrome, force a clean black-on-white document (e.g. سند القبض). */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .print-sheet {
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
