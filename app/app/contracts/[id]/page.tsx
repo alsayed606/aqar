@@ -2,12 +2,13 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
-import { activateContract, recordPayment, issueInvoice } from "../actions";
+import { activateContract, recordPayment, issueInvoice, amendRent, terminateContract } from "../actions";
 import {
   CONTRACT_STATUS_AR,
   CONTRACT_STATUS_TONE,
   FREQUENCY_AR,
   PAYMENT_METHOD_AR,
+  AMENDMENT_TYPE_AR,
 } from "@/lib/labels";
 import { halalasToSar } from "@/lib/money";
 import { first } from "@/lib/rows";
@@ -44,6 +45,16 @@ type PaymentLine = {
   received_at: string;
 };
 
+type Amendment = {
+  id: string;
+  version: number;
+  change_type: string;
+  payload: any;
+  effective_date: string;
+  reason: string | null;
+  created_at: string;
+};
+
 export default async function ContractDetail({
   params,
   searchParams,
@@ -61,13 +72,20 @@ export default async function ContractDetail({
   const { data: contract } = await supabase
     .from("contract")
     .select(
-      "id, contract_number, status, contract_kind, start_date, end_date, annual_rent_halalas, payment_frequency, deposit_halalas, service_fees_halalas, deed_number, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
+      "id, contract_number, status, contract_kind, start_date, end_date, annual_rent_halalas, payment_frequency, deposit_halalas, service_fees_halalas, deed_number, terminated_at, termination_reason, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
     )
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();
 
   if (!contract) notFound();
+
+  const { data: amendData } = await supabase
+    .from("contract_amendment")
+    .select("id, version, change_type, payload, effective_date, reason, created_at")
+    .eq("contract_id", id)
+    .order("version", { ascending: false });
+  const amendments = (amendData ?? []) as Amendment[];
 
   const { data: chargeData } = await supabase
     .from("charge_balance")
@@ -316,6 +334,110 @@ export default async function ContractDetail({
               </tbody>
             </table>
           </div>
+        </section>
+      )}
+
+      {/* Termination banner */}
+      {contract.status === "terminated" && (
+        <section className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
+          عقد مُنهى{contract.terminated_at ? ` بتاريخ ${new Date(contract.terminated_at).toISOString().slice(0, 10)}` : ""}
+          {contract.termination_reason ? ` — السبب: ${contract.termination_reason}` : ""}
+        </section>
+      )}
+
+      {/* Amendments (ملاحق العقد) */}
+      {contract.status !== "draft" && (
+        <section>
+          <h2 className="mb-3 text-base font-semibold">ملاحق العقد</h2>
+
+          {amendments.length > 0 && (
+            <div className="mb-4 overflow-x-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
+              <table className="w-full text-sm">
+                <thead className="bg-neutral-50 text-neutral-500 dark:bg-neutral-900">
+                  <tr>
+                    <th className="px-3 py-2 text-right font-medium">#</th>
+                    <th className="px-3 py-2 text-right font-medium">النوع</th>
+                    <th className="px-3 py-2 text-right font-medium">التغيير</th>
+                    <th className="px-3 py-2 text-right font-medium">يسري من</th>
+                    <th className="px-3 py-2 text-right font-medium">السبب</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                  {amendments.map((a) => (
+                    <tr key={a.id}>
+                      <td className="px-3 py-2">{a.version}</td>
+                      <td className="px-3 py-2 font-medium">{AMENDMENT_TYPE_AR[a.change_type] ?? a.change_type}</td>
+                      <td className="px-3 py-2 text-neutral-600 dark:text-neutral-300">
+                        {a.change_type === "rent_change" && a.payload?.annual_rent_halalas
+                          ? `${halalasToSar(a.payload.annual_rent_halalas.from)} ← ${halalasToSar(a.payload.annual_rent_halalas.to)} ر.س`
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-2" dir="ltr">{a.effective_date}</td>
+                      <td className="px-3 py-2 text-neutral-600 dark:text-neutral-300">{a.reason ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {contract.status === "active" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {/* Rent change */}
+              <form action={amendRent} className="space-y-2 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+                <p className="text-sm font-medium">تعديل الإيجار</p>
+                <p className="text-xs text-neutral-500">يُعيد تسعير الاستحقاقات المستقبلية غير المدفوعة من تاريخ السريان.</p>
+                <input type="hidden" name="contract_id" value={contract.id} />
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    name="new_annual"
+                    inputMode="decimal"
+                    placeholder="الإيجار السنوي الجديد (ر.س)"
+                    className="w-44 rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
+                  />
+                  <input
+                    name="effective_date"
+                    type="date"
+                    className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm outline-none dark:border-neutral-700"
+                  />
+                </div>
+                <input
+                  name="reason"
+                  placeholder="سبب التعديل"
+                  className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
+                />
+                <button className="rounded-lg bg-brand px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-fg">
+                  حفظ ملحق التعديل
+                </button>
+              </form>
+
+              {/* Early termination */}
+              <form action={terminateContract} className="space-y-2 rounded-2xl border border-red-200 bg-white p-4 shadow-sm dark:border-red-900/40 dark:bg-neutral-900">
+                <p className="text-sm font-medium text-red-700 dark:text-red-400">إنهاء مبكر</p>
+                <p className="text-xs text-neutral-500">يُنهي العقد ويلغي الاستحقاقات المستقبلية غير المدفوعة ويُحرّر الوحدة.</p>
+                <input type="hidden" name="contract_id" value={contract.id} />
+                <input
+                  name="effective_date"
+                  type="date"
+                  className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm outline-none dark:border-neutral-700"
+                />
+                <input
+                  name="reason"
+                  placeholder="سبب الإنهاء"
+                  className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
+                />
+                <button className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700">
+                  إنهاء العقد
+                </button>
+              </form>
+            </div>
+          )}
+
+          {amendments.length === 0 && contract.status !== "active" && (
+            <p className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-neutral-500 dark:border-neutral-700">
+              لا توجد ملاحق على هذا العقد.
+            </p>
+          )}
         </section>
       )}
     </div>

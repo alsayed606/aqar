@@ -42,6 +42,12 @@ export const CONTRACT_STATUS_TONE: Record<string, string> = {
   cancelled: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
 };
 
+export const AMENDMENT_TYPE_AR: Record<string, string> = {
+  rent_change: "تعديل الإيجار",
+  early_termination: "إنهاء مبكر",
+  extension: "تمديد",
+};
+
 export const FREQUENCY_AR: Record<string, string> = {
   monthly: "شهري",
   quarterly: "ربع سنوي",

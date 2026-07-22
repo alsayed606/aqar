@@ -104,6 +104,56 @@ export async function issueInvoice(formData: FormData) {
   redirect(`/app/invoices/${data}`);
 }
 
+const AMEND_ERRORS: Array<[RegExp, string]> = [
+  [/CONTRACT_NOT_ACTIVE/i, "لا يمكن تعديل عقد غير نشط"],
+  [/REASON_REQUIRED/i, "السبب مطلوب"],
+  [/INVALID_AMOUNT/i, "أدخل مبلغاً صحيحاً"],
+];
+const amendError = (m: string) => AMEND_ERRORS.find(([re]) => re.test(m))?.[1] ?? m;
+
+export async function amendRent(formData: FormData) {
+  const contract_id = String(formData.get("contract_id") ?? "");
+  const newAnnual = sarToHalalas(String(formData.get("new_annual") ?? ""));
+  const effective = String(formData.get("effective_date") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!contract_id) redirect("/app/contracts");
+  if (newAnnual == null || newAnnual < 0) {
+    redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent("أدخل الإيجار السنوي الجديد")}`);
+  }
+  if (!effective) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent("حدّد تاريخ سريان التعديل")}`);
+  if (!reason) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent("اكتب سبب التعديل")}`);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("amend_contract_rent", {
+    p_contract: contract_id,
+    p_new_annual: newAnnual,
+    p_effective: effective,
+    p_reason: reason,
+  });
+  if (error) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent(amendError(error.message))}`);
+  revalidatePath(`/app/contracts/${contract_id}`);
+  redirect(`/app/contracts/${contract_id}`);
+}
+
+export async function terminateContract(formData: FormData) {
+  const contract_id = String(formData.get("contract_id") ?? "");
+  const effective = String(formData.get("effective_date") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!contract_id) redirect("/app/contracts");
+  if (!effective) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent("حدّد تاريخ الإنهاء")}`);
+  if (!reason) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent("اكتب سبب الإنهاء")}`);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("amend_contract_terminate", {
+    p_contract: contract_id,
+    p_effective: effective,
+    p_reason: reason,
+  });
+  if (error) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent(amendError(error.message))}`);
+  revalidatePath(`/app/contracts/${contract_id}`);
+  redirect(`/app/contracts/${contract_id}`);
+}
+
 export async function recordPayment(formData: FormData) {
   const contract_id = String(formData.get("contract_id") ?? "");
   const charge_id = String(formData.get("charge_id") ?? "");
