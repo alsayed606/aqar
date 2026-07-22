@@ -6,11 +6,11 @@ import { halalasToSar } from "@/lib/money";
 import { tafqitSar } from "@/lib/tafqit";
 import { PAYMENT_METHOD_AR } from "@/lib/labels";
 import { PrintButton } from "@/components/print-button";
+import { first } from "@/lib/rows";
 
 export const dynamic = "force-dynamic";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const first = (x: any) => (Array.isArray(x) ? x[0] : x);
 
 export default async function RemittanceVoucher({
   params,

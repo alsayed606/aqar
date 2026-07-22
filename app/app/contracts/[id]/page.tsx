@@ -10,11 +10,11 @@ import {
   PAYMENT_METHOD_AR,
 } from "@/lib/labels";
 import { halalasToSar } from "@/lib/money";
+import { first } from "@/lib/rows";
 
 export const dynamic = "force-dynamic";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const first = (x: any) => (Array.isArray(x) ? x[0] : x);
 
 const PAYMENT_METHODS: Array<[string, string]> = [
   ["cash", "نقداً"],

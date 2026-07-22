@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { halalasToSar } from "@/lib/money";
+import { DOC_KIND_AR } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +17,6 @@ type InvoiceRow = {
   total_incl_vat_halalas: number;
   total_vat_halalas: number;
   status: string;
-};
-
-const DOC_KIND_AR: Record<string, string> = {
-  invoice: "فاتورة",
-  credit_note: "إشعار دائن",
-  debit_note: "إشعار مدين",
 };
 
 export default async function InvoicesPage() {

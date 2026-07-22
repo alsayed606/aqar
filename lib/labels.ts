@@ -51,6 +51,12 @@ export const FREQUENCY_AR: Record<string, string> = {
   custom: "مخصّص",
 };
 
+export const DOC_KIND_AR: Record<string, string> = {
+  invoice: "فاتورة",
+  credit_note: "إشعار دائن",
+  debit_note: "إشعار مدين",
+};
+
 export const PAYMENT_METHOD_AR: Record<string, string> = {
   cash: "نقداً",
   bank_transfer: "تحويل بنكي",

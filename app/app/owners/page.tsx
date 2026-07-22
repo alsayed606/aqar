@@ -3,11 +3,11 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { OwnerForm } from "@/components/owner-form";
+import { first } from "@/lib/rows";
 
 export const dynamic = "force-dynamic";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const first = (x: any) => (Array.isArray(x) ? x[0] : x);
 
 export default async function OwnersPage() {
   const activeOrg = await getActiveOrg();

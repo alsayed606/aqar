@@ -5,17 +5,12 @@ import { getActiveOrg } from "@/lib/supabase/active-org";
 import { setOwnerFee, setOwnerTaxInfo, recordRemittance } from "../actions";
 import { halalasToSar } from "@/lib/money";
 import { PAYMENT_METHOD_AR } from "@/lib/labels";
+import { first } from "@/lib/rows";
+import { isoDaysAgo } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const first = (x: any) => (Array.isArray(x) ? x[0] : x);
-
-function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - days);
-  return d.toISOString().slice(0, 10);
-}
 
 type StmtRow = {
   property_id: string;
