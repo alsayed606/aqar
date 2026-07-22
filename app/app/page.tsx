@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { switchOrg } from "./actions";
 import { CreateOrgForm } from "@/components/create-org-form";
+import { Dashboard } from "@/components/dashboard";
 import { ROLE_AR } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -30,20 +30,7 @@ export default async function AppHome() {
 
   return (
     <div className="space-y-6">
-      {activeOrg && (
-        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-          <h2 className="mb-1 text-lg font-semibold">ابدأ إدارة عقاراتك</h2>
-          <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
-            أضِف عقاراتك ووحداتها لتبدأ ببناء سجلّك.
-          </p>
-          <Link
-            href="/app/properties"
-            className="inline-block rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-fg"
-          >
-            الانتقال إلى العقارات ←
-          </Link>
-        </section>
-      )}
+      {activeOrg && <Dashboard />}
 
       {memberships.length === 0 ? (
         <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
