@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { normalizeSaudiPhone } from "@/lib/phone";
 import { parseArabicNumber } from "@/lib/num";
+import { sarToHalalas } from "@/lib/money";
 
 export type OwnerState = { error?: string; ok?: boolean };
 
@@ -60,6 +61,43 @@ export async function createOwner(
 
   revalidatePath("/app/owners");
   return { ok: true };
+}
+
+// Record a payout (remittance) to the owner. A numbered voucher (RM-…) is assigned by the DB.
+export async function recordRemittance(formData: FormData) {
+  const activeOrg = await getActiveOrg();
+  const owner_id = String(formData.get("owner_id") ?? "");
+  if (!activeOrg || !owner_id) redirect(`/app/owners/${owner_id}`);
+
+  const back = (extra: Record<string, string>) => {
+    const qs = new URLSearchParams({ ...extra });
+    redirect(`/app/owners/${owner_id}?${qs.toString()}`);
+  };
+
+  const amount = sarToHalalas(String(formData.get("amount") ?? ""));
+  if (amount == null || amount <= 0) back({ error: "أدخل مبلغ التوريد" });
+
+  const method = String(formData.get("method") ?? "bank_transfer");
+  const remitted_at = String(formData.get("remitted_at") ?? "").trim() || new Date().toISOString().slice(0, 10);
+  const period_from = String(formData.get("period_from") ?? "").trim() || null;
+  const period_to = String(formData.get("period_to") ?? "").trim() || null;
+  const reference = String(formData.get("reference") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("owner_remittance").insert({
+    org_id: activeOrg,
+    owner_id,
+    amount_halalas: amount,
+    method,
+    remitted_at: new Date(remitted_at).toISOString(),
+    period_from,
+    period_to,
+    reference,
+  });
+  if (error) back({ error: error.message });
+
+  revalidatePath(`/app/owners/${owner_id}`);
+  redirect(`/app/owners/${owner_id}`);
 }
 
 // Set the owner's tax identity (VAT + CR numbers) — used as the supplier on their properties' invoices.
