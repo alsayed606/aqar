@@ -100,6 +100,7 @@ export default async function ContractDetail({
     .from("invoice")
     .select("id, charge_id, invoice_no")
     .eq("contract_id", id)
+    .eq("doc_kind", "invoice")
     .eq("status", "issued")
     .is("deleted_at", null);
   const invoiceByCharge = new Map<string, { id: string; invoice_no: string | null }>();

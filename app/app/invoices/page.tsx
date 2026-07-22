@@ -10,11 +10,18 @@ type InvoiceRow = {
   id: string;
   invoice_no: string | null;
   invoice_type: string;
+  doc_kind: string;
   issue_at: string;
   buyer_name: string | null;
   total_incl_vat_halalas: number;
   total_vat_halalas: number;
   status: string;
+};
+
+const DOC_KIND_AR: Record<string, string> = {
+  invoice: "فاتورة",
+  credit_note: "إشعار دائن",
+  debit_note: "إشعار مدين",
 };
 
 export default async function InvoicesPage() {
@@ -24,7 +31,7 @@ export default async function InvoicesPage() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("invoice")
-    .select("id, invoice_no, invoice_type, issue_at, buyer_name, total_incl_vat_halalas, total_vat_halalas, status")
+    .select("id, invoice_no, invoice_type, doc_kind, issue_at, buyer_name, total_incl_vat_halalas, total_vat_halalas, status")
     .is("deleted_at", null)
     .order("issue_at", { ascending: false })
     .limit(200);
@@ -55,6 +62,7 @@ export default async function InvoicesPage() {
                 <th className="px-4 py-2 text-right font-medium">التاريخ</th>
                 <th className="px-4 py-2 text-right font-medium">المشتري</th>
                 <th className="px-4 py-2 text-right font-medium">النوع</th>
+                <th className="px-4 py-2 text-right font-medium">الحالة</th>
                 <th className="px-4 py-2 text-right font-medium">الضريبة (ر.س)</th>
                 <th className="px-4 py-2 text-right font-medium">الإجمالي (ر.س)</th>
                 <th className="px-4 py-2 text-right font-medium"></th>
@@ -67,7 +75,15 @@ export default async function InvoicesPage() {
                   <td className="px-4 py-2" dir="ltr">{new Date(r.issue_at).toISOString().slice(0, 10)}</td>
                   <td className="px-4 py-2">{r.buyer_name ?? "—"}</td>
                   <td className="px-4 py-2 text-xs text-neutral-500">
-                    {r.invoice_type === "plain" ? "عادية" : "ضريبية"}
+                    {DOC_KIND_AR[r.doc_kind] ?? "فاتورة"}
+                    {r.doc_kind === "invoice" && (r.invoice_type === "plain" ? " عادية" : " ضريبية")}
+                  </td>
+                  <td className="px-4 py-2 text-xs">
+                    {r.status === "cancelled" ? (
+                      <span className="text-red-600 dark:text-red-400">ملغاة</span>
+                    ) : (
+                      <span className="text-neutral-500">سارية</span>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300">{halalasToSar(r.total_vat_halalas)}</td>
                   <td className="px-4 py-2 font-medium">{halalasToSar(r.total_incl_vat_halalas)}</td>
