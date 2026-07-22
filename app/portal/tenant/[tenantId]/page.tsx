@@ -149,6 +149,7 @@ export default async function TenantPortalDashboard({ params }: { params: Promis
                   <th className="px-4 py-2 text-right font-medium">التاريخ</th>
                   <th className="px-4 py-2 text-right font-medium">المبلغ (ر.س)</th>
                   <th className="px-4 py-2 text-right font-medium">الطريقة</th>
+                  <th className="px-4 py-2 text-right font-medium"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
@@ -158,6 +159,11 @@ export default async function TenantPortalDashboard({ params }: { params: Promis
                     <td className="px-4 py-2" dir="ltr">{new Date(p.received_at).toISOString().slice(0, 10)}</td>
                     <td className="px-4 py-2 font-medium">{halalasToSar(p.amount_halalas)}</td>
                     <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300">{PAYMENT_METHOD_AR[p.method] ?? p.method}</td>
+                    <td className="px-4 py-2">
+                      <Link href={`/portal/tenant/${tenantId}/receipt/${p.id}`} className="text-brand hover:underline">
+                        السند ←
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

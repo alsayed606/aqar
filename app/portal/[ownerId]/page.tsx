@@ -111,6 +111,12 @@ export default async function OwnerPortalDashboard({
             </div>
             <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">عرض</button>
           </form>
+          <Link
+            href={`/portal/${ownerId}/statement?from=${from}&to=${to}`}
+            className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-fg"
+          >
+            كشف قابل للطباعة ←
+          </Link>
         </div>
         <div className="overflow-x-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
           <table className="w-full text-sm">
@@ -156,6 +162,7 @@ export default async function OwnerPortalDashboard({
                   <th className="px-4 py-2 text-right font-medium">التاريخ</th>
                   <th className="px-4 py-2 text-right font-medium">المبلغ (ر.س)</th>
                   <th className="px-4 py-2 text-right font-medium">الطريقة</th>
+                  <th className="px-4 py-2 text-right font-medium"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
@@ -165,6 +172,11 @@ export default async function OwnerPortalDashboard({
                     <td className="px-4 py-2" dir="ltr">{new Date(r.remitted_at).toISOString().slice(0, 10)}</td>
                     <td className="px-4 py-2 font-medium">{halalasToSar(r.amount_halalas)}</td>
                     <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300">{PAYMENT_METHOD_AR[r.method] ?? r.method}</td>
+                    <td className="px-4 py-2">
+                      <Link href={`/portal/${ownerId}/remittance/${r.id}`} className="text-brand hover:underline">
+                        سند الصرف ←
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
