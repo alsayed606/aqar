@@ -56,11 +56,12 @@ export async function revokeInvitation(formData: FormData) {
   const invitation_id = String(formData.get("invitation_id") ?? "");
   if (!invitation_id) redirect("/app/team");
   const supabase = await createClient();
-  await supabase
+  const { error } = await supabase
     .from("invitation")
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", invitation_id)
     .is("accepted_at", null);
+  if (error) redirect(`/app/team?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/app/team");
   redirect("/app/team");
 }
@@ -128,8 +129,14 @@ export async function setMemberScope(formData: FormData) {
     .eq("id", membership_id);
   if (uErr) back(uErr.message);
 
-  // Rewrite the scope set: clear, then add the chosen properties (only when scoped).
-  await supabase.from("membership_property_scope").delete().eq("membership_id", membership_id);
+  // Rewrite the scope set: clear, then add the chosen properties (only when scoped). The delete
+  // error is checked because a silent failure here would leave stale grants and WIDEN the member's
+  // access beyond what the admin selected.
+  const { error: dErr } = await supabase
+    .from("membership_property_scope")
+    .delete()
+    .eq("membership_id", membership_id);
+  if (dErr) back(dErr.message);
   if (!scopeAll && propertyIds.length > 0) {
     const { error: iErr } = await supabase
       .from("membership_property_scope")
