@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { switchOrg } from "./actions";
@@ -28,9 +29,21 @@ export default async function AppHome() {
     (Array.isArray(m.organization) ? m.organization[0]?.name : m.organization?.name) ??
     "منشأة";
 
+  const { data: ownerLinks } = await supabase.rpc("my_owner_links");
+  const hasOwnerLinks = (ownerLinks ?? []).length > 0;
+
   return (
     <div className="space-y-6">
       {activeOrg && <Dashboard />}
+
+      {hasOwnerLinks && (
+        <Link
+          href="/portal"
+          className="block rounded-2xl border border-brand/30 bg-brand/5 p-4 text-sm hover:border-brand dark:bg-brand/10"
+        >
+          <span className="font-medium">بوابة المالك</span> — لك ملفات مالك لدى مكتب إدارة. اطّلع على كشوفك وتوريداتك ←
+        </Link>
+      )}
 
       {memberships.length === 0 ? (
         <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">

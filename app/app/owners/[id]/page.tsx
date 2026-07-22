@@ -7,6 +7,7 @@ import { halalasToSar } from "@/lib/money";
 import { PAYMENT_METHOD_AR } from "@/lib/labels";
 import { first } from "@/lib/rows";
 import { isoDaysAgo } from "@/lib/dates";
+import { OwnerPortalInvite } from "@/components/owner-portal-invite";
 
 export const dynamic = "force-dynamic";
 
@@ -184,6 +185,13 @@ export default async function OwnerDetail({
             </button>
             <span className="text-xs text-neutral-400">تُستخدم كمورّد على فواتير عقارات هذا المالك.</span>
           </form>
+        )}
+
+        {!owner.is_self && (
+          <div className="mt-4 border-t border-neutral-100 pt-4 dark:border-neutral-800">
+            <p className="mb-2 text-xs text-neutral-500">بوابة المالك — دخول ذاتي للاطّلاع على الكشوف والتوريدات</p>
+            <OwnerPortalInvite ownerId={owner.id} />
+          </div>
         )}
       </header>
 

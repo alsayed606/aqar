@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { normalizeSaudiPhone } from "@/lib/phone";
@@ -9,6 +10,29 @@ import { parseArabicNumber } from "@/lib/num";
 import { sarToHalalas } from "@/lib/money";
 
 export type OwnerState = { error?: string; ok?: boolean };
+export type OwnerInviteState = { error?: string; link?: string };
+
+// Mint a portal invite for an owner; the raw token is returned once as a join link (kept out of the URL).
+export async function createOwnerInvite(
+  _prev: OwnerInviteState,
+  formData: FormData,
+): Promise<OwnerInviteState> {
+  const owner_id = String(formData.get("owner_id") ?? "");
+  if (!owner_id) return { error: "مالك غير صالح" };
+
+  const supabase = await createClient();
+  const { data: token, error } = await supabase.rpc("create_owner_invitation", { p_owner: owner_id });
+  if (error) {
+    if (/OWNER_NO_CONTACT/i.test(error.message)) return { error: "أضِف جوالاً أو بريداً للمالك أولاً" };
+    if (/FORBIDDEN/i.test(error.message)) return { error: "متاح للمدراء فقط" };
+    return { error: error.message };
+  }
+
+  const h = await headers();
+  const host = h.get("host") ?? "";
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  return { link: `${proto}://${host}/portal/join?token=${token}` };
+}
 
 export async function createOwner(
   _prev: OwnerState,
