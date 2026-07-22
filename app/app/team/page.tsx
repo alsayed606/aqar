@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
@@ -101,6 +102,7 @@ export default async function TeamPage({
               <tr>
                 <th className="px-4 py-2 text-right font-medium">الجوال</th>
                 <th className="px-4 py-2 text-right font-medium">الدور</th>
+                <th className="px-4 py-2 text-right font-medium">النطاق</th>
                 <th className="px-4 py-2 text-right font-medium">الحالة</th>
                 <th className="px-4 py-2 text-right font-medium">إجراءات</th>
               </tr>
@@ -134,6 +136,15 @@ export default async function TeamPage({
                           </button>
                         </form>
                       )}
+                    </td>
+                    <td className="px-4 py-2">
+                      <Link
+                        href={`/app/team/${m.membership_id}/scope`}
+                        className="text-xs text-brand hover:underline"
+                      >
+                        {m.scope_all ? "كل العقارات" : "عقارات محدّدة"}
+                        <span className="mr-1 text-neutral-400">· تحديد</span>
+                      </Link>
                     </td>
                     <td className="px-4 py-2">
                       <span className={"rounded-full px-2.5 py-0.5 text-xs font-medium " + (MEMBER_STATUS_TONE[m.status] ?? "")}>

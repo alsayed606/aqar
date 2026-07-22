@@ -101,6 +101,46 @@ export async function setMemberStatus(formData: FormData) {
   redirect("/app/team");
 }
 
+// Restrict a member to specific properties (scope_all=false + membership_property_scope rows), or
+// reopen everything (scope_all=true). RLS on the portfolio tables (has_property_access) enforces it.
+export async function setMemberScope(formData: FormData) {
+  const activeOrg = await getActiveOrg();
+  const membership_id = String(formData.get("membership_id") ?? "");
+  if (!activeOrg || !membership_id) redirect("/app/team");
+
+  const scopeAll = String(formData.get("scope_all") ?? "true") === "true";
+  const propertyIds = formData.getAll("property_ids").map(String).filter(Boolean);
+
+  const supabase = await createClient();
+  const { data: m } = await supabase
+    .from("membership")
+    .select("id")
+    .eq("id", membership_id)
+    .eq("org_id", activeOrg)
+    .maybeSingle();
+  if (!m) redirect("/app/team");
+
+  const back = (msg: string) => redirect(`/app/team?error=${encodeURIComponent(msg)}`);
+
+  const { error: uErr } = await supabase
+    .from("membership")
+    .update({ scope_all: scopeAll })
+    .eq("id", membership_id);
+  if (uErr) back(uErr.message);
+
+  // Rewrite the scope set: clear, then add the chosen properties (only when scoped).
+  await supabase.from("membership_property_scope").delete().eq("membership_id", membership_id);
+  if (!scopeAll && propertyIds.length > 0) {
+    const { error: iErr } = await supabase
+      .from("membership_property_scope")
+      .insert(propertyIds.map((property_id) => ({ membership_id, property_id })));
+    if (iErr) back(iErr.message);
+  }
+
+  revalidatePath("/app/team");
+  redirect("/app/team");
+}
+
 export async function acceptInvitation(formData: FormData) {
   const token = String(formData.get("token") ?? "").trim();
   if (!token) redirect("/app/join?error=missing");
