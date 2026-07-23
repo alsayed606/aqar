@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeSaudiPhone } from "@/lib/phone";
+import { safeReturnTo } from "@/lib/return-to";
 
 export type LoginState = {
   step: "phone" | "code";
@@ -46,5 +47,6 @@ export async function verifyOtp(
     return { step: "code", phone, error: error.message };
   }
 
-  redirect("/app");
+  // Land where the user was headed before login (validated), else the app home.
+  redirect(safeReturnTo(String(formData.get("returnTo") ?? "")) ?? "/app");
 }

@@ -1,12 +1,22 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeReturnTo } from "@/lib/return-to";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
+// Copy any auth cookies the session-refresh wrote onto a redirect response so the refreshed
+// tokens aren't dropped when we bounce the request.
+function withCookies(from: NextResponse, to: NextResponse): NextResponse {
+  from.cookies.getAll().forEach((cookie) => to.cookies.set(cookie));
+  return to;
+}
+
 /**
  * Refreshes the Supabase auth session on every request and keeps auth cookies in sync
- * (the standard @supabase/ssr middleware pattern). No route protection yet — that arrives with the
- * auth flow in the next step.
+ * (the standard @supabase/ssr middleware pattern), and guards the app + portal surfaces:
+ * an unauthenticated deep link is sent to /login?returnTo=… so login lands the user back where
+ * they were headed (crucial for invite/portal links), and an already-signed-in user hitting
+ * /login is forwarded on to their intended destination.
  */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -32,7 +42,28 @@ export async function middleware(request: NextRequest) {
   });
 
   // Touch the session so an expired access token is refreshed and re-set on the response.
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname, search, origin } = request.nextUrl;
+  const isProtected = pathname === "/app" || pathname.startsWith("/app/") || pathname === "/portal" || pathname.startsWith("/portal/");
+  const isLogin = pathname === "/login";
+
+  // Unauthenticated → send to login, remembering where they wanted to go.
+  if (isProtected && !user) {
+    const loginUrl = new URL("/login", origin);
+    loginUrl.searchParams.set("returnTo", pathname + search);
+    return withCookies(response, NextResponse.redirect(loginUrl));
+  }
+
+  // Already signed in but sitting on /login → forward to the intended (validated) destination.
+  if (isLogin && user) {
+    const dest = safeReturnTo(request.nextUrl.searchParams.get("returnTo")) ?? "/app";
+    const destUrl = new URL(dest, origin);
+    if (destUrl.origin !== origin) destUrl.href = new URL("/app", origin).href;
+    return withCookies(response, NextResponse.redirect(destUrl));
+  }
 
   return response;
 }
