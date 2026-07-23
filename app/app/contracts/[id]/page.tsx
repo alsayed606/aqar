@@ -80,7 +80,7 @@ export default async function ContractDetail({
   const { data: contract } = await supabase
     .from("contract")
     .select(
-      "id, contract_number, status, contract_kind, start_date, end_date, annual_rent_halalas, payment_frequency, deposit_halalas, service_fees_halalas, deed_number, terminated_at, termination_reason, renewed_from_contract_id, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
+      "id, contract_number, status, contract_kind, start_date, end_date, annual_rent_halalas, payment_frequency, deposit_halalas, service_fees_halalas, deed_number, terminated_at, termination_reason, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -88,22 +88,30 @@ export default async function ContractDetail({
 
   if (!contract) notFound();
 
-  // Renewal lineage: the predecessor this was renewed from, and any successor renewed off it.
+  // Renewal lineage (0031). Read the back-link in a separate, error-tolerant query so the whole
+  // page still works before migration 0031 is applied (the column simply doesn't exist yet → the
+  // renewal UI stays hidden and the contract behaves exactly as before).
+  const { data: renewalRow, error: renewalErr } = await supabase
+    .from("contract")
+    .select("renewed_from_contract_id")
+    .eq("id", id)
+    .maybeSingle();
+  const renewalReady = !renewalErr;
+  const renewedFromId = (renewalRow as { renewed_from_contract_id: string | null } | null)?.renewed_from_contract_id ?? null;
+
   const [{ data: predecessor }, { data: successor }] = await Promise.all([
-    contract.renewed_from_contract_id
+    renewalReady && renewedFromId
+      ? supabase.from("contract").select("id, contract_number, status").eq("id", renewedFromId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    renewalReady
       ? supabase
           .from("contract")
           .select("id, contract_number, status")
-          .eq("id", contract.renewed_from_contract_id)
+          .eq("renewed_from_contract_id", id)
+          .neq("status", "cancelled")
+          .is("deleted_at", null)
           .maybeSingle()
       : Promise.resolve({ data: null }),
-    supabase
-      .from("contract")
-      .select("id, contract_number, status")
-      .eq("renewed_from_contract_id", id)
-      .neq("status", "cancelled")
-      .is("deleted_at", null)
-      .maybeSingle(),
   ]);
 
   const { data: amendData } = await supabase
@@ -240,7 +248,7 @@ export default async function ContractDetail({
         )}
 
         {contract.status === "draft" &&
-          (contract.renewed_from_contract_id ? (
+          (renewedFromId ? (
             <div className="mt-6 border-t border-neutral-100 pt-4 dark:border-neutral-800">
               <p className="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
                 عقد تجديد (مسودة). تفعيله يُنهي العقد السابق تلقائياً (يصبح «منتهياً» ويُلغى ما تبقّى من
@@ -516,7 +524,7 @@ export default async function ContractDetail({
       )}
 
       {/* Renewal (تجديد العقد بعقد لاحق) */}
-      {(contract.status === "active" || contract.status === "expired") && !successor && (
+      {renewalReady && (contract.status === "active" || contract.status === "expired") && !successor && (
         <section>
           <h2 className="mb-3 text-base font-semibold">تجديد العقد</h2>
           <form
