@@ -154,6 +154,48 @@ export async function terminateContract(formData: FormData) {
   redirect(`/app/contracts/${contract_id}`);
 }
 
+const RENEW_ERRORS: Array<[RegExp, string]> = [
+  [/ALREADY_RENEWED/i, "لهذا العقد تجديد قائم بالفعل"],
+  [/CONTRACT_NOT_RENEWABLE/i, "يمكن تجديد العقود النشطة أو المنتهية فقط"],
+  [/END_BEFORE_START/i, "تاريخ النهاية قبل البداية"],
+  [/INVALID_AMOUNT/i, "أدخل الإيجار السنوي الجديد"],
+  [/contract_number|duplicate key/i, "رقم العقد مستخدم بالفعل"],
+];
+const renewError = (m: string) => RENEW_ERRORS.find(([re]) => re.test(m))?.[1] ?? m;
+
+export async function renewContract(formData: FormData) {
+  const source_id = String(formData.get("contract_id") ?? "");
+  const start = String(formData.get("start_date") ?? "").trim();
+  const end = String(formData.get("end_date") ?? "").trim();
+  const newAnnual = sarToHalalas(String(formData.get("new_annual") ?? ""));
+  const number = String(formData.get("contract_number") ?? "").trim() || null;
+  if (!source_id) redirect("/app/contracts");
+  if (!start || !end) redirect(`/app/contracts/${source_id}?error=${encodeURIComponent("حدّد تاريخي البداية والنهاية")}`);
+  if (end < start) redirect(`/app/contracts/${source_id}?error=${encodeURIComponent("تاريخ النهاية قبل البداية")}`);
+  if (newAnnual == null || newAnnual < 0) redirect(`/app/contracts/${source_id}?error=${encodeURIComponent("أدخل الإيجار السنوي الجديد")}`);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("renew_contract", {
+    p_source: source_id,
+    p_start: start,
+    p_end: end,
+    p_new_annual: newAnnual,
+    p_number: number,
+  });
+  if (error) redirect(`/app/contracts/${source_id}?error=${encodeURIComponent(renewError(error.message))}`);
+  redirect(`/app/contracts/${data}`);
+}
+
+export async function activateRenewal(formData: FormData) {
+  const contract_id = String(formData.get("contract_id") ?? "");
+  if (!contract_id) redirect("/app/contracts");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("activate_renewal", { p_new: contract_id });
+  if (error) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent(renewError(error.message))}`);
+  revalidatePath(`/app/contracts/${contract_id}`);
+  redirect(`/app/contracts/${contract_id}`);
+}
+
 export async function recordPayment(formData: FormData) {
   const contract_id = String(formData.get("contract_id") ?? "");
   const charge_id = String(formData.get("charge_id") ?? "");

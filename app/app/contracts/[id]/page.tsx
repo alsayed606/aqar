@@ -2,7 +2,15 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
-import { activateContract, recordPayment, issueInvoice, amendRent, terminateContract } from "../actions";
+import {
+  activateContract,
+  recordPayment,
+  issueInvoice,
+  amendRent,
+  terminateContract,
+  renewContract,
+  activateRenewal,
+} from "../actions";
 import {
   CONTRACT_STATUS_AR,
   CONTRACT_STATUS_TONE,
@@ -72,13 +80,31 @@ export default async function ContractDetail({
   const { data: contract } = await supabase
     .from("contract")
     .select(
-      "id, contract_number, status, contract_kind, start_date, end_date, annual_rent_halalas, payment_frequency, deposit_halalas, service_fees_halalas, deed_number, terminated_at, termination_reason, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
+      "id, contract_number, status, contract_kind, start_date, end_date, annual_rent_halalas, payment_frequency, deposit_halalas, service_fees_halalas, deed_number, terminated_at, termination_reason, renewed_from_contract_id, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
     )
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();
 
   if (!contract) notFound();
+
+  // Renewal lineage: the predecessor this was renewed from, and any successor renewed off it.
+  const [{ data: predecessor }, { data: successor }] = await Promise.all([
+    contract.renewed_from_contract_id
+      ? supabase
+          .from("contract")
+          .select("id, contract_number, status")
+          .eq("id", contract.renewed_from_contract_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("contract")
+      .select("id, contract_number, status")
+      .eq("renewed_from_contract_id", id)
+      .neq("status", "cancelled")
+      .is("deleted_at", null)
+      .maybeSingle(),
+  ]);
 
   const { data: amendData } = await supabase
     .from("contract_amendment")
@@ -133,6 +159,16 @@ export default async function ContractDetail({
   const totalPaid = charges.reduce((s, c) => s + Number(c.allocated_halalas), 0);
   const totalBalance = totalGross - totalPaid;
 
+  // Renewal defaults: a 1-year successor starting the day after the current end date.
+  const shiftDate = (iso: string, years: number, days: number) => {
+    const d = new Date(iso + "T00:00:00Z");
+    d.setUTCFullYear(d.getUTCFullYear() + years);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
+  const renewStart = shiftDate(contract.end_date, 0, 1);
+  const renewEnd = shiftDate(renewStart, 1, -1);
+
   const Info = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div>
       <dt className="text-xs text-neutral-500">{label}</dt>
@@ -181,19 +217,57 @@ export default async function ContractDetail({
           <Info label="رسوم الخدمات" value={`${halalasToSar(contract.service_fees_halalas)} ر.س`} />
         </dl>
 
-        {contract.status === "draft" && (
-          <div className="mt-6 border-t border-neutral-100 pt-4 dark:border-neutral-800">
-            <p className="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
-              العقد مسودة. تفعيله يولّد جدول الاستحقاقات تلقائياً ويجعل الوحدة «مؤجرة». بعد التفعيل لا يمكن تعديل بنوده.
-            </p>
-            <form action={activateContract}>
-              <input type="hidden" name="contract_id" value={contract.id} />
-              <button className="rounded-lg bg-brand px-4 py-2 font-medium text-white hover:bg-brand-fg">
-                تفعيل العقد
-              </button>
-            </form>
+        {(predecessor || successor) && (
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 border-t border-neutral-100 pt-3 text-sm dark:border-neutral-800">
+            {predecessor && (
+              <span className="text-neutral-500">
+                مجدَّد من:{" "}
+                <Link href={`/app/contracts/${predecessor.id}`} className="text-brand hover:underline" dir="ltr">
+                  {predecessor.contract_number}
+                </Link>
+              </span>
+            )}
+            {successor && (
+              <span className="text-neutral-500">
+                جُدِّد بعقد لاحق:{" "}
+                <Link href={`/app/contracts/${successor.id}`} className="text-brand hover:underline" dir="ltr">
+                  {successor.contract_number}
+                </Link>{" "}
+                <span className="text-xs">({CONTRACT_STATUS_AR[successor.status] ?? successor.status})</span>
+              </span>
+            )}
           </div>
         )}
+
+        {contract.status === "draft" &&
+          (contract.renewed_from_contract_id ? (
+            <div className="mt-6 border-t border-neutral-100 pt-4 dark:border-neutral-800">
+              <p className="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
+                عقد تجديد (مسودة). تفعيله يُنهي العقد السابق تلقائياً (يصبح «منتهياً» ويُلغى ما تبقّى من
+                استحقاقاته المستقبلية غير المدفوعة)، ثم يبدأ هذا العقد ويولّد جدول استحقاقاته. بعد التفعيل لا
+                يمكن تعديل بنوده.
+              </p>
+              <form action={activateRenewal}>
+                <input type="hidden" name="contract_id" value={contract.id} />
+                <button className="rounded-lg bg-brand px-4 py-2 font-medium text-white hover:bg-brand-fg">
+                  تفعيل التجديد
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="mt-6 border-t border-neutral-100 pt-4 dark:border-neutral-800">
+              <p className="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
+                العقد مسودة. تفعيله يولّد جدول الاستحقاقات تلقائياً ويجعل الوحدة «مؤجرة». بعد التفعيل لا يمكن
+                تعديل بنوده.
+              </p>
+              <form action={activateContract}>
+                <input type="hidden" name="contract_id" value={contract.id} />
+                <button className="rounded-lg bg-brand px-4 py-2 font-medium text-white hover:bg-brand-fg">
+                  تفعيل العقد
+                </button>
+              </form>
+            </div>
+          ))}
       </header>
 
       {contract.status !== "draft" && (
@@ -438,6 +512,64 @@ export default async function ContractDetail({
               لا توجد ملاحق على هذا العقد.
             </p>
           )}
+        </section>
+      )}
+
+      {/* Renewal (تجديد العقد بعقد لاحق) */}
+      {(contract.status === "active" || contract.status === "expired") && !successor && (
+        <section>
+          <h2 className="mb-3 text-base font-semibold">تجديد العقد</h2>
+          <form
+            action={renewContract}
+            className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900"
+          >
+            <p className="text-xs text-neutral-500">
+              يُنشئ عقداً لاحقاً (مسودة) بنفس الوحدة والمستأجر — لا يُعدّل هذا العقد. تُراجع المسودة ثم تُفعّلها،
+              وعندها يصبح هذا العقد «منتهياً» ويبدأ العقد الجديد.
+            </p>
+            <input type="hidden" name="contract_id" value={contract.id} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="mb-0.5 block text-xs text-neutral-500">بداية العقد الجديد</span>
+                <input
+                  name="start_date"
+                  type="date"
+                  defaultValue={renewStart}
+                  className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-0.5 block text-xs text-neutral-500">نهاية العقد الجديد</span>
+                <input
+                  name="end_date"
+                  type="date"
+                  defaultValue={renewEnd}
+                  className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-0.5 block text-xs text-neutral-500">الإيجار السنوي الجديد (ر.س)</span>
+                <input
+                  name="new_annual"
+                  inputMode="decimal"
+                  defaultValue={(Number(contract.annual_rent_halalas) / 100).toString()}
+                  className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-0.5 block text-xs text-neutral-500">رقم العقد الجديد (اختياري)</span>
+                <input
+                  name="contract_number"
+                  placeholder="يُشتق تلقائياً من رقم العقد"
+                  dir="ltr"
+                  className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
+                />
+              </label>
+            </div>
+            <button className="rounded-lg bg-brand px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-fg">
+              إنشاء عقد التجديد
+            </button>
+          </form>
         </section>
       )}
     </div>
