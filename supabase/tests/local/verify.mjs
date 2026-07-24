@@ -36,6 +36,11 @@ try {
   // ---------------- Seed (as postgres, bypassing RLS) ----------------
   const org1 = (await one("insert into app.organization(name) values('Office One') returning id")).id;
   const org2 = (await one("insert into app.organization(name) values('Office Two') returning id")).id;
+  // These orgs are seeded by direct insert (not create_organization), so give each a live
+  // subscription — the 0036 guard fail-closes on new property/unit/contract/membership otherwise.
+  // Comped on the unlimited Enterprise tier so seed volume never trips a plan ceiling.
+  for (const o of [org1, org2])
+    await q("insert into app.org_subscription(org_id,plan_code,status) values($1,'enterprise','comped')", [o]);
 
   const mkIdentity = async (phone) => (await one(
     "insert into app.identity(phone_e164, phone_raw) values($1,$1) returning id", [phone])).id;

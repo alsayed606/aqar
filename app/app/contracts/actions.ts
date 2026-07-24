@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { sarToHalalas } from "@/lib/money";
+import { translateSubscriptionError } from "@/lib/subscription-errors";
 
 export type ContractState = { error?: string };
 
@@ -69,7 +70,7 @@ export async function createContract(
 
   if (error) {
     if (/contract_number/i.test(error.message)) return { error: "رقم العقد مستخدم بالفعل" };
-    return { error: error.message };
+    return { error: translateSubscriptionError(error.message) ?? error.message };
   }
 
   redirect(`/app/contracts/${created.id}`);
@@ -182,7 +183,10 @@ export async function renewContract(formData: FormData) {
     p_new_annual: newAnnual,
     p_number: number,
   });
-  if (error) redirect(`/app/contracts/${source_id}?error=${encodeURIComponent(renewError(error.message))}`);
+  if (error) {
+    const msg = translateSubscriptionError(error.message) ?? renewError(error.message);
+    redirect(`/app/contracts/${source_id}?error=${encodeURIComponent(msg)}`);
+  }
   redirect(`/app/contracts/${data}`);
 }
 

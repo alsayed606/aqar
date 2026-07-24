@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { normalizeSaudiPhone } from "@/lib/phone";
+import { translateSubscriptionError } from "@/lib/subscription-errors";
 
 export type InviteState = { error?: string; link?: string; role?: string };
 
@@ -156,7 +157,7 @@ export async function acceptInvitation(formData: FormData) {
   if (error) {
     const msg = /INVITATION_INVALID/i.test(error.message)
       ? "الدعوة غير صالحة أو منتهية أو مستخدمة"
-      : error.message;
+      : (translateSubscriptionError(error.message) ?? error.message);
     redirect(`/app/join?token=${encodeURIComponent(token)}&error=${encodeURIComponent(msg)}`);
   }
   redirect("/app?joined=1");

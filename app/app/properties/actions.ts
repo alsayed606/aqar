@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { parseArabicNumber, parseArabicInt } from "@/lib/num";
+import { translateSubscriptionError } from "@/lib/subscription-errors";
 
 export type PropState = { error?: string; ok?: boolean };
 export type UnitState = { error?: string; ok?: boolean };
@@ -49,7 +50,7 @@ export async function createProperty(
     district,
     deed_number,
   });
-  if (error) return { error: error.message };
+  if (error) return { error: translateSubscriptionError(error.message) ?? error.message };
 
   revalidatePath("/app/properties");
   return { ok: true };
@@ -100,7 +101,7 @@ export async function createUnit(
     if (/duplicate key|unit_number/i.test(error.message)) {
       return { error: `رقم الوحدة "${unit_number}" مستخدم بالفعل في هذا العقار.` };
     }
-    return { error: error.message };
+    return { error: translateSubscriptionError(error.message) ?? error.message };
   }
 
   revalidatePath(`/app/properties/${property_id}`);

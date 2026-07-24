@@ -34,6 +34,11 @@ try {
   // ---------------- Seed (as postgres, bypassing RLS) ----------------
   const org1 = (await one("insert into app.organization(name) values('Org One') returning id")).id;
   const org2 = (await one("insert into app.organization(name) values('Org Two') returning id")).id;
+  // Seeded by direct insert (not create_organization) → provision a live subscription so the 0036
+  // guard doesn't fail-close the property/unit/contract/membership inserts below. Comped on the
+  // unlimited Enterprise tier so seed volume never trips a plan ceiling.
+  for (const o of [org1, org2])
+    await q("insert into app.org_subscription(org_id,plan_code,status) values($1,'enterprise','comped')", [o]);
 
   const mkId = async (phone) => (await one("insert into app.identity(phone_e164,phone_raw) values($1,$1) returning id", [phone])).id;
   const idOwner = await mkId("+966500000010");   // office owner, org1
@@ -160,6 +165,58 @@ try {
   ok("generate_notifications FORBIDDEN for non-member org", genForbidden.ok === false && /FORBIDDEN/i.test(genForbidden.error || ""));
   const genOk = await asRole(idOwner, org1, () => client.query("select app.generate_notifications($1) c", [org1]));
   ok("generate_notifications OK for a member", genOk.ok === true, genOk.error);
+
+  // ==================== Subscription (0036): lock, limits, comp, provisioning ====================
+  // A tight throwaway plan makes the ceiling deterministic without seeding 25 properties.
+  await q("insert into app.plan(code,name_ar,max_properties,max_units,max_members,price_halalas,is_public) values('test_tight','اختبار',1,1,1,0,false) on conflict (code) do nothing");
+  const mkSelfOwner = async (org) => {
+    const p = (await one("insert into app.party(org_id,display_name,legal_kind,roles) values($1,'Self','company',array['owner']::app.party_role[]) returning id", [org])).id;
+    return (await one("insert into app.owner(org_id,party_id,is_self,owner_kind) values($1,$2,true,'company') returning id", [org, p])).id;
+  };
+
+  // Org with an EXPIRED trial → new creation is locked.
+  const orgS = (await one("insert into app.organization(name) values('Sub Org') returning id")).id;
+  await q("insert into app.org_subscription(org_id,plan_code,status,trial_ends_at) values($1,'test_tight','trialing', now() - interval '1 day')", [orgS]);
+  const ownS = await mkSelfOwner(orgS);   // party/owner are unguarded — only property/unit/member/contract are
+  let expiredErr = "";
+  try { await q("insert into app.property(org_id,owner_id,name) values($1,$2,'X')", [orgS, ownS]); }
+  catch (e) { expiredErr = e.message; }
+  ok("expired trial blocks new property (SUBSCRIPTION_EXPIRED)", /SUBSCRIPTION_EXPIRED/.test(expiredErr), expiredErr);
+
+  // Extend the trial (the manual marketing lever ق-د.1) → creation is re-enabled.
+  await q("update app.org_subscription set trial_ends_at = now() + interval '30 days' where org_id=$1", [orgS]);
+  const p1 = await q("insert into app.property(org_id,owner_id,name) values($1,$2,'P-1') returning id", [orgS, ownS]).then(r => r.rows[0].id, e => ({ err: e.message }));
+  ok("extending trial re-enables creation", typeof p1 === "string", p1 && p1.err);
+
+  // At the plan ceiling (1 property) → the 2nd is blocked.
+  let limitErr = "";
+  try { await q("insert into app.property(org_id,owner_id,name) values($1,$2,'P-2')", [orgS, ownS]); }
+  catch (e) { limitErr = e.message; }
+  ok("exceeding plan property limit is blocked (PLAN_LIMIT_EXCEEDED)", /PLAN_LIMIT_EXCEEDED/.test(limitErr), limitErr);
+
+  // A comp (ق-د.2) ignores expiry entirely — past dates, still allowed (Basic ceiling not hit).
+  const orgC = (await one("insert into app.organization(name) values('Comp Org') returning id")).id;
+  await q("insert into app.org_subscription(org_id,plan_code,status,trial_ends_at,current_period_end) values($1,'basic','comped', now()-interval '10 days', now()-interval '10 days')", [orgC]);
+  const ownC = await mkSelfOwner(orgC);
+  const pc = await q("insert into app.property(org_id,owner_id,name) values($1,$2,'C-1') returning id", [orgC, ownC]).then(r => r.rows[0].id, e => ({ err: e.message }));
+  ok("comped subscription bypasses expiry", typeof pc === "string", pc && pc.err);
+
+  // create_organization auto-provisions a 30-day Basic trial before the first membership.
+  const idFresh = await mkId("+966500000099");
+  const prov = await asRole(idFresh, null, async () => {
+    const oid = (await client.query("select app.create_organization('Fresh Office') id")).rows[0].id;
+    // Read the row under the new org's context (RLS hides it otherwise — no active-org header).
+    await client.query("select set_config('request.headers', $1, true)", [JSON.stringify({ "x-active-org": oid })]);
+    return (await client.query("select status, plan_code, trial_ends_at from app.org_subscription where org_id=$1", [oid])).rows[0];
+  });
+  ok("create_organization provisions a trialing Basic subscription",
+    prov.ok && prov.value && prov.value.status === "trialing" && prov.value.plan_code === "basic" && prov.value.trial_ends_at, prov.error);
+
+  // RLS: a member reads only their own org's subscription.
+  const subMine = await asRole(idOwner, org1, () => client.query("select count(*)::int n from app.org_subscription"));
+  ok("member sees own org subscription", subMine.ok && subMine.value.rows[0].n === 1, subMine.error);
+  const subForeign = await asRole(idOwner, org2, () => client.query("select count(*)::int n from app.org_subscription"));
+  ok("subscriptions isolated: forged/foreign org sees none", subForeign.ok && subForeign.value.rows[0].n === 0);
 
   console.log(`\nPhase-3: ${pass} passed, ${fail} failed`);
 } catch (e) {
