@@ -28,7 +28,7 @@ export default async function Home() {
       <header className="space-y-3">
         <h1 className="text-4xl font-bold tracking-tight">عقار</h1>
         <p className="text-neutral-600 dark:text-neutral-400">
-          منصة إدارة الأملاك — المرحلة الثانية: إعداد التطبيق وربطه بقاعدة البيانات.
+          منصّة إدارة الأملاك.
         </p>
         <a
           href="/login"

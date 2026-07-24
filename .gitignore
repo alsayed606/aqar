@@ -27,3 +27,10 @@ pgdata*/
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# claude-flow / Ruflo tooling artifacts — auto-generated, never commit (Charter هـ-34)
+CLAUDE.md
+.claude-flow/
+.swarm/
+.mcp.json
+ruvector.db

@@ -17,7 +17,7 @@ export default async function PortalLayout({ children }: { children: React.React
       <header className="no-print border-b border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-3">
           <Link href="/portal" className="text-lg font-bold">
-            عقار · بوابة المالك
+            عقار · البوابة
           </Link>
           <form action={signOutPortal}>
             <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">

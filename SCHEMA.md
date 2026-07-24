@@ -1,8 +1,8 @@
 # سجل الحقيقة — مخطط قاعدة البيانات | System of Record — Data Schema
-### منصة إدارة الأملاك (المرحلة الأولى) | Property-Management SaaS (Phase 1)
+### منصة إدارة الأملاك — مرجع طبقة البيانات | Property-Management SaaS — Data-Layer Reference
 
-**الحالة | Status:** مُسلَّم للاعتماد — لا واجهة ولا كود تطبيق قبل موافقتك | Delivered for approval — no UI/app code until you sign off.
-**التحقق | Verification:** كل الهجرات تُحمَّل على PostgreSQL 17، و**36/36** فحصاً سلوكياً ناجحاً (الاختبارات الإلزامية ١–١٣ + جولة استيراد Excel + سجل التدقيق + حماية آخر مالك). See [`supabase/tests/local/`](supabase/tests/local/) and pgTAP in [`supabase/tests/`](supabase/tests/).
+**الحالة | Status:** طبقة البيانات **حيّة ومكتملة** — ٣١ هجرة (`0001`–`0031`) مُطبَّقة على PostgreSQL 17، والتطبيق مبنيّ وحيّ فوقها. هذا الملف يوثّق طبقة البيانات (المخطط/RLS/الدوال). **المرجع الأعلى للمشروع:** [`docs/foundation/07-project-charter.md`](docs/foundation/07-project-charter.md).
+**التحقق | Verification:** الهجرات تُحمَّل على PostgreSQL 17؛ سويت طبقة البيانات المُلتزَم **36/36** ([`supabase/tests/local/`](supabase/tests/local/) + pgTAP). *(ملاحظة: ميزات المرحلة الثالثة `0019`–`0031` تحتاج اختبارات مُلتزَمة — مُجدوَل في Sprint B، القاعدة هـ-36.)*
 
 > هذا الملف يوثّق ما نفّذته الهجرات فعلياً في [`supabase/migrations/`](supabase/migrations/)، لا نيّة تصميمية. كل قاعدة في التكليف مربوطة أدناه بجدول/دالة/سياسة/اختبار.
 
@@ -28,6 +28,21 @@
 | `0014_auth_otp.sql` | request_otp / verify_otp / rate-limit / enumeration-safe |
 | `0015_financial_views.sql` | `charge_balance`, `contract_financial`, `unit_financial`, `payment_status` (مشتقّة) |
 | `0016_import_functions.sql` | import_validate / import_commit / import_revert + mappers |
+| `0017_identity_auth_users.sql` | ربط `app.identity` بـ `auth.users` + trigger `on_auth_user_created` (Supabase Auth) — **يُلغي عملياً OTP المخصّص في `0004`/`0014`، وهو كود مهجور يُزال في Sprint B** |
+| `0018_org_visibility.sql` | `is_member_of()` + رؤية المنظمة لمبدّل المنشآت |
+| `0019_contract_ops.sql` | `activate_contract` (توليد جدول الاستحقاقات) + `record_charge_payment` |
+| `0020_owner_statement.sql` | `owner_statement` (المُحصَّل − الأتعاب = الصافي، مشتق) |
+| `0021_dashboard_kpis.sql` | `dashboard_finance` (إشغال/تحصيل/متأخرات/مستحق — حدود الشهر بتوقيت الرياض) |
+| `0022_receipt_vouchers.sql` | `org_counter`/`next_counter` (ترقيم ذرّي) + `receipt_no` على الدفعة (سند القبض `RV-YYYY-NNNNN`) |
+| `0023_tax_invoice.sql` | `invoice`/`invoice_line` + `issue_invoice` + `owner.vat_number` (فاتورة ZATCA مرحلة أولى + QR) |
+| `0024_credit_debit_notes.sql` | `doc_kind` + `issue_credit_note`/`issue_debit_note` (إشعار دائن/مدين) |
+| `0025_owner_remittance.sql` | `owner_remittance` + ترقيم سند الصرف `RM-YYYY-NNNNN` |
+| `0026_member_invitations.sql` | `org_members` + `create_invitation` (دعوة الأعضاء، رمز مُجزّأ) |
+| `0027_contract_amendments.sql` | `amend_contract_rent`/`amend_contract_terminate` + `contract_period_shape` (ملاحق العقد) |
+| `0028_owner_portal.sql` | بوابة المالك: `create_owner_invitation`/`accept_owner_invitation` + دوال `owner_portal_*` محكومة بـ `party.identity_id=auth.uid()` |
+| `0029_tenant_portal.sql` | بوابة المستأجر: `create_tenant_invitation` + `accept_portal_invitation` (عام) + دوال `tenant_portal_*` محكومة بالهوية |
+| `0030_portal_documents.sql` | مستندات البوابة القابلة للطباعة: `tenant_portal_receipt(+_lines)` + `owner_portal_org` |
+| `0031_contract_renewal.sql` | تجديد العقد: `renewed_from_contract_id` + `renew_contract` + `activate_renewal` (عقد لاحق يحترم ثبات العقد) |
 
 ---
 
