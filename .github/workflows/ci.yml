@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  app:
+    name: typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          # Placeholder values — NEXT_PUBLIC_* are inlined at build time; real values live in Vercel.
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: build-time-placeholder
+
+  schema:
+    name: schema_all is in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Regenerate and verify no drift
+        run: |
+          node supabase/build-schema.mjs
+          git diff --exit-code -- supabase/schema_all.sql \
+            || (echo "::error::schema_all.sql is out of date — run 'npm run build:schema' and commit." && exit 1)
+
+  db-tests:
+    name: data-layer + Phase-3 tests (PostgreSQL 17)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run test suite (embedded PostgreSQL)
+        working-directory: supabase/tests/local
+        run: |
+          npm install
+          npm run verify

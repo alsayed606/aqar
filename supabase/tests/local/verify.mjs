@@ -199,35 +199,8 @@ try {
   await expectThrow('12 allocation cannot exceed payment total', () =>
     q("insert into app.payment_allocation(org_id,payment_id,charge_id,amount_halalas) values($1,$2,$3,1)", [org1, payMulti, chgA]), 'ALLOCATION_EXCEEDS_PAYMENT');
 
-  // ================= 7,8,9 OTP =================
-  const phoneNew = '+966555555501';       // brand new
-  const phoneExisting = '+966500000001';  // idA exists
-  // 9. enumeration: identical observable effect for existing vs non-existing
-  await q('select app.request_otp($1,null,null)', [phoneNew]);
-  await q('select app.request_otp($1,null,null)', [phoneExisting]);
-  const smsNew = (await one("select count(*)::int c from app.sms_outbox where phone_e164=$1", [phoneNew])).c;
-  const smsEx = (await one("select count(*)::int c from app.sms_outbox where phone_e164=$1", [phoneExisting])).c;
-  ok('09 request_otp identical for existing vs non-existing (no enumeration)', smsNew === 1 && smsEx === 1, `${smsNew}/${smsEx}`);
-
-  // 7. reuse + expiry
-  const body = (await one("select body from app.sms_outbox where phone_e164=$1 order by created_at desc limit 1", [phoneNew])).body;
-  const code = body.match(/(\d{6})/)[1];
-  const v1 = (await one('select app.verify_otp($1,$2,null,null) id', [phoneNew, code])).id;
-  ok('07 first verify_otp succeeds', v1 !== null);
-  const v2 = (await one('select app.verify_otp($1,$2,null,null) id', [phoneNew, code])).id;
-  ok('07 reused OTP is rejected (single-use)', v2 === null);
-  // expiry
-  const pExp = '+966555555502';
-  await q(`insert into app.otp_challenge(phone_e164,code_hash,purpose,expires_at)
-           values($1, encode(extensions.digest('654321'||app.otp_pepper(),'sha256'),'hex'),'login', now()-interval '1 minute')`, [pExp]);
-  const vExp = (await one('select app.verify_otp($1,$2,null,null) id', [pExp, '654321'])).id;
-  ok('07 expired OTP is rejected', vExp === null);
-
-  // 8. rate limit -> exactly 5 sends per window
-  const pRate = '+966555555503';
-  for (let i = 0; i < 8; i++) await q('select app.request_otp($1,null,null)', [pRate]);
-  const sends = (await one("select count(*)::int c from app.sms_outbox where phone_e164=$1", [pRate])).c;
-  ok('08 rate limit caps sends at 5 per window', sends === 5, 'got ' + sends);
+  // (Tests 7/8/9 — custom OTP request/verify/rate-limit — removed: the legacy OTP subsystem was
+  //  dropped in migration 0032; authentication is now Supabase Auth. See engineering principle هـ-35.)
 
   // ================= Import round-trip (properties) =================
   const batch = (await one("insert into app.import_batch(org_id,kind,source_filename) values($1,'properties','props.xlsx') returning id", [org1])).id;

@@ -15,7 +15,7 @@
 | `0001_extensions_roles.sql` | schemas (`app`, `extensions`)، pgcrypto/citext، أدوار Supabase |
 | `0002_enums.sql` | كل الـ enums (بما فيها `org_type` — عرض فقط) |
 | `0003_utils.sql` | `auth.uid()`، تطبيع الجوال/المبلغ/التاريخ، `set_updated_at` |
-| `0004_identity_auth.sql` | Identity, AuthMethod, Session, OTP, auth_attempt, sms_outbox |
+| `0004_identity_auth.sql` | Identity + (AuthMethod, Session, OTP, auth_attempt, sms_outbox — **أُزيلت في `0032`**؛ Identity يبقى) |
 | `0005_org_membership.sql` | Organization, FeatureFlag, Membership, property-scope, Invitation |
 | `0006_party_property.sql` | Party, Owner(is_self), Tenant, Property, Building, Unit, UnitStatusHistory |
 | `0007_contracts_agreements.sql` | Contract, ContractAmendment, ManagementAgreement |
@@ -25,7 +25,7 @@
 | `0011_access_functions.sql` | `current_org_id`, `has_org_access`, `has_property_access`, `is_org_admin` |
 | `0012_rls_policies.sql` | RLS مُفعّلة + سياسات كل جدول + المنح |
 | `0013_triggers_guards.sql` | ثبات العقد، حماية آخر مالك، منع الربط التلقائي، تاريخ حالة الوحدة، ثوابت التخصيص، سجل التدقيق غير القابل للتعديل، RPCs |
-| `0014_auth_otp.sql` | request_otp / verify_otp / rate-limit / enumeration-safe |
+| `0014_auth_otp.sql` | request_otp / verify_otp / rate-limit / enumeration-safe — **أُزيلت في `0032`** (استبدلها Supabase Auth، 0017) |
 | `0015_financial_views.sql` | `charge_balance`, `contract_financial`, `unit_financial`, `payment_status` (مشتقّة) |
 | `0016_import_functions.sql` | import_validate / import_commit / import_revert + mappers |
 | `0017_identity_auth_users.sql` | ربط `app.identity` بـ `auth.users` + trigger `on_auth_user_created` (Supabase Auth) — **يُلغي عملياً OTP المخصّص في `0004`/`0014`، وهو كود مهجور يُزال في Sprint B** |
@@ -43,6 +43,8 @@
 | `0029_tenant_portal.sql` | بوابة المستأجر: `create_tenant_invitation` + `accept_portal_invitation` (عام) + دوال `tenant_portal_*` محكومة بالهوية |
 | `0030_portal_documents.sql` | مستندات البوابة القابلة للطباعة: `tenant_portal_receipt(+_lines)` + `owner_portal_org` |
 | `0031_contract_renewal.sql` | تجديد العقد: `renewed_from_contract_id` + `renew_contract` + `activate_renewal` (عقد لاحق يحترم ثبات العقد) |
+| `0032_drop_legacy_otp.sql` | **إزالة** نظام OTP/الجلسات المخصّص المهجور (otp_challenge/auth_attempt/sms_outbox/session/auth_method + دواله + `auth_method_type`)؛ Identity يبقى |
+| `0033_viewer_readonly.sql` | `is_org_writer()` + سياسات RLS تقييدية (INSERT/UPDATE/DELETE) تجعل دور `viewer` **للقراءة فقط** على جداول المحفظة والمالية |
 
 ---
 
