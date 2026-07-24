@@ -150,6 +150,17 @@ try {
   ok("exactly one active contract on the unit",
     (await one("select count(*)::int n from app.contract where unit_id=$1 and status='active'", [U1])).n === 1);
 
+  // ==================== Notifications (0034): isolation + gating ====================
+  await q("insert into app.notification(org_id, kind, title) values($1,'charge_overdue','تنبيه اختبار')", [org1]);
+  const noteMine = await asRole(idOwner, org1, () => client.query("select count(*)::int n from app.notification"));
+  ok("member sees own org's notifications", noteMine.ok && noteMine.value.rows[0].n >= 1, noteMine.error);
+  const noteForeign = await asRole(idOwner, org2, () => client.query("select count(*)::int n from app.notification"));
+  ok("notifications isolated: forged/foreign org sees none", noteForeign.ok && noteForeign.value.rows[0].n === 0);
+  const genForbidden = await asRole(idOwner, org2, () => client.query("select app.generate_notifications($1)", [org2]));
+  ok("generate_notifications FORBIDDEN for non-member org", genForbidden.ok === false && /FORBIDDEN/i.test(genForbidden.error || ""));
+  const genOk = await asRole(idOwner, org1, () => client.query("select app.generate_notifications($1) c", [org1]));
+  ok("generate_notifications OK for a member", genOk.ok === true, genOk.error);
+
   console.log(`\nPhase-3: ${pass} passed, ${fail} failed`);
 } catch (e) {
   console.error("HARNESS ERROR:", e.message, "\n", e.stack);

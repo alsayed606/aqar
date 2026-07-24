@@ -45,6 +45,8 @@
 | `0031_contract_renewal.sql` | تجديد العقد: `renewed_from_contract_id` + `renew_contract` + `activate_renewal` (عقد لاحق يحترم ثبات العقد) |
 | `0032_drop_legacy_otp.sql` | **إزالة** نظام OTP/الجلسات المخصّص المهجور (otp_challenge/auth_attempt/sms_outbox/session/auth_method + دواله + `auth_method_type`)؛ Identity يبقى |
 | `0033_viewer_readonly.sql` | `is_org_writer()` + سياسات RLS تقييدية (INSERT/UPDATE/DELETE) تجعل دور `viewer` **للقراءة فقط** على جداول المحفظة والمالية |
+| `0034_notifications.sql` | جدول `notification` (org-scoped + RLS بنطاق العقار) + `generate_notifications` (استحقاقات قريبة/متأخرة، عقود تنتهي — DEFINER محكوم) + `mark_notifications_read` — داخل التطبيق، بلا قناة خارجية |
+| `0035_search_indexes.sql` | `pg_trgm` + فهارس GIN trigram على أعمدة البحث (اسم العقار/الطرف، رقم العقد/الفاتورة/السند) لتسريع `ilike` مع النمو |
 
 ---
 

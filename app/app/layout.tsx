@@ -19,6 +19,7 @@ export default async function AppLayout({
 
   const activeOrg = await getActiveOrg();
   let orgName: string | null = null;
+  let unread = 0;
   if (activeOrg) {
     const { data } = await supabase
       .from("organization")
@@ -26,6 +27,12 @@ export default async function AppLayout({
       .eq("id", activeOrg)
       .maybeSingle();
     orgName = data?.name ?? null;
+    // Unread notifications badge. Degrades to 0 (no throw) before migration 0034 is applied.
+    const { count } = await supabase
+      .from("notification")
+      .select("id", { count: "exact", head: true })
+      .is("read_at", null);
+    unread = count ?? 0;
   }
 
   return (
@@ -64,6 +71,14 @@ export default async function AppLayout({
                 </Link>
                 <Link href="/app/team" className="hover:text-brand">
                   الفريق
+                </Link>
+                <Link href="/app/notifications" className="relative hover:text-brand">
+                  الإشعارات
+                  {unread > 0 && (
+                    <span className="mr-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-medium text-white">
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  )}
                 </Link>
               </nav>
             )}

@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { PropertyForm } from "@/components/property-form";
 import { PROPERTY_KIND_AR } from "@/lib/labels";
+import { parseListParams, likePattern } from "@/lib/list-params";
+import { ListToolbar } from "@/components/list-toolbar";
+import { Pagination } from "@/components/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -16,17 +19,24 @@ type PropertyRow = {
   deed_number: string | null;
 };
 
-export default async function PropertiesPage() {
+export default async function PropertiesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
+  const { q, page, from, to } = parseListParams(await searchParams);
 
   const supabase = await createClient();
-  const [{ data, error }, { data: ownerData }] = await Promise.all([
-    supabase
-      .from("property")
-      .select("id, name, property_kind, city, district, deed_number")
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false }),
+  let propQuery = supabase
+    .from("property")
+    .select("id, name, property_kind, city, district, deed_number", { count: "exact" })
+    .is("deleted_at", null);
+  if (q) propQuery = propQuery.ilike("name", likePattern(q));
+
+  const [{ data, error, count }, { data: ownerData }] = await Promise.all([
+    propQuery.order("created_at", { ascending: false }).range(from, to),
     supabase
       .from("owner")
       .select("id, is_self, party:party_id(display_name)")
@@ -35,6 +45,7 @@ export default async function PropertiesPage() {
   ]);
 
   const properties = (data ?? []) as PropertyRow[];
+  const total = count ?? 0;
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const owners = (ownerData ?? []).map((o: any) => ({
     id: o.id,
@@ -47,7 +58,7 @@ export default async function PropertiesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">العقارات</h1>
-        <span className="text-sm text-neutral-500">{properties.length} عقار</span>
+        <span className="text-sm text-neutral-500">{total} عقار</span>
       </div>
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
@@ -55,13 +66,15 @@ export default async function PropertiesPage() {
         <PropertyForm owners={owners} />
       </section>
 
+      <ListToolbar q={q} placeholder="بحث باسم العقار…" />
+
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
           تعذّر تحميل العقارات: {error.message}
         </p>
       ) : properties.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-neutral-300 p-8 text-center text-neutral-500 dark:border-neutral-700">
-          لا توجد عقارات بعد. أضِف أول عقار من النموذج أعلاه.
+          {q ? "لا توجد نتائج مطابقة للبحث." : "لا توجد عقارات بعد. أضِف أول عقار من النموذج أعلاه."}
         </p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
@@ -89,6 +102,10 @@ export default async function PropertiesPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {!error && properties.length > 0 && (
+        <Pagination page={page} total={total} q={q} basePath="/app/properties" />
       )}
     </div>
   );

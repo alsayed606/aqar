@@ -5,6 +5,9 @@ import { getActiveOrg } from "@/lib/supabase/active-org";
 import { ContractForm } from "@/components/contract-form";
 import { CONTRACT_STATUS_AR, CONTRACT_STATUS_TONE } from "@/lib/labels";
 import { halalasToSar } from "@/lib/money";
+import { parseListParams, likePattern } from "@/lib/list-params";
+import { ListToolbar } from "@/components/list-toolbar";
+import { Pagination } from "@/components/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +16,27 @@ function first(x: any) {
   return Array.isArray(x) ? x[0] : x;
 }
 
-export default async function ContractsPage() {
+export default async function ContractsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
+  const { q, page, from, to } = parseListParams(await searchParams);
 
   const supabase = await createClient();
 
-  const [{ data: unitData }, { data: tenantData }, { data: contractData, error }] =
+  let contractQuery = supabase
+    .from("contract")
+    .select(
+      "id, contract_number, status, annual_rent_halalas, start_date, end_date, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
+      { count: "exact" },
+    )
+    .is("deleted_at", null);
+  if (q) contractQuery = contractQuery.ilike("contract_number", likePattern(q));
+
+  const [{ data: unitData }, { data: tenantData }, { data: contractData, error, count }] =
     await Promise.all([
       supabase
         .from("unit")
@@ -30,13 +47,7 @@ export default async function ContractsPage() {
         .from("tenant")
         .select("id, party:party_id(display_name)")
         .is("deleted_at", null),
-      supabase
-        .from("contract")
-        .select(
-          "id, contract_number, status, annual_rent_halalas, start_date, end_date, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
-        )
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false }),
+      contractQuery.order("created_at", { ascending: false }).range(from, to),
     ]);
 
   const units = (unitData ?? []).map((u: any) => ({
@@ -48,12 +59,13 @@ export default async function ContractsPage() {
     label: first(t.party)?.display_name ?? "مستأجر",
   }));
   const contracts = contractData ?? [];
+  const total = count ?? 0;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">العقود</h1>
-        <span className="text-sm text-neutral-500">{contracts.length} عقد</span>
+        <span className="text-sm text-neutral-500">{total} عقد</span>
       </div>
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
@@ -82,53 +94,58 @@ export default async function ContractsPage() {
         )}
       </section>
 
+      <ListToolbar q={q} placeholder="بحث برقم العقد…" />
+
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
           تعذّر تحميل العقود: {error.message}
         </p>
       ) : contracts.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-neutral-300 p-8 text-center text-neutral-500 dark:border-neutral-700">
-          لا توجد عقود بعد.
+          {q ? "لا توجد نتائج مطابقة للبحث." : "لا توجد عقود بعد."}
         </p>
       ) : (
-        <ul className="space-y-3">
-          {contracts.map((c: any) => {
-            const unit = first(c.unit);
-            const tenant = first(c.tenant);
-            return (
-              <li key={c.id}>
-                <Link
-                  href={`/app/contracts/${c.id}`}
-                  className="block rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:border-brand dark:border-neutral-800 dark:bg-neutral-900"
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold" dir="ltr">
-                      {c.contract_number}
+        <>
+          <ul className="space-y-3">
+            {contracts.map((c: any) => {
+              const unit = first(c.unit);
+              const tenant = first(c.tenant);
+              return (
+                <li key={c.id}>
+                  <Link
+                    href={`/app/contracts/${c.id}`}
+                    className="block rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:border-brand dark:border-neutral-800 dark:bg-neutral-900"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold" dir="ltr">
+                        {c.contract_number}
+                      </p>
+                      <span
+                        className={
+                          "rounded-full px-2.5 py-0.5 text-xs font-medium " +
+                          (CONTRACT_STATUS_TONE[c.status] ?? "")
+                        }
+                      >
+                        {CONTRACT_STATUS_AR[c.status] ?? c.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">
+                      {first(unit?.property)?.name ?? "—"} · وحدة {unit?.unit_number ?? "—"} ·{" "}
+                      {first(tenant?.party)?.display_name ?? "—"}
                     </p>
-                    <span
-                      className={
-                        "rounded-full px-2.5 py-0.5 text-xs font-medium " +
-                        (CONTRACT_STATUS_TONE[c.status] ?? "")
-                      }
-                    >
-                      {CONTRACT_STATUS_AR[c.status] ?? c.status}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">
-                    {first(unit?.property)?.name ?? "—"} · وحدة {unit?.unit_number ?? "—"} ·{" "}
-                    {first(tenant?.party)?.display_name ?? "—"}
-                  </p>
-                  <p className="mt-1 text-sm text-neutral-500">
-                    الإيجار السنوي: {halalasToSar(c.annual_rent_halalas)} ر.س ·{" "}
-                    <span dir="ltr">
-                      {c.start_date} → {c.end_date}
-                    </span>
-                  </p>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+                    <p className="mt-1 text-sm text-neutral-500">
+                      الإيجار السنوي: {halalasToSar(c.annual_rent_halalas)} ر.س ·{" "}
+                      <span dir="ltr">
+                        {c.start_date} → {c.end_date}
+                      </span>
+                    </p>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <Pagination page={page} total={total} q={q} basePath="/app/contracts" />
+        </>
       )}
     </div>
   );

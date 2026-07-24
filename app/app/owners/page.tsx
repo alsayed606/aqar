@@ -4,29 +4,41 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { OwnerForm } from "@/components/owner-form";
 import { first } from "@/lib/rows";
+import { parseListParams, likePattern } from "@/lib/list-params";
+import { ListToolbar } from "@/components/list-toolbar";
+import { Pagination } from "@/components/pagination";
 
 export const dynamic = "force-dynamic";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export default async function OwnersPage() {
+export default async function OwnersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
+  const { q, page, from, to } = parseListParams(await searchParams);
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("owner")
-    .select("id, is_self, iban, party:party_id(display_name, national_id, phone_e164)")
-    .is("deleted_at", null)
-    .order("is_self", { ascending: false });
+    .select("id, is_self, iban, party:party_id!inner(display_name, national_id, phone_e164)", {
+      count: "exact",
+    })
+    .is("deleted_at", null);
+  if (q) query = query.ilike("party.display_name", likePattern(q));
+  const { data, error, count } = await query.order("is_self", { ascending: false }).range(from, to);
 
   const owners = data ?? [];
+  const total = count ?? 0;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">الملّاك</h1>
-        <span className="text-sm text-neutral-500">{owners.length}</span>
+        <span className="text-sm text-neutral-500">{total}</span>
       </div>
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
@@ -34,39 +46,48 @@ export default async function OwnersPage() {
         <OwnerForm />
       </section>
 
+      <ListToolbar q={q} placeholder="بحث باسم المالك…" />
+
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
           تعذّر التحميل: {error.message}
         </p>
+      ) : owners.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-neutral-300 p-8 text-center text-neutral-500 dark:border-neutral-700">
+          {q ? "لا توجد نتائج مطابقة للبحث." : "لا يوجد ملّاك بعد."}
+        </p>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {owners.map((o: any) => {
-            const p = first(o.party);
-            return (
-              <li key={o.id}>
-                <Link
-                  href={`/app/owners/${o.id}`}
-                  className="block rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:border-brand dark:border-neutral-800 dark:bg-neutral-900"
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold">
-                      {o.is_self ? "المنشأة (مالك ذاتي)" : p?.display_name}
+        <>
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {owners.map((o: any) => {
+              const p = first(o.party);
+              return (
+                <li key={o.id}>
+                  <Link
+                    href={`/app/owners/${o.id}`}
+                    className="block rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:border-brand dark:border-neutral-800 dark:bg-neutral-900"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold">
+                        {o.is_self ? "المنشأة (مالك ذاتي)" : p?.display_name}
+                      </p>
+                      {o.is_self && (
+                        <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                          ذاتي
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-neutral-500" dir="ltr">
+                      {p?.phone_e164 ?? p?.national_id ?? ""}
                     </p>
-                    {o.is_self && (
-                      <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                        ذاتي
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-sm text-neutral-500" dir="ltr">
-                    {p?.phone_e164 ?? p?.national_id ?? ""}
-                  </p>
-                  <p className="mt-1 text-xs text-neutral-400">كشف الحساب ←</p>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+                    <p className="mt-1 text-xs text-neutral-400">كشف الحساب ←</p>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <Pagination page={page} total={total} q={q} basePath="/app/owners" />
+        </>
       )}
     </div>
   );

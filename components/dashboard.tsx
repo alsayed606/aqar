@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveOrg } from "@/lib/supabase/active-org";
 import { halalasToSar } from "@/lib/money";
 
 /**
@@ -34,6 +35,10 @@ export async function Dashboard() {
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
   const soon = isoInDays(60);
+
+  // Refresh operational notifications on home load (idempotent; a no-op error before migration 0034).
+  const activeOrg = await getActiveOrg();
+  if (activeOrg) await supabase.rpc("generate_notifications", { p_org: activeOrg });
 
   // Run every count in parallel. head:true → no rows transferred, just the count.
   const [

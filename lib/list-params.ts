@@ -1,0 +1,19 @@
+// Shared parsing for searchable/paginated list pages. Keeps page size + range math in one place.
+export const PAGE_SIZE = 20;
+
+export function parseListParams(sp: { q?: string; page?: string }) {
+  const q = (sp.q ?? "").trim();
+  const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
+  return { q, page, from, to };
+}
+
+// A PostgREST-safe ilike pattern: escape %, _ and \ so user input can't act as wildcards.
+export function likePattern(q: string): string {
+  return "%" + q.replace(/([\\%_])/g, "\\$1") + "%";
+}
+
+export function pageCountOf(total: number | null | undefined): number {
+  return Math.max(1, Math.ceil((total ?? 0) / PAGE_SIZE));
+}
