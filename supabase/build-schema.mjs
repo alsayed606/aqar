@@ -18,7 +18,8 @@ const header =
 const files = readdirSync(MIG).filter((f) => f.endsWith(".sql")).sort();
 let out = header;
 for (const f of files) {
-  const body = readFileSync(path.join(MIG, f), "utf8").replace(/\s*$/, "");
+  // Normalize CRLF -> LF so output is byte-identical on Windows and Linux (CI drift check).
+  const body = readFileSync(path.join(MIG, f), "utf8").replace(/\r\n/g, "\n").replace(/\s*$/, "");
   out += `\n${BAR}\n-- ${f}\n${BAR}\n${body}\n`;
 }
 writeFileSync(OUT, out, "utf8");
