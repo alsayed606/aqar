@@ -48,6 +48,7 @@
 | `0034_notifications.sql` | جدول `notification` (org-scoped + RLS بنطاق العقار) + `generate_notifications` (استحقاقات قريبة/متأخرة، عقود تنتهي — DEFINER محكوم) + `mark_notifications_read` — داخل التطبيق، بلا قناة خارجية |
 | `0035_search_indexes.sql` | `pg_trgm` + فهارس GIN trigram على أعمدة البحث (اسم العقار/الطرف، رقم العقد/الفاتورة/السند) لتسريع `ilike` مع النمو |
 | `0036_subscription.sql` | `plan` (كتالوج + بذور ٣ خطط) + `subscription_status` + `org_subscription` (سجل/منشأة، RLS قراءة للأعضاء) + دوال `subscription_active`/`plan_limit`/`usage_count`/`subscription_summary` + **BEFORE INSERT trigger** على `property/unit/membership/contract` (قفل الحيوية + سقف الموارد) + `create_organization` يوفّر تجربة ٣٠ يوماً + backfill `comped` للمنشآت القائمة |
+| `0037_identity_email.sql` | `identity.phone_e164` صار اختيارياً (الدخول بالبريد) + قيد `identity_contact_present` (جوال أو بريد) + `handle_new_auth_user()` يُنشئ هوية لمستخدم البريد (هاتف NULL) ويقرأ `full_name` من `raw_user_meta_data` |
 
 ---
 

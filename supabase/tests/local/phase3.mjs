@@ -218,6 +218,31 @@ try {
   const subForeign = await asRole(idOwner, org2, () => client.query("select count(*)::int n from app.org_subscription"));
   ok("subscriptions isolated: forged/foreign org sees none", subForeign.ok && subForeign.value.rows[0].n === 0);
 
+  // ==================== Identity email-first (0037): optional phone + contact floor ====================
+  const emailId = (await one("insert into app.identity(email) values('office@example.com') returning id")).id;
+  ok("identity with email only (no phone) is accepted", !!emailId);
+
+  let bothNull = "";
+  try { await q("insert into app.identity(full_name) values('No Contact')"); }
+  catch (e) { bothNull = e.message; }
+  ok("identity with neither phone nor email is rejected", /identity_contact_present|check/i.test(bothNull), bothNull);
+
+  let badPhone = "";
+  try { await q("insert into app.identity(phone_e164) values('12345')"); }
+  catch (e) { badPhone = e.message; }
+  ok("identity phone format still enforced when present", /check|phone/i.test(badPhone), badPhone);
+
+  // The whole point: a phone-less (email) identity must be able to create an org, and get a trial sub.
+  const emailOrg = await asRole(emailId, null, async () => {
+    const oid = (await client.query("select app.create_organization('Email Office') id")).rows[0].id;
+    await client.query("select set_config('request.headers', $1, true)", [JSON.stringify({ "x-active-org": oid })]);
+    const sub = (await client.query("select status, plan_code from app.org_subscription where org_id=$1", [oid])).rows[0];
+    const mem = (await client.query("select count(*)::int n from app.membership where org_id=$1 and identity_id=$2", [oid, emailId])).rows[0].n;
+    return { sub, mem };
+  });
+  ok("create_organization works for an email-only identity (+ trial provisioned)",
+    emailOrg.ok && emailOrg.value.sub && emailOrg.value.sub.status === "trialing" && emailOrg.value.mem === 1, emailOrg.error);
+
   console.log(`\nPhase-3: ${pass} passed, ${fail} failed`);
 } catch (e) {
   console.error("HARNESS ERROR:", e.message, "\n", e.stack);
