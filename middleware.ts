@@ -47,7 +47,10 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname, search, origin } = request.nextUrl;
-  const isProtected = pathname === "/app" || pathname.startsWith("/app/") || pathname === "/portal" || pathname.startsWith("/portal/");
+  const isProtected =
+    pathname === "/app" || pathname.startsWith("/app/") ||
+    pathname === "/portal" || pathname.startsWith("/portal/") ||
+    pathname === "/operator" || pathname.startsWith("/operator/");
   const isLogin = pathname === "/login";
 
   // Unauthenticated → send to login, remembering where they wanted to go.

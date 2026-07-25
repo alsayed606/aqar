@@ -16,8 +16,8 @@
 **تسجيل الدخول بالجوال جاهز على البيئة الحيّة.** الهجرات `0001`–`0019` مُطبَّقة على القاعدة.
 
 ### ⏳ مطلوب الآن
-- ⏳ **هجرة `0038`** (صندوق إرسال الإشعارات بالبريد) — **بانتظار تطبيقك**. **+ متغيرات بيئة Vercel:** `SUPABASE_SERVICE_ROLE_KEY`، `EMAIL_FROM` (مُرسِل مُوثَّق في Resend)، `CRON_SECRET` (بجانب `RESEND_API_KEY` الموجود). **مسار `/auth/callback` والـ middleware جاهزان الآن**، لذا يمكنك **تفعيل Confirm Email** في لوحة Supabase بأمان.
-- ✅ هجرات **`0036`–`0037`** (الاشتراك، الهوية بالبريد) — طُبّقت. الدخول بالبريد يعمل حيّاً.
+- ⏳ **هجرة `0039`** (دفع الاشتراك الآلي + المشغّل) — **بانتظار تطبيقك**. **+ متغيرات بيئة Vercel:** `MOYASAR_SECRET_KEY`، `MOYASAR_WEBHOOK_SECRET`. **+ ضبط Moyasar:** عنوان webhook = `https://<موقعك>/api/payments/webhook` مع `secret_token`. **+ بذر هويتك كمشغّل:** `insert into app.platform_operator(identity_id) values ('<auth-uid>');`.
+- ✅ هجرات **`0036`–`0038`** (الاشتراك، الهوية بالبريد، إرسال الإشعارات) — طُبّقت. الدخول بالبريد + إشعارات البريد تعمل حيّاً.
 - ✅ هجرات **`0032`–`0035`** (إسقاط OTP، قراءة «المطّلع» فقط، الإشعارات، فهارس البحث) — طُبّقت.
 - ✅ هجرة **`0031`** (تجديد العقود عبر عقد لاحق) — طُبّقت.
 - ✅ هجرة **`0030`** (مستندات البوابة القابلة للطباعة) — طُبّقت.
@@ -35,6 +35,15 @@
 ---
 
 ## 2026-07-25
+
+### ميزة — Sprint G: دفع الاشتراك الآلي (Moyasar) + واجهة مشغّل المنصّة — نطاق مُجمَّد
+إغلاق دائرة الفوترة: يدفع المكتب عبر صفحة Moyasar المستضافة فيُفعَّل اشتراكه فوراً، + واجهة مشغّل لإدارة الاشتراكات يدوياً. قرارات مُعتمدة: Moyasar · دفعة لكل فترة · جدول `platform_operator` · تأجيل فاتورة ZATCA لرسوم الـSaaS.
+- **هجرة `0039`:** جدول `subscription_payment` (RLS قراءة للمدير، `gateway_payment_id` فريد، تتبّع status/period/raw). `create_subscription_payment(org,plan)` (مقيّد بالمدير، يرفض الخطط غير العامة/بلا سعر). `apply_subscription_payment`/`mark_subscription_payment_failed` (**service_role حصراً، idempotent**): عند الدفع يُفعّل `org_subscription` (`active` + الخطة + `current_period_end = max(now, current) + شهر`)، والتطبيق مرّتين = تفعيل واحد. جدول `platform_operator` + `is_platform_operator()` + `operator_list_orgs`/`operator_set_subscription`/`operator_list_payments` (مقيّدة بالمشغّل، فوق كل المنشآت).
+- **G-1 الدفع:** طبقة `lib/payments/moyasar.ts` (Invoices API، Basic auth، **صفحة مستضافة — لا نلمس البطاقة**) + `startSubscriptionCheckout` (نيّة → فاتورة Moyasar → تحويل) + أزرار «اشترك/تجديد» في `/app/subscription` + webhook `/api/payments/webhook` (تحقّق `secret_token`، service_role، `apply`/`mark`، idempotent، مطابقة عبر `metadata.payment_intent`).
+- **G-2 المشغّل:** صفحتا `/operator` (كل المنشآت + اشتراك + استخدام) و`/operator/[orgId]` (تعديل الاشتراك عبر `operator_set_subscription` + سجل المدفوعات)، محميّتان بـ`is_platform_operator` (غير المشغّل → 404) + `/operator` أُضيف لحماية Middleware.
+- **مؤجَّل بالتجميد:** الدفع المتكرّر الآلي (توكنة/تجديد ذاتي/dunning) · proration · فاتورة ZATCA لرسوم الاشتراك · الاسترداد الآلي · قنوات SMS.
+- التحقق PG17: **`verify.mjs` ٣١/٣١ + `phase3.mjs` ٦٣/٦٣** (أُضيف ١٦: نيّة الدفع مقيّدة بالمدير + رفض غير القابل للشراء، `apply` يُفعّل ويمدّد و**idempotent**، mark failed، عزل RLS للمدفوعات، بوّابة `is_platform_operator` وعمل/رفض `operator_*` والتطبيق الفعلي للتعديل) · `0001`–`0039` نظيف · `schema_all` (٣٩) · `tsc` نظيف · `build` مُجمَّع بنجاح (كل مسارات الدفع/المشغّل).
+- **⏳ يتطلّب تطبيقك:** هجرة **`0039`** + متغيّرات Moyasar في Vercel + ضبط webhook + بذر هويتك في `platform_operator`.
 
 ### ميزة — Sprint F: إرسال البريد (إشعارات + اكتمال المصادقة) — نطاق مُجمَّد
 تفعيل إرسال البريد الحقيقي فوق **Resend** (مزوّد واحد): إشعارات الاستحقاقات للمكاتب (ADR-0002) + تأكيد البريد واستعادة كلمة المرور.

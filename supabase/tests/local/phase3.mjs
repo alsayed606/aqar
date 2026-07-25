@@ -306,6 +306,69 @@ try {
   const failedRow = await one("select status, attempts, last_error from app.notification_delivery where id=$1", [d2]);
   ok("delivery becomes 'failed' after 3 attempts", failedRow.status === "failed" && failedRow.attempts === 3, JSON.stringify(failedRow));
 
+  // ==================== Subscription payments (0039): intent → apply → activate ====================
+  // Committed authenticated call (persists, unlike asRole) via session GUCs; the fns are DEFINER.
+  async function callAs(sub, org, sql, params) {
+    await q("select set_config('request.jwt.claims',$1,false)", [JSON.stringify({ sub, role: "authenticated" })]);
+    await q("select set_config('request.headers',$1,false)", [JSON.stringify({ "x-active-org": org })]);
+    try { return (await q(sql, params)).rows; }
+    finally {
+      await q("select set_config('request.jwt.claims','',false)");
+      await q("select set_config('request.headers','',false)");
+    }
+  }
+
+  const intent = (await callAs(idOwner, org1, "select * from app.create_subscription_payment($1,'basic')", [org1]))[0];
+  ok("create_subscription_payment records an initiated Basic intent (9900)",
+    intent && intent.status === "initiated" && Number(intent.amount_halalas) === 9900, JSON.stringify(intent && { s: intent.status, a: intent.amount_halalas }));
+
+  let payForbidden = "";
+  try { await callAs(idViewer, org1, "select app.create_subscription_payment($1,'basic')", [org1]); } catch (e) { payForbidden = e.message; }
+  ok("create_subscription_payment FORBIDDEN for a non-admin", /FORBIDDEN/i.test(payForbidden), payForbidden);
+
+  let notPurchasable = "";
+  try { await callAs(idOwner, org1, "select app.create_subscription_payment($1,'enterprise')", [org1]); } catch (e) { notPurchasable = e.message; }
+  ok("enterprise (private / price 0) is not self-serve purchasable", /PLAN_NOT_PURCHASABLE/i.test(notPurchasable), notPurchasable);
+
+  await q("select app.apply_subscription_payment($1,$2,$3::jsonb)", [intent.id, "moyasar-abc", JSON.stringify({ id: "moyasar-abc", status: "paid" })]);
+  const sub1 = await one("select plan_code, status, (current_period_end > now()) future from app.org_subscription where org_id=$1", [org1]);
+  ok("apply activates the subscription (basic, active, future period)", sub1.plan_code === "basic" && sub1.status === "active" && sub1.future === true, JSON.stringify(sub1));
+  const paid1 = await one("select status, paid_at, gateway_payment_id, period_end from app.subscription_payment where id=$1", [intent.id]);
+  ok("payment marked paid (gateway ref + period_end)", paid1.status === "paid" && !!paid1.paid_at && paid1.gateway_payment_id === "moyasar-abc" && !!paid1.period_end);
+
+  await q("select app.apply_subscription_payment($1,$2,$3::jsonb)", [intent.id, "moyasar-abc", JSON.stringify({ id: "moyasar-abc", status: "paid" })]);
+  const end2 = (await one("select period_end from app.subscription_payment where id=$1", [intent.id])).period_end;
+  ok("apply is idempotent (period NOT extended twice)", new Date(paid1.period_end).getTime() === new Date(end2).getTime());
+
+  const intent2 = (await callAs(idOwner, org1, "select * from app.create_subscription_payment($1,'pro')", [org1]))[0];
+  await q("select app.mark_subscription_payment_failed($1,$2::jsonb)", [intent2.id, JSON.stringify({ status: "failed" })]);
+  ok("mark_subscription_payment_failed sets failed", (await one("select status from app.subscription_payment where id=$1", [intent2.id])).status === "failed");
+
+  const payMine = await asRole(idOwner, org1, () => client.query("select count(*)::int n from app.subscription_payment"));
+  ok("org admin reads own payments (RLS)", payMine.ok && payMine.value.rows[0].n >= 1, payMine.error);
+  const payViewer = await asRole(idViewer, org1, () => client.query("select count(*)::int n from app.subscription_payment"));
+  ok("non-admin member cannot read payments (is_org_admin RLS)", payViewer.ok && payViewer.value.rows[0].n === 0);
+  const payCross = await asRole(idOwner, org2, () => client.query("select count(*)::int n from app.subscription_payment where org_id=$1", [org1]));
+  ok("payments invisible under a foreign org context", payCross.ok && payCross.value.rows[0].n === 0);
+
+  // ==================== Platform operator (0039) ====================
+  const opNo = await asRole(idOwner, org1, () => client.query("select app.is_platform_operator() b"));
+  ok("is_platform_operator false for a normal user", opNo.ok && opNo.value.rows[0].b === false, opNo.error);
+  const opForbidden = await asRole(idOwner, org1, () => client.query("select * from app.operator_list_orgs()"));
+  ok("operator_list_orgs FORBIDDEN for a non-operator", opForbidden.ok === false && /FORBIDDEN/i.test(opForbidden.error || ""));
+
+  await q("insert into app.platform_operator(identity_id) values($1)", [idOwner]);
+  const opYes = await asRole(idOwner, org1, () => client.query("select app.is_platform_operator() b"));
+  ok("is_platform_operator true after seeding", opYes.ok && opYes.value.rows[0].b === true);
+  const opList = await asRole(idOwner, org1, () => client.query("select count(*)::int n from app.operator_list_orgs()"));
+  ok("operator_list_orgs returns orgs for an operator", opList.ok && opList.value.rows[0].n >= 1, opList.error);
+
+  await callAs(idOwner, org1, "select app.operator_set_subscription($1,'pro','active'::app.subscription_status,null,null,'partner')", [org2]);
+  const org2sub = await one("select plan_code, status, notes from app.org_subscription where org_id=$1", [org2]);
+  ok("operator_set_subscription applies the override (org2 → pro/active/partner)", org2sub.plan_code === "pro" && org2sub.status === "active" && org2sub.notes === "partner", JSON.stringify(org2sub));
+  const opPay = await asRole(idOwner, org1, () => client.query("select count(*)::int n from app.operator_list_payments($1)", [org1]));
+  ok("operator_list_payments works for an operator", opPay.ok && opPay.value.rows[0].n >= 1, opPay.error);
+
   console.log(`\nPhase-3: ${pass} passed, ${fail} failed`);
 } catch (e) {
   console.error("HARNESS ERROR:", e.message, "\n", e.stack);
