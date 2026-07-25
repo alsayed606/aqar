@@ -369,6 +369,50 @@ try {
   const opPay = await asRole(idOwner, org1, () => client.query("select count(*)::int n from app.operator_list_payments($1)", [org1]));
   ok("operator_list_payments works for an operator", opPay.ok && opPay.value.rows[0].n >= 1, opPay.error);
 
+  // ==================== Recurring billing (0040): token, auto-renew, dunning ====================
+  // org1 is basic/active with a future period (from the payment tests above), no card yet.
+  let noCard = "";
+  try { await callAs(idOwner, org1, "select app.set_auto_renew($1,true)", [org1]); } catch (e) { noCard = e.message; }
+  ok("set_auto_renew requires a saved card", /NO_PAYMENT_METHOD/i.test(noCard), noCard);
+
+  await q("select app.save_payment_method($1,$2,$3,$4,$5,$6)", [org1, "tok_123", "visa", "4242", 12, 2030]);
+  const pm = await one("select token, brand, last4, status from app.org_payment_method where org_id=$1 and status='active'", [org1]);
+  ok("save_payment_method stores an active token (reference, not card)", pm.token === "tok_123" && pm.brand === "visa" && pm.last4 === "4242");
+  const armed = await one("select auto_renew, payment_method_id from app.org_subscription where org_id=$1", [org1]);
+  ok("saving a card enables auto_renew + links the method", armed.auto_renew === true && !!armed.payment_method_id);
+
+  const notDue = (await q("select count(*)::int n from app.claim_due_renewals(50)")).rows[0].n;
+  ok("claim_due_renewals skips a not-yet-due subscription", notDue === 0, "got " + notDue);
+
+  await q("update app.org_subscription set current_period_end = now() - interval '1 day' where org_id=$1", [org1]);
+  const due = (await q("select * from app.claim_due_renewals(50)")).rows.find((r) => r.org_id === org1);
+  ok("claim_due_renewals leases a due sub + opens an auto intent (9900, token)", !!due && Number(due.amount_halalas) === 9900 && due.token === "tok_123", JSON.stringify(due && { a: due.amount_halalas, t: due.token }));
+  const autoIntent = await one("select initiated_by, attempt, status from app.subscription_payment where id=$1", [due.intent_id]);
+  ok("auto intent recorded (initiated_by=auto, attempt=1)", autoIntent.initiated_by === "auto" && autoIntent.attempt === 1 && autoIntent.status === "initiated");
+  const renewReclaim = (await q("select count(*)::int n from app.claim_due_renewals(50)")).rows[0].n;
+  ok("claim does not re-lease an in-flight renewal", renewReclaim === 0);
+
+  await q("select app.apply_subscription_payment($1,$2,$3::jsonb)", [due.intent_id, "moyasar-renew-1", JSON.stringify({ status: "paid" })]);
+  const renewed = await one("select status, dunning_attempts, next_charge_at, (current_period_end > now()) fut from app.org_subscription where org_id=$1", [org1]);
+  ok("apply renews: active, dunning reset, next_charge cleared, period extended", renewed.status === "active" && renewed.dunning_attempts === 0 && renewed.next_charge_at === null && renewed.fut === true, JSON.stringify(renewed));
+
+  // Full dunning cycle: 3 failed auto-charges → past_due.
+  for (let i = 1; i <= 3; i++) {
+    await q("update app.org_subscription set current_period_end = now() - interval '1 day', next_charge_at = null where org_id=$1", [org1]);
+    const m = (await q("select * from app.claim_due_renewals(50)")).rows.find((r) => r.org_id === org1);
+    await q("select app.record_dunning_failure($1,$2::jsonb)", [m.intent_id, JSON.stringify({ error: "declined" })]);
+  }
+  const dun = await one("select status, dunning_attempts from app.org_subscription where org_id=$1", [org1]);
+  ok("dunning: subscription goes past_due after 3 failed attempts", dun.status === "past_due" && dun.dunning_attempts === 3, JSON.stringify(dun));
+  const billNotes = (await one("select count(*)::int n from app.notification where org_id=$1 and kind in ('billing_failed','subscription_past_due')", [org1])).n;
+  ok("dunning raises billing notifications (in-app + queued email)", billNotes >= 1, "got " + billNotes);
+
+  // RLS: payment methods are admin-only.
+  const pmViewer = await asRole(idViewer, org1, () => client.query("select count(*)::int n from app.org_payment_method"));
+  ok("non-admin cannot read payment methods (RLS)", pmViewer.ok && pmViewer.value.rows[0].n === 0);
+  const pmAdmin = await asRole(idOwner, org1, () => client.query("select count(*)::int n from app.org_payment_method where status='active'"));
+  ok("admin reads own active payment method (RLS)", pmAdmin.ok && pmAdmin.value.rows[0].n === 1, pmAdmin.error);
+
   console.log(`\nPhase-3: ${pass} passed, ${fail} failed`);
 } catch (e) {
   console.error("HARNESS ERROR:", e.message, "\n", e.stack);

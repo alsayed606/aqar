@@ -16,8 +16,8 @@
 **تسجيل الدخول بالجوال جاهز على البيئة الحيّة.** الهجرات `0001`–`0019` مُطبَّقة على القاعدة.
 
 ### ⏳ مطلوب الآن
-- ⏳ **هجرة `0039`** (دفع الاشتراك الآلي + المشغّل) — **بانتظار تطبيقك**. **+ متغيرات بيئة Vercel:** `MOYASAR_SECRET_KEY`، `MOYASAR_WEBHOOK_SECRET`. **+ ضبط Moyasar:** عنوان webhook = `https://<موقعك>/api/payments/webhook` مع `secret_token`. **+ بذر هويتك كمشغّل:** `insert into app.platform_operator(identity_id) values ('<auth-uid>');`.
-- ✅ هجرات **`0036`–`0038`** (الاشتراك، الهوية بالبريد، إرسال الإشعارات) — طُبّقت. الدخول بالبريد + إشعارات البريد تعمل حيّاً.
+- ⏳ **هجرة `0040`** (التجديد المتكرّر) — **بانتظار تطبيقك**. **بلا متغيّرات/أسرار جديدة** (تعيد استخدام `MOYASAR_SECRET_KEY` + `CRON_SECRET`). *ملاحظة: أُضيف cron ثانٍ يومي `/api/cron/renew-subscriptions` في `vercel.json` (خطة Hobby تسمح بمهمّتَي cron — لدينا الآن اثنتان بالضبط).*
+- ✅ هجرات **`0036`–`0039`** (الاشتراك، الهوية بالبريد، إرسال الإشعارات، الدفع الآلي + المشغّل) — طُبّقت. الدفع الآلي + لوحة المشغّل تعملان حيّاً.
 - ✅ هجرات **`0032`–`0035`** (إسقاط OTP، قراءة «المطّلع» فقط، الإشعارات، فهارس البحث) — طُبّقت.
 - ✅ هجرة **`0031`** (تجديد العقود عبر عقد لاحق) — طُبّقت.
 - ✅ هجرة **`0030`** (مستندات البوابة القابلة للطباعة) — طُبّقت.
@@ -35,6 +35,14 @@
 ---
 
 ## 2026-07-25
+
+### ميزة — Sprint H: التجديد المتكرّر الآلي (توكنة + خصم دوري + Dunning) — نطاق مُجمَّد
+استدامة الفوترة بلا تدخّل شهري. قرارات مُعتمدة: حفظ البطاقة عند أول دفعة (on-session) · Dunning يوم ٠/+٢/+٥ ثم `past_due` (قفل، البيانات تبقى) · تنبيهات داخل التطبيق + بريد · إقرار دعم Moyasar للـoff-session.
+- **هجرة `0040`:** `org_payment_method` (**رمز token مرجعي — لا بيانات بطاقة**، RLS قراءة للمدير، بطاقة نشطة واحدة/منشأة) + حقول `org_subscription` (`auto_renew`/`payment_method_id`/`dunning_attempts`/`next_charge_at`) + `subscription_payment` (`initiated_by`/`attempt`). دوال: `set_auto_renew`/`remove_payment_method` (مدير) · `save_payment_method`/`claim_due_renewals` (حجز ذرّي `FOR UPDATE SKIP LOCKED` + فتح نيّة `auto`)/`record_dunning_failure` (جدول ٠/+٢/+٥ ثم `past_due` + تنبيه)/`enqueue_notification_email` (**service_role حصراً**). تحديث `apply_subscription_payment` (تصفير Dunning عند أي نجاح) و`subscription_summary` (auto_renew + بطاقة).
+- **التطبيق:** `moyasar.chargeToken` (Payments API، `source=token`) + `extractCardToken` · خانة «فعّل التجديد التلقائي» (مفعّلة افتراضياً) في الدفع؛ الـwebhook يحفظ الرمز عند النجاح إن طُلب · صفحة الاشتراك: قسم التجديد التلقائي (بطاقة •••• + تشغيل/إيقاف + إزالة) · مجدول **Vercel Cron يومي** `/api/cron/renew-subscriptions` (claim→charge→apply/dunning) + إدخال cron في `vercel.json`.
+- **مؤجَّل بالتجميد:** proration · بطاقات متعدّدة · Apple Pay المتكرّر · الاسترداد الآلي · Dunning عبر SMS.
+- التحقق PG17: **`verify.mjs` ٣١/٣١ + `phase3.mjs` ٧٥/٧٥** (أُضيف ١٢: التوكنة تُفعّل التجديد، `set_auto_renew` يتطلّب بطاقة، `claim_due_renewals` يحجز المستحقّ فقط ولا يُكرّر، `apply` يُجدّد ويصفّر Dunning، دورة Dunning الكاملة → `past_due`، عزل RLS للبطاقات) · `0001`–`0040` نظيف · `schema_all` (٤٠) · `tsc`+`build` **exit 0**.
+- **⏳ يتطلّب تطبيقك:** هجرة **`0040`** فقط (لا أسرار جديدة). *التحقّق الحيّ للخصم off-session يعتمد دعم Moyasar للدفع المتكرّر المُوكَّن (مُقَرّ).*
 
 ### ميزة — Sprint G: دفع الاشتراك الآلي (Moyasar) + واجهة مشغّل المنصّة — نطاق مُجمَّد
 إغلاق دائرة الفوترة: يدفع المكتب عبر صفحة Moyasar المستضافة فيُفعَّل اشتراكه فوراً، + واجهة مشغّل لإدارة الاشتراكات يدوياً. قرارات مُعتمدة: Moyasar · دفعة لكل فترة · جدول `platform_operator` · تأجيل فاتورة ZATCA لرسوم الـSaaS.

@@ -51,6 +51,7 @@
 | `0037_identity_email.sql` | `identity.phone_e164` صار اختيارياً (الدخول بالبريد) + قيد `identity_contact_present` (جوال أو بريد) + `handle_new_auth_user()` يُنشئ هوية لمستخدم البريد (هاتف NULL) ويقرأ `full_name` من `raw_user_meta_data` |
 | `0038_notification_delivery.sql` | قناة إرسال الإشعارات (بريد): `notification_channel`/`delivery_status` + جدول `notification_delivery` (outbox، RLS قراءة للأعضاء، فهرس idempotency) + `enqueue_email_deliveries` (جلسة المستخدم) + `claim_email_deliveries`/`mark_email_delivery_sent`/`_failed` (service_role فقط، backoff ١/٥/٣٠، حد ٣). الـ drainer = Vercel Cron عبر Resend |
 | `0039_subscription_payments.sql` | دفع الاشتراك الآلي (Moyasar) + مشغّل المنصّة: `subscription_payment` (RLS قراءة للمدير، `gateway_payment_id` فريد) + `create_subscription_payment` (مدير) + `apply_subscription_payment`/`mark_..._failed` (service_role فقط، idempotent، يُفعّل `org_subscription` +شهر) + جدول `platform_operator` + `is_platform_operator` + `operator_list_orgs`/`operator_set_subscription`/`operator_list_payments` (مقيّدة بالمشغّل) |
+| `0040_recurring_billing.sql` | التجديد المتكرّر: `org_payment_method` (رمز token مرجعي، RLS مدير) + حقول `org_subscription` (auto_renew/payment_method_id/dunning_attempts/next_charge_at) + `set_auto_renew`/`remove_payment_method` (مدير) + `save_payment_method`/`claim_due_renewals`/`record_dunning_failure`/`enqueue_notification_email` (service_role) + تحديث `apply_subscription_payment` (تصفير Dunning) و`subscription_summary` (auto_renew+card). المجدول = Vercel Cron يومي عبر `moyasar.chargeToken` |
 
 ---
 

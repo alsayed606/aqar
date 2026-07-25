@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { halalasToSar } from "@/lib/money";
 import { fmtDate, type Summary, type SubscriptionStatus } from "@/lib/subscription";
-import { startSubscriptionCheckout } from "./actions";
+import { startSubscriptionCheckout, setAutoRenew, removeCard } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -139,9 +139,51 @@ export default async function SubscriptionPage({
             </ul>
           </div>
 
-          {/* Plans + automated payment (Moyasar hosted checkout). */}
+          {/* Auto-renew status + saved card management. */}
+          <div className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+            <h2 className="mb-2 font-semibold">التجديد التلقائي</h2>
+            {s.card ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm">
+                  <div>
+                    الحالة:{" "}
+                    {s.auto_renew ? (
+                      <span className="font-medium text-emerald-600 dark:text-emerald-400">مُفعّل</span>
+                    ) : (
+                      <span className="text-neutral-500">موقوف</span>
+                    )}
+                  </div>
+                  <div className="text-neutral-500">
+                    البطاقة: {s.card.brand ?? "بطاقة"} •••• <span dir="ltr">{s.card.last4 ?? "----"}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <form action={setAutoRenew}>
+                    <input type="hidden" name="on" value={s.auto_renew ? "0" : "1"} />
+                    <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
+                      {s.auto_renew ? "إيقاف" : "تفعيل"}
+                    </button>
+                  </form>
+                  <form action={removeCard}>
+                    <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-neutral-700 dark:hover:bg-red-900/20">
+                      إزالة البطاقة
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                لا توجد بطاقة محفوظة. فعّل «التجديد التلقائي» عند الدفع القادم ليتجدّد اشتراكك شهرياً دون تدخّل.
+              </p>
+            )}
+          </div>
+
+          {/* Plans + automated payment (Moyasar hosted checkout). One form; the button clicked sets `plan`. */}
           {plans.length > 0 && (
-            <div className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+            <form
+              action={startSubscriptionCheckout}
+              className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900"
+            >
               <h2 className="mb-1 font-semibold">الخطط والدفع</h2>
               <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
                 اختر خطة وادفع بأمان (مدى / Apple Pay / بطاقة). يُفعَّل اشتراكك فور اكتمال الدفع.
@@ -160,20 +202,25 @@ export default async function SubscriptionPage({
                           <span dir="ltr">{halalasToSar(p.price_halalas)}</span> ر.س / شهرياً
                         </div>
                       </div>
-                      <form action={startSubscriptionCheckout}>
-                        <input type="hidden" name="plan" value={p.code} />
-                        <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-fg">
-                          {current ? "تجديد" : "اشترك"}
-                        </button>
-                      </form>
+                      <button
+                        name="plan"
+                        value={p.code}
+                        className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-fg"
+                      >
+                        {current ? "تجديد" : "اشترك"}
+                      </button>
                     </div>
                   );
                 })}
               </div>
-              <p className="mt-3 text-xs text-neutral-500">
+              <label className="mt-4 flex items-center gap-2 text-sm">
+                <input type="checkbox" name="save_card" value="1" defaultChecked className="h-4 w-4 rounded border-neutral-300" />
+                فعّل التجديد التلقائي (حفظ البطاقة للخصم الشهري).
+              </label>
+              <p className="mt-2 text-xs text-neutral-500">
                 الدفع متاح لمدير المنشأة. تُدار البطاقة على صفحة مزوّد الدفع الآمنة — لا نحفظ بياناتها.
               </p>
-            </div>
+            </form>
           )}
         </>
       )}

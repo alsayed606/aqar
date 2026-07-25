@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyWebhookSecret } from "@/lib/payments/moyasar";
+import { verifyWebhookSecret, extractCardToken } from "@/lib/payments/moyasar";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +31,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "server not configured" }, { status: 500 });
   }
 
+  const orgId = metadata.org_id;
   if (status === "paid") {
     const { error } = await admin.rpc("apply_subscription_payment", {
       p_intent: intentId,
@@ -38,6 +39,21 @@ export async function POST(request: Request) {
       p_raw: body,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // If the office opted into auto-renew, persist the returned card token (never the card itself).
+    if (metadata.save_card === "1" && orgId) {
+      const card = extractCardToken(data);
+      if (card) {
+        await admin.rpc("save_payment_method", {
+          p_org: orgId,
+          p_token: card.token,
+          p_brand: card.brand,
+          p_last4: card.last4,
+          p_exp_month: null,
+          p_exp_year: null,
+        });
+      }
+    }
   } else if (status === "failed") {
     await admin.rpc("mark_subscription_payment_failed", { p_intent: intentId, p_raw: body });
   }

@@ -16,6 +16,8 @@ export type Summary = {
   active: boolean;
   trial_ends_at: string | null;
   current_period_end: string | null;
+  auto_renew: boolean;
+  card: { brand: string | null; last4: string | null } | null;
   limits: { properties: number | null; units: number | null; members: number | null };
   usage: { properties: number; units: number; members: number };
 };
