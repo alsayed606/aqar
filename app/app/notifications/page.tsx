@@ -31,6 +31,9 @@ export default async function NotificationsPage() {
   const supabase = await createClient();
   // Refresh, then list (both no-op/empty before migration 0034 is applied).
   await supabase.rpc("generate_notifications", { p_org: activeOrg });
+  // Queue email deliveries for any unread notifications (idempotent; no-op before 0038). The Vercel
+  // Cron drainer sends them. Degrades silently if the function isn't there yet.
+  await supabase.rpc("enqueue_email_deliveries", { p_org: activeOrg });
   const { data, error } = await supabase
     .from("notification")
     .select("id, kind, entity_type, entity_id, title, body, due_date, read_at, created_at")

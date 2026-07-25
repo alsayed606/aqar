@@ -16,8 +16,8 @@
 **تسجيل الدخول بالجوال جاهز على البيئة الحيّة.** الهجرات `0001`–`0019` مُطبَّقة على القاعدة.
 
 ### ⏳ مطلوب الآن
-- ⏳ **هجرة `0037`** (هوية بالبريد: جوال اختياري + قيد «جوال أو بريد») — **بانتظار تطبيقك**. **+ ضبط لوحة Supabase:** تفعيل مزوّد **Email** وإطفاء **Confirm Email** مؤقتاً. بدونهما لا يعمل الدخول بالبريد.
-- ✅ هجرة **`0036`** (نموذج الاشتراك) — طُبّقت.
+- ⏳ **هجرة `0038`** (صندوق إرسال الإشعارات بالبريد) — **بانتظار تطبيقك**. **+ متغيرات بيئة Vercel:** `SUPABASE_SERVICE_ROLE_KEY`، `EMAIL_FROM` (مُرسِل مُوثَّق في Resend)، `CRON_SECRET` (بجانب `RESEND_API_KEY` الموجود). **مسار `/auth/callback` والـ middleware جاهزان الآن**، لذا يمكنك **تفعيل Confirm Email** في لوحة Supabase بأمان.
+- ✅ هجرات **`0036`–`0037`** (الاشتراك، الهوية بالبريد) — طُبّقت. الدخول بالبريد يعمل حيّاً.
 - ✅ هجرات **`0032`–`0035`** (إسقاط OTP، قراءة «المطّلع» فقط، الإشعارات، فهارس البحث) — طُبّقت.
 - ✅ هجرة **`0031`** (تجديد العقود عبر عقد لاحق) — طُبّقت.
 - ✅ هجرة **`0030`** (مستندات البوابة القابلة للطباعة) — طُبّقت.
@@ -35,6 +35,15 @@
 ---
 
 ## 2026-07-25
+
+### ميزة — Sprint F: إرسال البريد (إشعارات + اكتمال المصادقة) — نطاق مُجمَّد
+تفعيل إرسال البريد الحقيقي فوق **Resend** (مزوّد واحد): إشعارات الاستحقاقات للمكاتب (ADR-0002) + تأكيد البريد واستعادة كلمة المرور.
+- **هجرة `0038` (صندوق إرسال الإشعارات):** `notification_channel`/`delivery_status` enums + جدول `notification_delivery` (append-only، `org_id` لـ RLS قراءة الأعضاء، فهرس فريد `(notification_id,channel,target)` = **idempotency**، حقول تتبّع: `provider_message_id`/`provider_response`/`attempts`/`next_attempt_at`/`last_error`/`last_attempt_at`). دوال: `enqueue_email_deliveries(org)` (جلسة المستخدم، `has_org_access`، صفّ لكل إشعار غير مقروء × عضو نشط له بريد) + `claim_email_deliveries`/`mark_email_delivery_sent`/`_failed` (**service_role حصراً**؛ `claim` يحجز ذرّياً بـ`FOR UPDATE SKIP LOCKED` فلا إرسال مزدوج). **إعادة المحاولة:** ٣ محاولات، ١→٥→٣٠ دقيقة، ثم `failed`.
+- **F-2 خط الإشعارات:** `lib/email/provider.ts` (طبقة Resend واحدة عبر `fetch`) + `lib/supabase/admin.ts` (عميل service_role، للـ drainer فقط) + مسار **Vercel Cron** `/api/cron/drain-notifications` (حارس `CRON_SECRET`، claim→send→mark) + `vercel.json` (كل ٥ دقائق) + قالب عربي بسيط (Plain+HTML). الاستدعاء `enqueue` مربوط بعد `generate_notifications` في الرئيسية وصفحة الإشعارات (idempotent، يتدهور قبل `0038`).
+- **F-1 اكتمال المصادقة:** مسار عام **`/auth/callback`** (يتعامل مع `code` وأيضاً `token_hash`+`type` لكل تدفقات Supabase: تأكيد/استعادة/رابط سحري/دعوة/تغيير بريد) + **`/forgot-password`** (`resetPasswordForEmail`) + **`/auth/reset`** (`updateUser`) + رابط «نسيت كلمة المرور» وزر «إعادة إرسال التأكيد» في `/login` + قراءة `?error/?notice`. (Middleware بلا تغيير — هذه المسارات عامة أصلاً.)
+- **مؤجَّل بالتجميد:** قناة SMS، تفضيلات القنوات لكل مستخدم، واتساب، التجميع (digest)، قوالب HTML غنية.
+- التحقق PG17: **`verify.mjs` ٣١/٣١ + `phase3.mjs` ٤٧/٤٧** (أُضيف ١١: enqueue لكل عضو له بريد فقط، idempotency، FORBIDDEN لغير العضو، عزل RLS، دورة claim→mark_sent، عدم إعادة الحجز، تحوّل `failed` بعد ٣ محاولات) · تحميل `0001`–`0038` نظيفاً · `schema_all` (٣٨) · `tsc`+`build` نظيفان.
+- **⏳ يتطلّب تطبيقك:** هجرة **`0038`** + متغيرات بيئة Vercel (`SUPABASE_SERVICE_ROLE_KEY`، `EMAIL_FROM`، `CRON_SECRET`). ويمكنك الآن **تفعيل Confirm Email** (مسار الاستدعاء جاهز). *ملاحظة تشغيلية: دورية Vercel Cron تعتمد خطتك — Pro تُشغّلها كل ٥ دقائق، Hobby ~يومياً؛ التصميم لا يتأثّر (backoff يعتمد `next_attempt_at`) لكن زمن الوصول يتأثّر.*
 
 ### ميزة — Sprint E: الدخول بالبريد الإلكتروني (Email + Password) — نطاق مُجمَّد
 إتاحة إنشاء حساب ودخول بالبريد وكلمة المرور بلا تبعية إرسال (SMTP)، مصمَّماً ليُركَّب عليه تأكيد البريد/الاستعادة/إشعارات البريد لاحقاً دون كسر (الخيار «أ» المُعتمَد).

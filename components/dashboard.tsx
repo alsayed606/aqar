@@ -38,7 +38,11 @@ export async function Dashboard() {
 
   // Refresh operational notifications on home load (idempotent; a no-op error before migration 0034).
   const activeOrg = await getActiveOrg();
-  if (activeOrg) await supabase.rpc("generate_notifications", { p_org: activeOrg });
+  if (activeOrg) {
+    await supabase.rpc("generate_notifications", { p_org: activeOrg });
+    // Queue email deliveries (idempotent; no-op before 0038). The Vercel Cron drainer sends them.
+    await supabase.rpc("enqueue_email_deliveries", { p_org: activeOrg });
+  }
 
   // Run every count in parallel. head:true → no rows transferred, just the count.
   const [

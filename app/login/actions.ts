@@ -1,10 +1,19 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeSaudiPhone } from "@/lib/phone";
 import { safeReturnTo } from "@/lib/return-to";
 import { translateAuthError } from "@/lib/auth-errors";
+
+// Absolute site origin for auth redirect links (email confirmation / recovery land back here).
+async function siteOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("host") ?? "";
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  return `${proto}://${host}`;
+}
 
 export type LoginState = {
   step: "phone" | "code";
@@ -97,4 +106,55 @@ export async function verifyOtp(
 
   // Land where the user was headed before login (validated), else the app home.
   redirect(safeReturnTo(String(formData.get("returnTo") ?? "")) ?? "/app");
+}
+
+// ── Password reset & confirmation resend (Sprint F) ────────────────────────────────────────────
+export type ResetRequestState = { sent?: boolean; error?: string };
+export type ResetState = { error?: string };
+
+// Send a recovery link. Always reports success (no account-existence disclosure) once the email is
+// well-formed. The link lands on /auth/callback which exchanges it and forwards to /auth/reset.
+export async function requestPasswordReset(
+  _prev: ResetRequestState,
+  formData: FormData,
+): Promise<ResetRequestState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) return { error: "أدخل بريداً إلكترونياً صالحاً." };
+
+  const supabase = await createClient();
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${await siteOrigin()}/auth/callback?next=/auth/reset`,
+  });
+  return { sent: true };
+}
+
+// Set a new password. Requires the recovery session established by the callback route.
+export async function updatePassword(
+  _prev: ResetState,
+  formData: FormData,
+): Promise<ResetState> {
+  const password = String(formData.get("password") ?? "");
+  if (password.length < 8) return { error: "كلمة المرور يجب أن تكون ٨ أحرف على الأقل." };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "انتهت صلاحية رابط الاستعادة أو أنه غير صالح. اطلب رابطاً جديداً." };
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: translateAuthError(error.message) };
+  redirect("/app");
+}
+
+// Resend the sign-up confirmation email (used once email confirmation is enabled).
+export async function resendConfirmation(formData: FormData): Promise<void> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) redirect("/login?error=" + encodeURIComponent("أدخل بريداً إلكترونياً صالحاً أولاً."));
+
+  const supabase = await createClient();
+  await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: `${await siteOrigin()}/auth/callback?next=/app` },
+  });
+  redirect("/login?notice=" + encodeURIComponent("أرسلنا رسالة تأكيد جديدة إن كان الحساب بحاجة لتفعيل."));
 }

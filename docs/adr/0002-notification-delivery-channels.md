@@ -1,6 +1,6 @@
 # ADR-0002 — قنوات إرسال الإشعارات (Notification Delivery Channels)
 
-- **الحالة:** مقترح (Proposed) — تصميم مرجعي؛ لا يُبنى في هذا السبرنت.
+- **الحالة:** مُعتمد ومُنفَّذ (Accepted) — قناة **البريد** مبنية في Sprint F (هجرة `0038`). قناة SMS تبقى مؤجَّلة ([ADR-0001](0001-sms-provider.md)).
 - **النوع:** قرار معماري/تقني.
 - **التاريخ:** ٢٥ يوليو ٢٠٢٦.
 - **المبادئ الحاكمة:** م-١١ (ندمج لا نبني)، هـ-٤ (مصدر الحقيقة = الهجرات)، هـ-١٩ (لا أسرار في المستودع).
@@ -16,18 +16,18 @@
 
 **الخلاصة:** `notification` لا يحتاج أي تعديل لاستقبال قناة بريد لاحقاً؛ القناة تُضاف كطبقة **إضافية** فوقه.
 
-## القرار (التصميم المُعتمد للمرحلة القادمة — لا يُنفَّذ الآن)
-عند بناء الإرسال الخارجي، يُضاف **صندوق إرسال (outbox) منفصل** بلا لمس `notification`:
-- `notification_channel` enum: `in_app | email | sms`.
-- جدول `notification_delivery` (append-only): `notification_id` (FK)، `channel`، `target` (البريد/الجوال المُحلّل وقت الإرسال)، `status` (`pending|sent|failed`)، `attempts`، `provider`، `created_at`، `sent_at`، `error`.
-- **Drainer** (Edge Function / cron) يسحب `pending` ويسلّم عبر المزوّد: البريد عبر SMTP (Supabase/SES/Resend)، والـ SMS عبر [ADR-0001](0001-sms-provider.md). أسرار المزوّد لا تُلتزَم (هـ-١٩).
-- تفضيلات المستخدم (أي قنوات يريد) تُضاف حينها كحقول تفضيل على الهوية/العضوية.
+## القرار المُنفَّذ (Sprint F / هجرة `0038`)
+صندوق إرسال منفصل **بلا لمس `notification`**:
+- `notification_channel` enum: `in_app | email | sms` + `delivery_status` enum: `pending | sent | failed`.
+- جدول `app.notification_delivery` (append-only): `org_id` (لـ RLS)، `notification_id` (FK)، `channel`، `target` (البريد المُحلّل)، `status`، `attempts`/`max_attempts`، `next_attempt_at` (بوابة الأهلية/الـbackoff)، `provider`، `provider_message_id`، `provider_response` (jsonb)، `last_error`، `last_attempt_at`، `created_at`، `sent_at`. فهرس فريد `(notification_id, channel, target)` = **idempotency**. RLS: قراءة لأعضاء المنشأة فقط.
+- `enqueue_email_deliveries(org)` (DEFINER، جلسة المستخدم، `has_org_access`-gated): صفّ بريد لكل إشعار غير مقروء × كل عضو نشط له بريد. تُستدعى بعد `generate_notifications`.
+- **الـ Drainer = Vercel Cron** (`/api/cron/drain-notifications`, كل ٥ دقائق) بـ service_role **حصراً**: `claim_email_deliveries` يحجز الصفوف ذرّياً (`FOR UPDATE SKIP LOCKED`) فلا إرسال مزدوج عند تراكب التشغيل → يُرسل عبر **Resend** (طبقة واحدة `lib/email/provider.ts`) → `mark_email_delivery_sent/failed`.
+- **إعادة المحاولة:** حد أقصى ٣، فواصل ١→٥→٣٠ دقيقة (عبر `next_attempt_at`)، ثم `failed`.
+- تفضيلات القنوات لكل مستخدم: تُضاف لاحقاً كحقول على الهوية/العضوية (خارج نطاق Sprint F).
 
-هذا النمط **يعكس** `sms_outbox` القديم (المُسقَط في `0032`) لكن مُعمّماً للقنوات، ومفصولاً عن التوليد.
+هذا النمط **يعكس** `sms_outbox` القديم (المُسقَط في `0032`) لكن مُعمّماً للقنوات ومفصولاً عن التوليد.
 
 ## التبعات
-- قناة البريد تحتاج **SMTP** (تبعية إرسال) — مؤجَّلة عمداً؛ الـ MVP الحالي بلا إرسال (بريد+كلمة مرور بلا تأكيد).
-- لا تغيير على `notification`/`generate_notifications` عند إضافة القناة → صفر كسر (future-proof).
-
-## القرار المطلوب لاحقاً
-اعتماد سبرنت «إرسال الإشعارات» يبني `notification_delivery` + الـ drainer + مزوّد أول (بريد عبر SMTP). يُحدَّث حقل «الحالة» إلى «مُعتمد» عندها.
+- قناة البريد تعتمد **Resend** حصراً (SMTP لرسائل GoTrue + API للـ drainer). المزوّد قابل للاستبدال داخل `lib/email/provider.ts` فقط.
+- لا تغيير على `notification`/`generate_notifications` → صفر كسر (future-proof).
+- **قناة SMS** تُضاف لاحقاً بنفس النمط (قيمة `channel='sms'` + drainer عبر مزوّد ADR-0001) دون تعديل المخطط.

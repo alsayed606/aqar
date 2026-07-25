@@ -1,13 +1,26 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
-import { emailAuth, type EmailAuthState } from "./actions";
+import { emailAuth, resendConfirmation, type EmailAuthState } from "./actions";
 
 // returnTo is the validated, app-internal path to land on after login (default /app). It rides as a
 // hidden field so it survives the round-trip. The active path is email + password (Sprint E); phone
 // OTP is retained in the server actions but intentionally not surfaced here.
-export function LoginForm({ returnTo }: { returnTo: string }) {
-  const [state, formAction, pending] = useActionState(emailAuth, { mode: "signin" } as EmailAuthState);
+export function LoginForm({
+  returnTo,
+  initialError,
+  initialNotice,
+}: {
+  returnTo: string;
+  initialError?: string;
+  initialNotice?: string;
+}) {
+  const [state, formAction, pending] = useActionState(emailAuth, {
+    mode: "signin",
+    error: initialError,
+    notice: initialNotice,
+  } as EmailAuthState);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const isSignup = mode === "signup";
 
@@ -112,6 +125,22 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
           >
             {pending ? "جارٍ المعالجة…" : isSignup ? "إنشاء الحساب" : "دخول"}
           </button>
+
+          {!isSignup && (
+            <div className="flex items-center justify-between pt-1 text-sm">
+              <Link href="/forgot-password" className="text-neutral-500 hover:text-brand hover:underline">
+                نسيت كلمة المرور؟
+              </Link>
+              {/* Resends the confirmation email using the entered address (once confirmation is on). */}
+              <button
+                type="submit"
+                formAction={resendConfirmation}
+                className="text-neutral-500 hover:text-brand hover:underline"
+              >
+                إعادة إرسال التأكيد
+              </button>
+            </div>
+          )}
         </form>
       </section>
     </main>

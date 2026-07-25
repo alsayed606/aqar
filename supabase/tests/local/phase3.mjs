@@ -243,6 +243,69 @@ try {
   ok("create_organization works for an email-only identity (+ trial provisioned)",
     emailOrg.ok && emailOrg.value.sub && emailOrg.value.sub.status === "trialing" && emailOrg.value.mem === 1, emailOrg.error);
 
+  // ==================== Notification email delivery (0038): enqueue + drain ====================
+  // Run enqueue as a member (has_org_access) but committed (not rolled back) so rows persist for the
+  // drain assertions. auth.uid()/current_org come from session GUCs; enqueue is DEFINER.
+  async function enqAs(sub, org) {
+    await q("select set_config('request.jwt.claims',$1,false)", [JSON.stringify({ sub, role: "authenticated" })]);
+    await q("select set_config('request.headers',$1,false)", [JSON.stringify({ "x-active-org": org })]);
+    try { return (await one("select app.enqueue_email_deliveries($1) c", [org])).c; }
+    finally {
+      await q("select set_config('request.jwt.claims','',false)");
+      await q("select set_config('request.headers','',false)");
+    }
+  }
+
+  const orgN = (await one("insert into app.organization(name) values('Notify Org') returning id")).id;
+  await q("insert into app.org_subscription(org_id,plan_code,status) values($1,'enterprise','comped')", [orgN]);
+  const idEmail = (await one("insert into app.identity(phone_e164,phone_raw,email) values('+966500000200','+966500000200','notify-owner@example.com') returning id")).id;
+  const idNoEmail = (await one("insert into app.identity(phone_e164,phone_raw) values('+966500000201','+966500000201') returning id")).id;
+  await q("insert into app.membership(identity_id,org_id,role,status,scope_all) values($1,$2,'owner','active',true)", [idEmail, orgN]);
+  await q("insert into app.membership(identity_id,org_id,role,status,scope_all) values($1,$2,'staff','active',true)", [idNoEmail, orgN]);
+  const noteN = (await one("insert into app.notification(org_id,kind,title,body) values($1,'charge_overdue','دفعة متأخرة','دفعة مستحقة') returning id", [orgN])).id;
+
+  await enqAs(idEmail, orgN);
+  const delN = (await one("select count(*)::int n from app.notification_delivery where org_id=$1 and channel='email'", [orgN])).n;
+  ok("enqueue: one email delivery per active member WITH an email (only)", delN === 1, "got " + delN);
+  const del0 = await one("select target, status, attempts from app.notification_delivery where org_id=$1 limit 1", [orgN]);
+  ok("delivery targets the member email, pending, 0 attempts", del0.target === "notify-owner@example.com" && del0.status === "pending" && del0.attempts === 0, JSON.stringify(del0));
+
+  await enqAs(idEmail, orgN);
+  const delN2 = (await one("select count(*)::int n from app.notification_delivery where org_id=$1", [orgN])).n;
+  ok("enqueue is idempotent (no duplicate on re-run)", delN2 === 1, "got " + delN2);
+
+  let enqForbidden = "";
+  try { await enqAs(idOwner, orgN); } catch (e) { enqForbidden = e.message; }
+  ok("enqueue FORBIDDEN for a non-member", /FORBIDDEN/i.test(enqForbidden), enqForbidden);
+
+  const delMine = await asRole(idEmail, orgN, () => client.query("select count(*)::int n from app.notification_delivery"));
+  ok("member reads own org deliveries (RLS)", delMine.ok && delMine.value.rows[0].n >= 1, delMine.error);
+  const delForeign = await asRole(idOwner, org1, () => client.query("select count(*)::int n from app.notification_delivery where org_id=$1", [orgN]));
+  ok("deliveries isolated across orgs (RLS)", delForeign.ok && delForeign.value.rows[0].n === 0);
+
+  // Drain lifecycle (as postgres = service_role-equivalent): claim → mark sent, no re-claim.
+  const claimed = (await q("select * from app.claim_email_deliveries(10)")).rows;
+  ok("claim leases the pending delivery (attempts→1)", claimed.length === 1 && claimed[0].attempts === 1, JSON.stringify(claimed.map((c) => c.attempts)));
+  const leased = await one("select attempts, (next_attempt_at > now()) future from app.notification_delivery where id=$1", [claimed[0].id]);
+  ok("claim schedules next_attempt_at forward (retry lease)", leased.future === true && leased.attempts === 1);
+  await q("select app.mark_email_delivery_sent($1,$2,$3::jsonb)", [claimed[0].id, "resend-msg-123", JSON.stringify({ id: "resend-msg-123" })]);
+  const sentRow = await one("select status, provider, provider_message_id, sent_at from app.notification_delivery where id=$1", [claimed[0].id]);
+  ok("mark_sent finalizes the row (provider_message_id + sent_at)", sentRow.status === "sent" && sentRow.provider === "resend" && sentRow.provider_message_id === "resend-msg-123" && !!sentRow.sent_at);
+  const reclaim = (await q("select * from app.claim_email_deliveries(10)")).rows;
+  ok("a sent delivery is never re-claimed", reclaim.length === 0);
+
+  // Retry backoff → 'failed' after max attempts (3).
+  const note2 = (await one("insert into app.notification(org_id,kind,title,due_date) values($1,'charge_overdue','تنبيه ٢', current_date) returning id", [orgN])).id;
+  await enqAs(idEmail, orgN);
+  const d2 = (await one("select id from app.notification_delivery where notification_id=$1", [note2])).id;
+  for (let i = 0; i < 3; i++) {
+    await q("update app.notification_delivery set next_attempt_at = now() - interval '1 hour' where id=$1 and status='pending'", [d2]);
+    await q("select app.claim_email_deliveries(10)");
+    await q("select app.mark_email_delivery_failed($1,$2,null)", [d2, "smtp error " + i]);
+  }
+  const failedRow = await one("select status, attempts, last_error from app.notification_delivery where id=$1", [d2]);
+  ok("delivery becomes 'failed' after 3 attempts", failedRow.status === "failed" && failedRow.attempts === 3, JSON.stringify(failedRow));
+
   console.log(`\nPhase-3: ${pass} passed, ${fail} failed`);
 } catch (e) {
   console.error("HARNESS ERROR:", e.message, "\n", e.stack);
