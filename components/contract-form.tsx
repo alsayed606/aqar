@@ -175,6 +175,45 @@ export function ContractForm({
         />
       </div>
 
+      {/* Optional commercial details: shop/trade name + signing representative (per contract). */}
+      <details className="rounded-lg border border-neutral-200 sm:col-span-2 dark:border-neutral-800">
+        <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-300">
+          اسم المحل التجاري وممثل المنشأة (اختياري)
+        </summary>
+        <div className="grid gap-3 border-t border-neutral-100 p-3 sm:grid-cols-2 dark:border-neutral-800">
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium" htmlFor="trade_name">
+              اسم المحل التجاري
+            </label>
+            <input id="trade_name" name="trade_name" placeholder="مثال: مخابز الريان" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium" htmlFor="representative_name">
+              اسم ممثل المنشأة
+            </label>
+            <input id="representative_name" name="representative_name" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium" htmlFor="representative_capacity">
+              صفته
+            </label>
+            <input id="representative_capacity" name="representative_capacity" placeholder="مثال: مدير عام / مفوّض" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium" htmlFor="representative_id">
+              رقم هوية الممثل <span className="text-neutral-400">(اختياري)</span>
+            </label>
+            <input id="representative_id" name="representative_id" dir="ltr" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium" htmlFor="representative_phone">
+              جوال الممثل <span className="text-neutral-400">(اختياري)</span>
+            </label>
+            <input id="representative_phone" name="representative_phone" dir="ltr" placeholder="05XXXXXXXX" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700" />
+          </div>
+        </div>
+      </details>
+
       {state.error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 sm:col-span-2 dark:bg-red-900/20 dark:text-red-300">
           {state.error}

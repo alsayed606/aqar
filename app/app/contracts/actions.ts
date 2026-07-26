@@ -37,6 +37,13 @@ export async function createContract(
   let contract_number = String(formData.get("contract_number") ?? "").trim();
   if (!contract_number) contract_number = "CT-" + Date.now();
 
+  // Optional commercial details (per contract): shop/trade name + signing representative (Sprint J).
+  const trade_name = String(formData.get("trade_name") ?? "").trim() || null;
+  const representative_name = String(formData.get("representative_name") ?? "").trim() || null;
+  const representative_capacity = String(formData.get("representative_capacity") ?? "").trim() || null;
+  const representative_id = String(formData.get("representative_id") ?? "").trim() || null;
+  const representative_phone = String(formData.get("representative_phone") ?? "").trim() || null;
+
   const supabase = await createClient();
 
   const { data: unit, error: unitErr } = await supabase
@@ -64,6 +71,11 @@ export async function createContract(
       payment_frequency,
       deposit_halalas: deposit,
       service_fees_halalas: service_fees,
+      trade_name,
+      representative_name,
+      representative_capacity,
+      representative_id,
+      representative_phone,
     })
     .select("id")
     .single();

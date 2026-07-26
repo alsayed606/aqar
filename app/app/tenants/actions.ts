@@ -41,9 +41,22 @@ export async function createTenant(
   const display_name = String(formData.get("display_name") ?? "").trim();
   if (!display_name) return { error: "اسم المستأجر مطلوب" };
 
-  const legal_kind = String(formData.get("legal_kind") ?? "individual");
+  // Tenant legal form: individual / sole_establishment / company (Sprint J). legal_kind (the coarse
+  // enum) is derived from it for backward compatibility.
+  const TYPES = ["individual", "sole_establishment", "company"];
+  const tenant_type = TYPES.includes(String(formData.get("tenant_type") ?? ""))
+    ? String(formData.get("tenant_type"))
+    : "individual";
+  const legal_kind = tenant_type === "company" ? "company" : "individual";
+  const isEstablishment = tenant_type !== "individual";
+
   const national_id = String(formData.get("national_id") ?? "").trim() || null;
   const email = String(formData.get("email") ?? "").trim() || null;
+  // Establishment identifiers (all optional, so first entry is never blocked).
+  const cr_number = String(formData.get("cr_number") ?? "").trim() || null;
+  const vat_number = String(formData.get("vat_number") ?? "").trim() || null;
+  const unified_number = String(formData.get("unified_number") ?? "").trim() || null;
+  const cr_expiry = String(formData.get("cr_expiry") ?? "").trim() || null;
 
   const phoneRaw = String(formData.get("phone") ?? "").trim();
   let phone_e164: string | null = null;
@@ -65,6 +78,11 @@ export async function createTenant(
       phone_raw: phoneRaw || null,
       email,
       roles: ["tenant"],
+      // Only attach establishment identifiers for non-individual tenants.
+      cr_number: isEstablishment ? cr_number : null,
+      vat_number: isEstablishment ? vat_number : null,
+      unified_number: isEstablishment ? unified_number : null,
+      cr_expiry: isEstablishment ? cr_expiry : null,
     })
     .select("id")
     .single();
@@ -74,6 +92,7 @@ export async function createTenant(
     org_id: activeOrg,
     party_id: party.id,
     tenant_kind: legal_kind,
+    tenant_type,
   });
   if (tenantErr) return { error: tenantErr.message };
 

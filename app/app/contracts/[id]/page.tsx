@@ -84,7 +84,7 @@ export default async function ContractDetail({
   const { data: contract } = await supabase
     .from("contract")
     .select(
-      "id, contract_number, status, contract_kind, start_date, end_date, annual_rent_halalas, payment_frequency, deposit_halalas, service_fees_halalas, deed_number, terminated_at, termination_reason, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
+      "id, contract_number, status, contract_kind, start_date, end_date, annual_rent_halalas, payment_frequency, deposit_halalas, service_fees_halalas, deed_number, terminated_at, termination_reason, trade_name, representative_name, representative_capacity, representative_id, representative_phone, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -228,6 +228,28 @@ export default async function ContractDetail({
           <Info label="التأمين" value={`${halalasToSar(contract.deposit_halalas)} ر.س`} />
           <Info label="رسوم الخدمات" value={`${halalasToSar(contract.service_fees_halalas)} ر.س`} />
         </dl>
+
+        {(contract.trade_name || contract.representative_name) && (
+          <div className="mt-4 border-t border-neutral-100 pt-3 dark:border-neutral-800">
+            <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              {contract.trade_name && <Info label="اسم المحل التجاري" value={contract.trade_name} />}
+              {contract.representative_name && (
+                <Info
+                  label="ممثل المنشأة"
+                  value={
+                    <>
+                      {contract.representative_name}
+                      {contract.representative_capacity ? ` — ${contract.representative_capacity}` : ""}
+                    </>
+                  }
+                />
+              )}
+              {contract.representative_phone && (
+                <Info label="جوال الممثل" value={<span dir="ltr">{contract.representative_phone}</span>} />
+              )}
+            </dl>
+          </div>
+        )}
 
         {(predecessor || successor) && (
           <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 border-t border-neutral-100 pt-3 text-sm dark:border-neutral-800">

@@ -466,6 +466,35 @@ try {
   ok("current_capabilities(staff) = {view, manage_data}",
     capsStaff.ok && JSON.stringify([...capsStaff.value.rows[0].c].sort()) === JSON.stringify(["manage_data", "view"]), JSON.stringify(capsStaff.value && capsStaff.value.rows[0].c));
 
+  // ==================== Tenant / establishment model (0042) ====================
+  const pEst = await one(
+    "insert into app.party(org_id,display_name,legal_kind,roles,cr_number,vat_number,unified_number,cr_expiry) values($1,'شركة الراجحي','company',array['tenant']::app.party_role[],'1010','3001','700123','2030-01-01') returning id, cr_number, vat_number, unified_number, (cr_expiry is not null) has_exp",
+    [orgR]);
+  ok("party stores establishment identifiers (cr/vat/unified/expiry)",
+    pEst.cr_number === "1010" && pEst.vat_number === "3001" && pEst.unified_number === "700123" && pEst.has_exp === true, JSON.stringify(pEst));
+
+  const tEst = await one("insert into app.tenant(org_id,party_id,tenant_kind,tenant_type) values($1,$2,'company','company') returning id, tenant_type", [orgR, pEst.id]);
+  ok("tenant.tenant_type persists (company)", tEst.tenant_type === "company");
+
+  const pInd = (await one("insert into app.party(org_id,display_name,roles) values($1,'فرد',array['tenant']::app.party_role[]) returning id", [orgR])).id;
+  ok("tenant_type defaults to individual", (await one("insert into app.tenant(org_id,party_id) values($1,$2) returning tenant_type", [orgR, pInd])).tenant_type === "individual");
+
+  const pSole = (await one("insert into app.party(org_id,display_name,roles) values($1,'مؤسسة',array['tenant']::app.party_role[]) returning id", [orgR])).id;
+  ok("tenant_type accepts sole_establishment", (await one("insert into app.tenant(org_id,party_id,tenant_type) values($1,$2,'sole_establishment') returning tenant_type", [orgR, pSole])).tenant_type === "sole_establishment");
+
+  const pBad = (await one("insert into app.party(org_id,display_name,roles) values($1,'x',array['tenant']::app.party_role[]) returning id", [orgR])).id;
+  let badType = "";
+  try { await q("insert into app.tenant(org_id,party_id,tenant_type) values($1,$2,'foobar')", [orgR, pBad]); } catch (e) { badType = e.message; }
+  ok("tenant_type CHECK rejects an invalid value", /check|tenant_type/i.test(badType), badType);
+
+  const propR = (await one("insert into app.property(org_id,owner_id,name) values($1,$2,'PR-Est') returning id", [orgR, ownR])).id;
+  const uEst = (await one("insert into app.unit(org_id,property_id,unit_number,current_status) values($1,$2,'C1','vacant') returning id", [orgR, propR])).id;
+  const cEst = await one(
+    "insert into app.contract(org_id,property_id,unit_id,tenant_id,contract_number,contract_kind,status,start_date,end_date,annual_rent_halalas,payment_frequency,trade_name,representative_name,representative_capacity,representative_phone) values($1,$2,$3,$4,'CT-EST','commercial','draft','2025-01-01','2025-12-31',2400000,'quarterly','مخابز الريان','خالد','مدير','+966500000400') returning trade_name, representative_name, representative_capacity, representative_phone",
+    [orgR, propR, uEst, tEst.id]);
+  ok("contract stores per-contract trade_name + representative",
+    cEst.trade_name === "مخابز الريان" && cEst.representative_name === "خالد" && cEst.representative_capacity === "مدير" && cEst.representative_phone === "+966500000400", JSON.stringify(cEst));
+
   console.log(`\nPhase-3: ${pass} passed, ${fail} failed`);
 } catch (e) {
   console.error("HARNESS ERROR:", e.message, "\n", e.stack);
