@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
+import { getCapabilities } from "@/lib/capabilities";
 import { PropertyForm } from "@/components/property-form";
 import { PROPERTY_KIND_AR } from "@/lib/labels";
 import { parseListParams, likePattern } from "@/lib/list-params";
@@ -27,6 +28,7 @@ export default async function PropertiesPage({
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
   const { q, page, from, to } = parseListParams(await searchParams);
+  const caps = await getCapabilities(activeOrg);
 
   const supabase = await createClient();
   let propQuery = supabase
@@ -61,10 +63,12 @@ export default async function PropertiesPage({
         <span className="text-sm text-neutral-500">{total} عقار</span>
       </div>
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-        <h2 className="mb-4 text-base font-semibold">إضافة عقار</h2>
-        <PropertyForm owners={owners} />
-      </section>
+      {caps.has("manage_data") && (
+        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+          <h2 className="mb-4 text-base font-semibold">إضافة عقار</h2>
+          <PropertyForm owners={owners} />
+        </section>
+      )}
 
       <ListToolbar q={q} placeholder="بحث باسم العقار…" />
 

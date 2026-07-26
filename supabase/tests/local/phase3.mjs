@@ -413,6 +413,59 @@ try {
   const pmAdmin = await asRole(idOwner, org1, () => client.query("select count(*)::int n from app.org_payment_method where status='active'"));
   ok("admin reads own active payment method (RLS)", pmAdmin.ok && pmAdmin.value.rows[0].n === 1, pmAdmin.error);
 
+  // ==================== Roles & capabilities (0041) ====================
+  const orgR = (await one("insert into app.organization(name) values('Roles Org') returning id")).id;
+  await q("insert into app.org_subscription(org_id,plan_code,status) values($1,'enterprise','comped')", [orgR]);
+  const mkRoleMember = async (phone, role) => {
+    const idn = await mkId(phone);
+    await q("insert into app.membership(identity_id,org_id,role,status,scope_all) values($1,$2,$3,'active',true)", [idn, orgR, role]);
+    return idn;
+  };
+  const rOwner = await mkRoleMember("+966500000300", "owner");
+  const rManager = await mkRoleMember("+966500000301", "manager");
+  const rAccountant = await mkRoleMember("+966500000302", "accountant");
+  const rStaff = await mkRoleMember("+966500000303", "staff");
+  const rViewer = await mkRoleMember("+966500000304", "viewer");
+  const pR = (await one("insert into app.party(org_id,display_name,legal_kind,roles) values($1,'Self','company',array['owner']::app.party_role[]) returning id", [orgR])).id;
+  const ownR = (await one("insert into app.owner(org_id,party_id,is_self,owner_kind) values($1,$2,true,'company') returning id", [orgR, pR])).id;
+  const tpR = (await one("insert into app.party(org_id,display_name,roles) values($1,'Tenant',array['tenant']::app.party_role[]) returning id", [orgR])).id;
+
+  const tryIns = (sub, sql, params) => asRole(sub, orgR, () => client.query(sql, params));
+
+  // manage_data: staff can create data, accountant cannot.
+  ok("staff (manage_data) CAN create a property",
+    (await tryIns(rStaff, "insert into app.property(org_id,owner_id,name) values($1,$2,'S')", [orgR, ownR])).ok === true);
+  ok("accountant (no manage_data) CANNOT create a property",
+    (await tryIns(rAccountant, "insert into app.property(org_id,owner_id,name) values($1,$2,'A')", [orgR, ownR])).ok === false);
+
+  // manage_finance: accountant can record a payment, staff cannot.
+  ok("accountant (manage_finance) CAN record a payment",
+    (await tryIns(rAccountant, "insert into app.payment(org_id,party_id,amount_halalas) values($1,$2,50000)", [orgR, tpR])).ok === true);
+  ok("staff (no manage_finance) CANNOT record a payment",
+    (await tryIns(rStaff, "insert into app.payment(org_id,party_id,amount_halalas) values($1,$2,50000)", [orgR, tpR])).ok === false);
+
+  // manager does both; viewer does neither.
+  const mgrData = await tryIns(rManager, "insert into app.property(org_id,owner_id,name) values($1,$2,'M')", [orgR, ownR]);
+  const mgrFin = await tryIns(rManager, "insert into app.payment(org_id,party_id,amount_halalas) values($1,$2,50000)", [orgR, tpR]);
+  ok("manager CAN both data and finance", mgrData.ok === true && mgrFin.ok === true, (mgrData.error || "") + (mgrFin.error || ""));
+  ok("viewer CANNOT insert (data)",
+    (await tryIns(rViewer, "insert into app.property(org_id,owner_id,name) values($1,$2,'V')", [orgR, ownR])).ok === false);
+  const vUpd = await asRole(rViewer, orgR, () => client.query("update app.property set city='x' where org_id=$1", [orgR]));
+  ok("viewer UPDATE affects 0 rows", vUpd.ok && vUpd.value.rowCount === 0, vUpd.error);
+
+  // has_capability + current_capabilities.
+  const capStaff = await asRole(rStaff, orgR, () => client.query("select app.has_capability($1,'manage_data') d, app.has_capability($1,'manage_finance') f", [orgR]));
+  ok("has_capability: staff data=true, finance=false", capStaff.ok && capStaff.value.rows[0].d === true && capStaff.value.rows[0].f === false, capStaff.error);
+  const capAcct = await asRole(rAccountant, orgR, () => client.query("select app.has_capability($1,'manage_data') d, app.has_capability($1,'manage_finance') f", [orgR]));
+  ok("has_capability: accountant data=false, finance=true", capAcct.ok && capAcct.value.rows[0].d === false && capAcct.value.rows[0].f === true);
+  const capMgr = await asRole(rManager, orgR, () => client.query("select app.has_capability($1,'manage_team') t, app.has_capability($1,'manage_billing') b", [orgR]));
+  ok("manager has neither manage_team nor manage_billing", capMgr.ok && capMgr.value.rows[0].t === false && capMgr.value.rows[0].b === false);
+  const capOwner = await asRole(rOwner, orgR, () => client.query("select app.has_capability($1,'manage_team') t, app.has_capability($1,'manage_billing') b", [orgR]));
+  ok("owner has manage_team + manage_billing", capOwner.ok && capOwner.value.rows[0].t === true && capOwner.value.rows[0].b === true);
+  const capsStaff = await asRole(rStaff, orgR, () => client.query("select app.current_capabilities($1) c", [orgR]));
+  ok("current_capabilities(staff) = {view, manage_data}",
+    capsStaff.ok && JSON.stringify([...capsStaff.value.rows[0].c].sort()) === JSON.stringify(["manage_data", "view"]), JSON.stringify(capsStaff.value && capsStaff.value.rows[0].c));
+
   console.log(`\nPhase-3: ${pass} passed, ${fail} failed`);
 } catch (e) {
   console.error("HARNESS ERROR:", e.message, "\n", e.stack);

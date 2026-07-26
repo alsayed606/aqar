@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
+import { getCapabilities } from "@/lib/capabilities";
 import { halalasToSar } from "@/lib/money";
 import { fmtDate, type Summary, type SubscriptionStatus } from "@/lib/subscription";
 import { startSubscriptionCheckout, setAutoRenew, removeCard } from "./actions";
@@ -31,6 +32,8 @@ export default async function SubscriptionPage({
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
   const { error: flashError, checkout } = await searchParams;
+  const caps = await getCapabilities(activeOrg);
+  const canBill = caps.has("manage_billing");
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("subscription_summary", { p_org: activeOrg });
@@ -139,7 +142,8 @@ export default async function SubscriptionPage({
             </ul>
           </div>
 
-          {/* Auto-renew status + saved card management. */}
+          {/* Auto-renew status + saved card management (billing managers only). */}
+          {canBill && (
           <div className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
             <h2 className="mb-2 font-semibold">التجديد التلقائي</h2>
             {s.card ? (
@@ -177,9 +181,10 @@ export default async function SubscriptionPage({
               </p>
             )}
           </div>
+          )}
 
           {/* Plans + automated payment (Moyasar hosted checkout). One form; the button clicked sets `plan`. */}
-          {plans.length > 0 && (
+          {canBill && plans.length > 0 && (
             <form
               action={startSubscriptionCheckout}
               className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900"

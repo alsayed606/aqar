@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
+import { getCapabilities } from "@/lib/capabilities";
 import {
   activateContract,
   recordPayment,
@@ -74,6 +75,9 @@ export default async function ContractDetail({
   const { error: flashError } = await searchParams;
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
+  const caps = await getCapabilities(activeOrg);
+  const canData = caps.has("manage_data");     // contract lifecycle: activate / renew / amend / terminate
+  const canFinance = caps.has("manage_finance"); // issue invoice / record payment
 
   const supabase = await createClient();
 
@@ -247,7 +251,7 @@ export default async function ContractDetail({
           </div>
         )}
 
-        {contract.status === "draft" &&
+        {canData && contract.status === "draft" &&
           (renewedFromId ? (
             <div className="mt-6 border-t border-neutral-100 pt-4 dark:border-neutral-800">
               <p className="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
@@ -335,7 +339,7 @@ export default async function ContractDetail({
                             >
                               {invoiceByCharge.get(c.charge_id)!.invoice_no ?? "عرض"}
                             </Link>
-                          ) : (
+                          ) : canFinance ? (
                             <form action={issueInvoice}>
                               <input type="hidden" name="contract_id" value={contract.id} />
                               <input type="hidden" name="charge_id" value={c.charge_id} />
@@ -343,10 +347,12 @@ export default async function ContractDetail({
                                 إصدار
                               </button>
                             </form>
+                          ) : (
+                            <span className="text-xs text-neutral-400">—</span>
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          {c.is_settled ? (
+                          {c.is_settled || !canFinance ? (
                             <span className="text-xs text-neutral-400">—</span>
                           ) : (
                             <form action={recordPayment} className="flex items-center gap-1">
@@ -463,7 +469,7 @@ export default async function ContractDetail({
             </div>
           )}
 
-          {contract.status === "active" && (
+          {canData && contract.status === "active" && (
             <div className="grid gap-4 sm:grid-cols-2">
               {/* Rent change */}
               <form action={amendRent} className="space-y-2 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
@@ -524,7 +530,7 @@ export default async function ContractDetail({
       )}
 
       {/* Renewal (تجديد العقد بعقد لاحق) */}
-      {renewalReady && (contract.status === "active" || contract.status === "expired") && !successor && (
+      {canData && renewalReady && (contract.status === "active" || contract.status === "expired") && !successor && (
         <section>
           <h2 className="mb-3 text-base font-semibold">تجديد العقد</h2>
           <form

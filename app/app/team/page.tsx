@@ -176,6 +176,35 @@ export default async function TeamPage({
         </div>
       </section>
 
+      {/* Role reference — what each role can do (enforced at the database via RLS). */}
+      <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+        <h2 className="mb-3 text-base font-semibold">صلاحيات الأدوار</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-neutral-500">
+              <tr className="[&>th]:py-1.5 [&>th]:text-right [&>th]:font-medium">
+                <th>الدور</th>
+                <th>ما الذي يستطيعه</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+              {[
+                ["المالك / المدير العام", "كل شيء: البيانات، المالية، الفريق، والاشتراك/الدفع."],
+                ["مدير المكتب", "البيانات (عقارات/عقود/مستأجرون/ملّاك) + المالية (سندات/فواتير) — بلا فريق أو فوترة."],
+                ["المحاسب", "العمليات المالية فقط (سندات القبض، الفواتير، التوريدات) + الاطّلاع."],
+                ["مدخل البيانات", "إدخال وتعديل البيانات (العقارات/الوحدات/المستأجرون/العقود) — بلا عمليات مالية."],
+                ["مطّلع", "قراءة فقط، دون أي تعديل."],
+              ].map(([role, desc]) => (
+                <tr key={role} className="[&>td]:py-2 [&>td]:align-top">
+                  <td className="whitespace-nowrap font-medium">{role}</td>
+                  <td className="text-neutral-600 dark:text-neutral-400">{desc}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {/* Pending invitations */}
       <section>
         <h2 className="mb-3 text-base font-semibold">دعوات معلّقة ({invites.length})</h2>
