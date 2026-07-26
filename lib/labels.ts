@@ -65,7 +65,8 @@ export const DOC_KIND_AR: Record<string, string> = {
 
 export const PAYMENT_METHOD_AR: Record<string, string> = {
   cash: "نقداً",
-  bank_transfer: "تحويل بنكي",
+  bank_transfer: "حوالة بنكية",
+  ejar: "منصة إيجار",
   mada: "مدى",
   apple_pay: "Apple Pay",
   sadad: "سداد",

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
@@ -80,7 +81,11 @@ export default async function TenantsPage({
                   const p = party(t);
                   return (
                     <tr key={t.id}>
-                      <td className="px-4 py-2 font-medium">{p?.display_name}</td>
+                      <td className="px-4 py-2 font-medium">
+                        <Link href={`/app/tenants/${t.id}`} className="hover:text-brand hover:underline">
+                          {p?.display_name}
+                        </Link>
+                      </td>
                       <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300" dir="ltr">
                         {p?.national_id ?? "—"}
                       </td>

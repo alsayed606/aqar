@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { UnitForm } from "@/components/unit-form";
+import { ConfirmButton } from "@/components/confirm-button";
 import { changePropertyOwner } from "../actions";
 import { PROPERTY_KIND_AR, UNIT_STATUS_AR, UNIT_STATUS_TONE } from "@/lib/labels";
 
@@ -118,13 +119,19 @@ export default async function PropertyDetail({
               ))}
             </select>
           </div>
-          <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
+          <ConfirmButton
+            message="تغيير مالك العقار قد يؤثّر على العقود والالتزامات المالية والبيانات المرتبطة به. هل تريد المتابعة؟"
+            className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
             حفظ المالك
-          </button>
+          </ConfirmButton>
           <span className="self-center text-xs text-neutral-400">
             الحالي: {ownerLabel((property as any).owner)}
           </span>
         </form>
+        <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">
+          ⚠️ تغيير المالك قد يؤثّر على العقود والالتزامات المالية المرتبطة بالعقار.
+        </p>
       </header>
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">

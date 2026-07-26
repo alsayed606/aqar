@@ -6,7 +6,15 @@ import { UNIT_STATUS_AR } from "@/lib/labels";
 
 const initial: UnitState = {};
 
-export function UnitForm({ propertyId }: { propertyId: string }) {
+// Either bound to one property (propertyId) or offered with a property picker (properties) — the
+// latter powers the standalone /app/units page.
+export function UnitForm({
+  propertyId,
+  properties,
+}: {
+  propertyId?: string;
+  properties?: { id: string; label: string }[];
+}) {
   const [state, action, pending] = useActionState(createUnit, initial);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -16,7 +24,31 @@ export function UnitForm({ propertyId }: { propertyId: string }) {
 
   return (
     <form ref={formRef} action={action} className="grid gap-3 sm:grid-cols-3">
-      <input type="hidden" name="property_id" value={propertyId} />
+      {properties ? (
+        <div className="sm:col-span-3">
+          <label className="mb-1 block text-sm font-medium" htmlFor="property_id">
+            العقار *
+          </label>
+          <select
+            id="property_id"
+            name="property_id"
+            required
+            defaultValue=""
+            className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700"
+          >
+            <option value="" disabled>
+              اختر العقار
+            </option>
+            {properties.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <input type="hidden" name="property_id" value={propertyId} />
+      )}
 
       <div>
         <label className="mb-1 block text-sm font-medium" htmlFor="unit_number">

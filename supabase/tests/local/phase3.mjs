@@ -495,6 +495,24 @@ try {
   ok("contract stores per-contract trade_name + representative",
     cEst.trade_name === "مخابز الريان" && cEst.representative_name === "خالد" && cEst.representative_capacity === "مدير" && cEst.representative_phone === "+966500000400", JSON.stringify(cEst));
 
+  // ==================== Sprint K: ejar method + draft edit / active immutable ====================
+  const mEjar = (await one("insert into app.payment(org_id,party_id,amount_halalas,method) values($1,$2,10000,'ejar') returning method", [orgR, tpR])).method;
+  ok("payment method 'ejar' accepted (0043)", mEjar === "ejar");
+
+  const cDraft = (await one(
+    "insert into app.contract(org_id,property_id,unit_id,tenant_id,contract_number,contract_kind,status,start_date,end_date,annual_rent_halalas,payment_frequency) values($1,$2,$3,$4,'CT-K','commercial','draft',current_date,current_date+364,1200000,'quarterly') returning id",
+    [orgR, propR, uEst, tEst.id])).id;
+  ok("draft contract is editable (rent + trade_name)",
+    (await q("update app.contract set annual_rent_halalas=3000000, trade_name='محل جديد' where id=$1 and status='draft'", [cDraft])).rowCount === 1);
+
+  await q("select app.activate_contract($1)", [cDraft]);
+  let immErr = "";
+  try { await q("update app.contract set annual_rent_halalas=9999999 where id=$1", [cDraft]); } catch (e) { immErr = e.message; }
+  ok("active contract stays immutable after edit-window", /CONTRACT_IMMUTABLE/i.test(immErr), immErr);
+
+  ok("unit is editable", (await q("update app.unit set floor='3' where id=$1", [uEst])).rowCount === 1);
+  ok("tenant is editable", (await q("update app.tenant set tenant_type='sole_establishment' where id=$1", [tEst.id])).rowCount === 1);
+
   console.log(`\nPhase-3: ${pass} passed, ${fail} failed`);
 } catch (e) {
   console.error("HARNESS ERROR:", e.message, "\n", e.stack);

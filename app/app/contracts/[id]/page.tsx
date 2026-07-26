@@ -11,6 +11,7 @@ import {
   terminateContract,
   renewContract,
   activateRenewal,
+  updateDraftContract,
 } from "../actions";
 import {
   CONTRACT_STATUS_AR,
@@ -26,14 +27,12 @@ export const dynamic = "force-dynamic";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+// Standard collection methods for rent (Sprint K). The payment_method enum still holds the older
+// values for historical rows; these are just the options offered on new payments.
 const PAYMENT_METHODS: Array<[string, string]> = [
   ["cash", "نقداً"],
-  ["bank_transfer", "تحويل بنكي"],
-  ["mada", "مدى"],
-  ["apple_pay", "Apple Pay"],
-  ["sadad", "سداد"],
-  ["cheque", "شيك"],
-  ["card", "بطاقة"],
+  ["bank_transfer", "حوالة بنكية"],
+  ["ejar", "منصة إيجار"],
 ];
 
 type ChargeBal = {
@@ -84,7 +83,7 @@ export default async function ContractDetail({
   const { data: contract } = await supabase
     .from("contract")
     .select(
-      "id, contract_number, status, contract_kind, start_date, end_date, annual_rent_halalas, payment_frequency, deposit_halalas, service_fees_halalas, deed_number, terminated_at, termination_reason, trade_name, representative_name, representative_capacity, representative_id, representative_phone, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
+      "id, contract_number, status, contract_kind, start_date, end_date, annual_rent_halalas, payment_frequency, deposit_halalas, service_fees_halalas, deed_number, terminated_at, termination_reason, trade_name, representative_name, representative_capacity, representative_id, representative_phone, unit_id, tenant_id, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -180,6 +179,21 @@ export default async function ContractDetail({
   };
   const renewStart = shiftDate(contract.end_date, 0, 1);
   const renewEnd = shiftDate(renewStart, 1, -1);
+
+  // Draft contracts are still editable (immutability only freezes ACTIVE contracts). Load the
+  // pickers only in that case.
+  const isDraft = contract.status === "draft";
+  let draftUnits: any[] = [];
+  let draftTenants: any[] = [];
+  if (isDraft && canData) {
+    const [u, t] = await Promise.all([
+      supabase.from("unit").select("id, unit_number, property:property_id(name)").is("deleted_at", null).order("unit_number"),
+      supabase.from("tenant").select("id, party:party_id(display_name)").is("deleted_at", null),
+    ]);
+    draftUnits = u.data ?? [];
+    draftTenants = t.data ?? [];
+  }
+  const efCls = "w-full rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700";
 
   const Info = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div>
@@ -303,6 +317,94 @@ export default async function ContractDetail({
             </div>
           ))}
       </header>
+
+      {isDraft && canData && (
+        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+          <details>
+            <summary className="cursor-pointer select-none text-base font-semibold">تعديل المسودة</summary>
+            <p className="mt-1 mb-3 text-xs text-neutral-500">يمكن التعديل ما دام العقد مسودة. بعد التفعيل تُجمَّد بنوده.</p>
+            <form action={updateDraftContract} className="grid gap-3 sm:grid-cols-2">
+              <input type="hidden" name="contract_id" value={contract.id} />
+              <div>
+                <label className="mb-1 block text-sm font-medium">الوحدة *</label>
+                <select name="unit_id" required defaultValue={(contract as any).unit_id ?? ""} className={efCls}>
+                  {draftUnits.map((u) => (
+                    <option key={u.id} value={u.id}>{first(u.property)?.name ?? "عقار"} — وحدة {u.unit_number}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">المستأجر *</label>
+                <select name="tenant_id" required defaultValue={(contract as any).tenant_id ?? ""} className={efCls}>
+                  {draftTenants.map((t) => (
+                    <option key={t.id} value={t.id}>{first(t.party)?.display_name ?? "مستأجر"}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">نوع العقد</label>
+                <select name="contract_kind" defaultValue={contract.contract_kind} className={efCls}>
+                  <option value="residential">سكني (بدون ضريبة)</option>
+                  <option value="commercial">تجاري (ضريبة 15%)</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">دورية الدفع</label>
+                <select name="payment_frequency" defaultValue={contract.payment_frequency} className={efCls}>
+                  <option value="monthly">شهري</option>
+                  <option value="quarterly">ربع سنوي</option>
+                  <option value="semi_annual">نصف سنوي</option>
+                  <option value="annual">سنوي</option>
+                  <option value="one_time">دفعة واحدة</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">تاريخ البداية *</label>
+                <input name="start_date" type="date" required defaultValue={contract.start_date} className={efCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">تاريخ النهاية *</label>
+                <input name="end_date" type="date" required defaultValue={contract.end_date} className={efCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">الإيجار السنوي (ر.س) *</label>
+                <input name="annual_rent" inputMode="decimal" required defaultValue={Number(contract.annual_rent_halalas) / 100} className={efCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">التأمين (ر.س)</label>
+                <input name="deposit" inputMode="decimal" defaultValue={Number(contract.deposit_halalas) / 100} className={efCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">رسوم الخدمات (ر.س)</label>
+                <input name="service_fees" inputMode="decimal" defaultValue={Number(contract.service_fees_halalas) / 100} className={efCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">رقم العقد</label>
+                <input name="contract_number" dir="ltr" defaultValue={contract.contract_number} className={efCls + " text-right"} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">اسم المحل التجاري</label>
+                <input name="trade_name" defaultValue={(contract as any).trade_name ?? ""} className={efCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">اسم الممثل</label>
+                <input name="representative_name" defaultValue={(contract as any).representative_name ?? ""} className={efCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">صفة الممثل</label>
+                <input name="representative_capacity" defaultValue={(contract as any).representative_capacity ?? ""} className={efCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">جوال الممثل</label>
+                <input name="representative_phone" dir="ltr" defaultValue={(contract as any).representative_phone ?? ""} className={efCls + " text-right"} />
+              </div>
+              <div className="sm:col-span-2">
+                <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-fg">حفظ تعديلات المسودة</button>
+              </div>
+            </form>
+          </details>
+        </section>
+      )}
 
       {contract.status !== "draft" && (
         <section>

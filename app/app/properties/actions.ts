@@ -105,5 +105,36 @@ export async function createUnit(
   }
 
   revalidatePath(`/app/properties/${property_id}`);
+  revalidatePath("/app/units");
   return { ok: true };
+}
+
+// Edit a unit's mutable fields (unit numbering, status, size). RLS (manage_data) gates the write.
+export async function updateUnit(formData: FormData) {
+  const unit_id = String(formData.get("unit_id") ?? "");
+  const back = String(formData.get("back") ?? "/app/units");
+  if (!unit_id) redirect(back);
+
+  const unit_number = String(formData.get("unit_number") ?? "").trim();
+  if (!unit_number) redirect(`${back}?error=${encodeURIComponent("رقم الوحدة مطلوب")}`);
+
+  const patch = {
+    unit_number,
+    current_status: String(formData.get("current_status") ?? "vacant"),
+    floor: String(formData.get("floor") ?? "").trim() || null,
+    area_sqm: parseArabicNumber(String(formData.get("area_sqm") ?? "")),
+    bedrooms: parseArabicInt(String(formData.get("bedrooms") ?? "")),
+    bathrooms: parseArabicInt(String(formData.get("bathrooms") ?? "")),
+  };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("unit").update(patch).eq("id", unit_id);
+  if (error) {
+    const msg = /duplicate key|unit_number/i.test(error.message)
+      ? `رقم الوحدة "${unit_number}" مستخدم بالفعل في هذا العقار.`
+      : error.message;
+    redirect(`${back}?error=${encodeURIComponent(msg)}`);
+  }
+  revalidatePath("/app/units");
+  redirect(back);
 }

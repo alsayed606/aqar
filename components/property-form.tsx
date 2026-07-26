@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useRef } from "react";
 import { createProperty, type PropState } from "@/app/app/properties/actions";
 import { PROPERTY_KIND_AR } from "@/lib/labels";
@@ -49,6 +50,14 @@ export function PropertyForm({ owners = [] }: { owners?: OwnerOption[] }) {
           </select>
         </div>
       )}
+
+      <p className="text-xs text-neutral-500 sm:col-span-2">
+        إذا لم تكن أنت مالك العقار،{" "}
+        <Link href="/app/owners" className="text-brand hover:underline">
+          أضِف مالكاً جديداً من هنا
+        </Link>
+        .
+      </p>
 
       <div>
         <label className="mb-1 block text-sm font-medium" htmlFor="property_kind">

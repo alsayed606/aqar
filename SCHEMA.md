@@ -54,6 +54,7 @@
 | `0040_recurring_billing.sql` | التجديد المتكرّر: `org_payment_method` (رمز token مرجعي، RLS مدير) + حقول `org_subscription` (auto_renew/payment_method_id/dunning_attempts/next_charge_at) + `set_auto_renew`/`remove_payment_method` (مدير) + `save_payment_method`/`claim_due_renewals`/`record_dunning_failure`/`enqueue_notification_email` (service_role) + تحديث `apply_subscription_payment` (تصفير Dunning) و`subscription_summary` (auto_renew+card). المجدول = Vercel Cron يومي عبر `moyasar.chargeToken` |
 | `0041_roles_matrix.sql` | مصفوفة الأدوار: `role_capability` (مبذور، للقراءة) + `has_capability(org,cap)` + `current_capabilities(org)` + استبدال سياسات `0033` بسياسات RLS تقييدية لكل قدرة (جداول البيانات + `charge` → `manage_data`؛ `payment`/`payment_allocation`/`invoice`/`invoice_line`/`owner_remittance` → `manage_finance`) |
 | `0042_tenant_establishment.sql` | نموذج المستأجر/المنشأة (إضافي): `tenant.tenant_type` (text+CHECK فرد/مؤسسة فردية/شركة، مبذور من `tenant_kind`) + أعمدة منشأة على `party` (`vat_number`/`unified_number`/`cr_expiry`) + على `contract` (`trade_name` + `representative_name/_capacity/_id/_phone`). بلا تعديل enum، بلا فقدان بيانات |
+| `0043_payment_method_ejar.sql` | `ALTER TYPE app.payment_method ADD VALUE 'ejar'` (منصة إيجار كطريقة دفع). آمن على PG12+ (يُضاف فقط، لا يُستخدم في نفس المعاملة)، idempotent |
 
 ---
 

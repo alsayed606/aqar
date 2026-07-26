@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
@@ -98,4 +99,52 @@ export async function createTenant(
 
   revalidatePath("/app/tenants");
   return { ok: true };
+}
+
+// Edit an existing tenant (party fields + tenant_type). RLS (manage_data) gates the write.
+export async function updateTenant(formData: FormData) {
+  const tenant_id = String(formData.get("tenant_id") ?? "");
+  const party_id = String(formData.get("party_id") ?? "");
+  if (!tenant_id || !party_id) redirect("/app/tenants");
+
+  const display_name = String(formData.get("display_name") ?? "").trim();
+  if (!display_name) redirect(`/app/tenants/${tenant_id}?error=${encodeURIComponent("الاسم مطلوب")}`);
+
+  const TYPES = ["individual", "sole_establishment", "company"];
+  const tenant_type = TYPES.includes(String(formData.get("tenant_type") ?? ""))
+    ? String(formData.get("tenant_type"))
+    : "individual";
+  const legal_kind = tenant_type === "company" ? "company" : "individual";
+  const isEstablishment = tenant_type !== "individual";
+
+  const phoneRaw = String(formData.get("phone") ?? "").trim();
+  let phone_e164: string | null = null;
+  if (phoneRaw) {
+    phone_e164 = normalizeSaudiPhone(phoneRaw);
+    if (!phone_e164) redirect(`/app/tenants/${tenant_id}?error=${encodeURIComponent("رقم جوال غير صالح")}`);
+  }
+
+  const supabase = await createClient();
+  const { error: pErr } = await supabase
+    .from("party")
+    .update({
+      display_name,
+      legal_kind,
+      national_id: String(formData.get("national_id") ?? "").trim() || null,
+      email: String(formData.get("email") ?? "").trim() || null,
+      phone_e164,
+      phone_raw: phoneRaw || null,
+      cr_number: isEstablishment ? String(formData.get("cr_number") ?? "").trim() || null : null,
+      vat_number: isEstablishment ? String(formData.get("vat_number") ?? "").trim() || null : null,
+      unified_number: isEstablishment ? String(formData.get("unified_number") ?? "").trim() || null : null,
+      cr_expiry: isEstablishment ? String(formData.get("cr_expiry") ?? "").trim() || null : null,
+    })
+    .eq("id", party_id);
+  if (pErr) redirect(`/app/tenants/${tenant_id}?error=${encodeURIComponent(pErr.message)}`);
+
+  const { error: tErr } = await supabase.from("tenant").update({ tenant_kind: legal_kind, tenant_type }).eq("id", tenant_id);
+  if (tErr) redirect(`/app/tenants/${tenant_id}?error=${encodeURIComponent(tErr.message)}`);
+
+  revalidatePath("/app/tenants");
+  redirect(`/app/tenants/${tenant_id}?ok=1`);
 }

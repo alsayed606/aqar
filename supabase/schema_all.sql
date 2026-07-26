@@ -5316,3 +5316,13 @@ alter table app.contract add column if not exists representative_name     text; 
 alter table app.contract add column if not exists representative_capacity text;  -- صفته
 alter table app.contract add column if not exists representative_id       text;  -- رقم هويته (اختياري)
 alter table app.contract add column if not exists representative_phone    text;  -- جواله (اختياري)
+
+-- ================================================================
+-- 0043_payment_method_ejar.sql
+-- ================================================================
+-- 0043_payment_method_ejar.sql
+-- Sprint K: add the Ejar platform as a payment method. PostgreSQL 12+ allows ALTER TYPE ... ADD VALUE
+-- inside a transaction block (the new value just can't be USED in the same transaction) — this
+-- migration only ADDs it, so it is safe for the one-shot SQL-Editor apply and the test harness.
+-- IF NOT EXISTS makes it idempotent. Existing payment rows are untouched.
+alter type app.payment_method add value if not exists 'ejar';
