@@ -30,6 +30,7 @@ desktop.ini
 
 # claude-flow / Ruflo tooling artifacts — auto-generated, never commit (Charter هـ-34)
 CLAUDE.md
+.claude/
 .claude-flow/
 .swarm/
 .mcp.json
