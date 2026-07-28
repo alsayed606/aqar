@@ -25,11 +25,20 @@ export async function createProperty(
   const district = String(formData.get("district") ?? "").trim() || null;
   const deed_number = String(formData.get("deed_number") ?? "").trim() || null;
 
+  // Holding relationship (Sprint L, presentation only): owned = the org owns it (self-owner);
+  // managed/investment = an external landlord, which must be chosen.
+  const HOLDING = ["owned", "managed", "investment"];
+  const holding_type = HOLDING.includes(String(formData.get("holding_type") ?? "")) ? String(formData.get("holding_type")) : "owned";
+  const occ = String(formData.get("occupancy_type") ?? "").trim();
+  const occupancy_type = occ === "family" || occ === "bachelor" ? occ : null;
+  const toInt = (v: string) => { const n = parseArabicInt(v); return n; };
+
   const supabase = await createClient();
 
-  // Owner: use the selected owner; otherwise fall back to the org's auto self-owner.
+  // Owner: for an owned property use the org self-owner; otherwise the chosen external owner is required.
   let owner_id = String(formData.get("owner_id") ?? "").trim();
-  if (!owner_id) {
+  if (holding_type === "owned" || !owner_id) {
+    if (holding_type !== "owned" && !owner_id) return { error: "اختر المالك للعقار غير المملوك (إدارة/استثمار)." };
     const { data: self, error: selfErr } = await supabase
       .from("owner")
       .select("id")
@@ -38,7 +47,7 @@ export async function createProperty(
       .maybeSingle();
     if (selfErr) return { error: selfErr.message };
     if (!self) return { error: "تعذّر إيجاد المالك الافتراضي للمنشأة" };
-    owner_id = self.id;
+    if (holding_type === "owned") owner_id = self.id;
   }
 
   const { error } = await supabase.from("property").insert({
@@ -49,11 +58,35 @@ export async function createProperty(
     city,
     district,
     deed_number,
+    holding_type,
+    property_code: String(formData.get("property_code") ?? "").trim() || null,
+    property_type: String(formData.get("property_type") ?? "").trim() || null,
+    occupancy_type,
+    deed_type: String(formData.get("deed_type") ?? "").trim() || null,
+    deed_date: String(formData.get("deed_date") ?? "").trim() || null,
+    water_meter: String(formData.get("water_meter") ?? "").trim() || null,
+    electricity_meter: String(formData.get("electricity_meter") ?? "").trim() || null,
+    planned_residential_units: toInt(String(formData.get("planned_residential_units") ?? "")),
+    planned_commercial_units: toInt(String(formData.get("planned_commercial_units") ?? "")),
   });
   if (error) return { error: translateSubscriptionError(error.message) ?? error.message };
 
   revalidatePath("/app/properties");
   return { ok: true };
+}
+
+// Soft-delete a property (keeps history; RLS manage_data gates it).
+export async function deleteProperty(formData: FormData) {
+  const property_id = String(formData.get("property_id") ?? "");
+  if (!property_id) redirect("/app/properties");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("property")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", property_id);
+  if (error) redirect(`/app/properties?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/app/properties");
+  redirect("/app/properties");
 }
 
 // Reassign a property to a different owner (e.g., from the self-owner to a real client).

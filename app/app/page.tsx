@@ -25,6 +25,7 @@ export default async function AppHome() {
     .eq("status", "active");
 
   const memberships = (data ?? []) as MembershipRow[];
+  const ownsOrg = memberships.some((m) => m.role === "owner"); // one org per user (Sprint L)
   const orgName = (m: MembershipRow) =>
     (Array.isArray(m.organization) ? m.organization[0]?.name : m.organization?.name) ??
     "منشأة";
@@ -88,10 +89,12 @@ export default async function AppHome() {
             })}
           </ul>
 
-          <div className="mt-6 border-t border-neutral-100 pt-6 dark:border-neutral-800">
-            <h3 className="mb-3 text-sm font-medium text-neutral-500">إنشاء منشأة أخرى</h3>
-            <CreateOrgForm />
-          </div>
+          {!ownsOrg && (
+            <div className="mt-6 border-t border-neutral-100 pt-6 dark:border-neutral-800">
+              <h3 className="mb-3 text-sm font-medium text-neutral-500">إنشاء منشأتك</h3>
+              <CreateOrgForm />
+            </div>
+          )}
         </section>
       )}
     </div>

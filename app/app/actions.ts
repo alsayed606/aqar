@@ -26,7 +26,10 @@ export async function createOrg(
   const { data, error } = await supabase.rpc("create_organization", {
     p_name: name,
   });
-  if (error) return { error: error.message };
+  if (error) {
+    if (/OWN_ORG_EXISTS/i.test(error.message)) return { error: "لا يمكنك إنشاء أكثر من منشأة واحدة. يمكنك الانضمام لمنشآت أخرى عبر دعوة." };
+    return { error: error.message };
+  }
 
   (await cookies()).set("active-org", String(data), ACTIVE_ORG_COOKIE);
   redirect("/app");

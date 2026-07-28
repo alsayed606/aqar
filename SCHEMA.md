@@ -55,6 +55,7 @@
 | `0041_roles_matrix.sql` | مصفوفة الأدوار: `role_capability` (مبذور، للقراءة) + `has_capability(org,cap)` + `current_capabilities(org)` + استبدال سياسات `0033` بسياسات RLS تقييدية لكل قدرة (جداول البيانات + `charge` → `manage_data`؛ `payment`/`payment_allocation`/`invoice`/`invoice_line`/`owner_remittance` → `manage_finance`) |
 | `0042_tenant_establishment.sql` | نموذج المستأجر/المنشأة (إضافي): `tenant.tenant_type` (text+CHECK فرد/مؤسسة فردية/شركة، مبذور من `tenant_kind`) + أعمدة منشأة على `party` (`vat_number`/`unified_number`/`cr_expiry`) + على `contract` (`trade_name` + `representative_name/_capacity/_id/_phone`). بلا تعديل enum، بلا فقدان بيانات |
 | `0043_payment_method_ejar.sql` | `ALTER TYPE app.payment_method ADD VALUE 'ejar'` (منصة إيجار كطريقة دفع). آمن على PG12+ (يُضاف فقط، لا يُستخدم في نفس المعاملة)، idempotent |
+| `0044_property_fields.sql` | حقول عقار **عرضية** إضافية (`holding_type` مملوك/إدارة/استثمار CHECK + بذر · `property_code`/`property_type`/`occupancy_type` عوائل/عزّاب CHECK · `deed_type`/`deed_date`/`water_meter`/`electricity_meter`/`planned_*_units`) + `create_organization` يرفض المنشأة الثانية لنفس المالك (`OWN_ORG_EXISTS`). بلا فقدان بيانات، بلا منطق يُقاد بها |
 
 ---
 

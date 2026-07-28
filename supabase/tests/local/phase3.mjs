@@ -513,6 +513,30 @@ try {
   ok("unit is editable", (await q("update app.unit set floor='3' where id=$1", [uEst])).rowCount === 1);
   ok("tenant is editable", (await q("update app.tenant set tenant_type='sole_establishment' where id=$1", [tEst.id])).rowCount === 1);
 
+  // ==================== Sprint L: property fields + one-org guard (0044) ====================
+  const propL = await one(
+    "insert into app.property(org_id,owner_id,name,holding_type,property_code,property_type,occupancy_type,deed_type,deed_date,water_meter,planned_residential_units) values($1,$2,'PL','managed','PC-1','برج','family','ملكية','2030-01-01','WM-1',10) returning holding_type, property_code, occupancy_type, planned_residential_units",
+    [orgR, ownR]);
+  ok("property stores new fields (holding/code/occupancy/planned)",
+    propL.holding_type === "managed" && propL.property_code === "PC-1" && propL.occupancy_type === "family" && propL.planned_residential_units === 10, JSON.stringify(propL));
+
+  let badHold = "";
+  try { await q("insert into app.property(org_id,owner_id,name,holding_type) values($1,$2,'X','foobar')", [orgR, ownR]); } catch (e) { badHold = e.message; }
+  ok("holding_type CHECK rejects invalid", /check|holding_type/i.test(badHold), badHold);
+  let badOcc = "";
+  try { await q("insert into app.property(org_id,owner_id,name,occupancy_type) values($1,$2,'Y','zzz')", [orgR, ownR]); } catch (e) { badOcc = e.message; }
+  ok("occupancy_type CHECK rejects invalid", /check|occupancy/i.test(badOcc), badOcc);
+
+  const idOne = await mkId("+966500000500");
+  const oneOrg = await asRole(idOne, null, async () => {
+    const firstId = (await client.query("select app.create_organization('Org One L') id")).rows[0].id;
+    let secondErr = "";
+    try { await client.query("select app.create_organization('Org Two L')"); } catch (e) { secondErr = e.message; }
+    return { firstId, secondErr };
+  });
+  ok("create_organization: first org for a user succeeds", oneOrg.ok && !!oneOrg.value.firstId, oneOrg.error);
+  ok("create_organization: a second org is blocked (OWN_ORG_EXISTS)", oneOrg.ok && /OWN_ORG_EXISTS/i.test(oneOrg.value.secondErr), JSON.stringify(oneOrg.value));
+
   console.log(`\nPhase-3: ${pass} passed, ${fail} failed`);
 } catch (e) {
   console.error("HARNESS ERROR:", e.message, "\n", e.stack);
