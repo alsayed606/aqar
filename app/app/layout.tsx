@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { daysLeft, type Summary } from "@/lib/subscription";
+import { AppNav } from "@/components/app-nav";
 import { signOut } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -53,68 +54,20 @@ export default async function AppLayout({
   return (
     <div className="min-h-screen">
       <header className="no-print border-b border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-3">
-          <div className="flex items-center gap-5">
+        {activeOrg && orgName ? (
+          <AppNav orgName={orgName} unread={unread} />
+        ) : (
+          <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-3">
             <Link href="/app" className="text-lg font-bold">
               عقار
             </Link>
-            {activeOrg && orgName && (
-              <nav className="flex gap-4 text-sm text-neutral-600 dark:text-neutral-300">
-                <Link href="/app" className="hover:text-brand">
-                  الرئيسية
-                </Link>
-                <Link href="/app/properties" className="hover:text-brand">
-                  العقارات
-                </Link>
-                <Link href="/app/units" className="hover:text-brand">
-                  الوحدات
-                </Link>
-                <Link href="/app/owners" className="hover:text-brand">
-                  الملّاك
-                </Link>
-                <Link href="/app/tenants" className="hover:text-brand">
-                  المستأجرون
-                </Link>
-                <Link href="/app/contracts" className="hover:text-brand">
-                  العقود
-                </Link>
-                <Link href="/app/invoices" className="hover:text-brand">
-                  الفواتير
-                </Link>
-                <Link href="/app/receipts" className="hover:text-brand">
-                  السندات
-                </Link>
-                <Link href="/app/import" className="hover:text-brand">
-                  الاستيراد
-                </Link>
-                <Link href="/app/team" className="hover:text-brand">
-                  الفريق
-                </Link>
-                <Link href="/app/notifications" className="relative hover:text-brand">
-                  الإشعارات
-                  {unread > 0 && (
-                    <span className="mr-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-medium text-white">
-                      {unread > 99 ? "99+" : unread}
-                    </span>
-                  )}
-                </Link>
-                <Link href="/app/subscription" className="hover:text-brand">
-                  الاشتراك
-                </Link>
-              </nav>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            {orgName && (
-              <span className="hidden text-sm text-neutral-500 sm:inline">{orgName}</span>
-            )}
             <form action={signOut}>
               <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
                 خروج
               </button>
             </form>
           </div>
-        </div>
+        )}
       </header>
       {subBanner && (
         <Link
