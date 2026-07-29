@@ -4,16 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { getCapabilities } from "@/lib/capabilities";
 import { UnitForm } from "@/components/unit-form";
-import { updateUnit } from "../properties/actions";
 import { UNIT_STATUS_AR, UNIT_STATUS_TONE } from "@/lib/labels";
 import { FilterableCards } from "@/components/filterable-list";
+import { UnitEditDrawer } from "@/components/unit-edit-drawer";
 
 export const dynamic = "force-dynamic";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const firstOf = (x: any) => (Array.isArray(x) ? x[0] : x);
-
-const fieldCls = "w-full rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700";
 
 export default async function UnitsPage({
   searchParams,
@@ -98,28 +96,19 @@ export default async function UnitsPage({
                 </div>
 
                 {canData && (
-                  <details className="mt-3">
-                    <summary className="cursor-pointer select-none text-sm text-brand">تعديل</summary>
-                    <form action={updateUnit} className="mt-3 grid gap-2 sm:grid-cols-3">
-                      <input type="hidden" name="unit_id" value={u.id} />
-                      <input type="hidden" name="back" value="/app/units" />
-                      <input name="unit_number" defaultValue={u.unit_number} placeholder="رقم الوحدة" className={fieldCls} required />
-                      <select name="current_status" defaultValue={u.current_status} className={fieldCls}>
-                        {Object.entries(UNIT_STATUS_AR).map(([v, label]) => (
-                          <option key={v} value={v}>{label}</option>
-                        ))}
-                      </select>
-                      <input name="floor" defaultValue={u.floor ?? ""} placeholder="الدور" className={fieldCls} />
-                      <input name="area_sqm" defaultValue={u.area_sqm ?? ""} placeholder="المساحة م²" inputMode="decimal" className={fieldCls} />
-                      <input name="bedrooms" defaultValue={u.bedrooms ?? ""} placeholder="غرف" inputMode="numeric" className={fieldCls} />
-                      <input name="bathrooms" defaultValue={u.bathrooms ?? ""} placeholder="دورات مياه" inputMode="numeric" className={fieldCls} />
-                      <div className="sm:col-span-3">
-                        <button className="rounded-lg bg-brand px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-fg">
-                          حفظ التعديل
-                        </button>
-                      </div>
-                    </form>
-                  </details>
+                  <div className="mt-2">
+                    <UnitEditDrawer
+                      unit={{
+                        id: u.id,
+                        unit_number: u.unit_number,
+                        current_status: u.current_status,
+                        floor: u.floor,
+                        area_sqm: u.area_sqm,
+                        bedrooms: u.bedrooms,
+                        bathrooms: u.bathrooms,
+                      }}
+                    />
+                  </div>
                 )}
               </div>
               ),

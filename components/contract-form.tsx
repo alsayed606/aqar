@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { createContract, type ContractState } from "@/app/app/contracts/actions";
+import { Combobox } from "@/components/ui";
 
 const initial: ContractState = {};
 
@@ -22,47 +23,21 @@ export function ContractForm({
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-2">
       <div>
-        <label className="mb-1 block text-sm font-medium" htmlFor="unit_id">
-          الوحدة *
-        </label>
-        <select
-          id="unit_id"
+        <label className="mb-1 block text-sm font-medium">الوحدة *</label>
+        <Combobox
           name="unit_id"
-          required
-          defaultValue=""
-          className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700"
-        >
-          <option value="" disabled>
-            {noUnits ? "لا توجد وحدات — أضِفها أولاً" : "اختر الوحدة"}
-          </option>
-          {units.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.label}
-            </option>
-          ))}
-        </select>
+          placeholder={noUnits ? "لا توجد وحدات — أضِفها أولاً" : "ابحث واختر الوحدة…"}
+          options={units.map((u) => ({ value: u.id, label: u.label }))}
+        />
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium" htmlFor="tenant_id">
-          المستأجر *
-        </label>
-        <select
-          id="tenant_id"
+        <label className="mb-1 block text-sm font-medium">المستأجر *</label>
+        <Combobox
           name="tenant_id"
-          required
-          defaultValue=""
-          className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700"
-        >
-          <option value="" disabled>
-            {noTenants ? "لا يوجد مستأجرون — أضِفهم أولاً" : "اختر المستأجر"}
-          </option>
-          {tenants.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.label}
-            </option>
-          ))}
-        </select>
+          placeholder={noTenants ? "لا يوجد مستأجرون — أضِفهم أولاً" : "ابحث واختر المستأجر…"}
+          options={tenants.map((t) => ({ value: t.id, label: t.label }))}
+        />
       </div>
 
       <div>

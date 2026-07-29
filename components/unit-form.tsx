@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef } from "react";
 import { createUnit, type UnitState } from "@/app/app/properties/actions";
 import { UNIT_STATUS_AR } from "@/lib/labels";
+import { Combobox } from "@/components/ui";
 
 const initial: UnitState = {};
 
@@ -26,25 +27,12 @@ export function UnitForm({
     <form ref={formRef} action={action} className="grid gap-3 sm:grid-cols-3">
       {properties ? (
         <div className="sm:col-span-3">
-          <label className="mb-1 block text-sm font-medium" htmlFor="property_id">
-            العقار *
-          </label>
-          <select
-            id="property_id"
+          <label className="mb-1 block text-sm font-medium">العقار *</label>
+          <Combobox
             name="property_id"
-            required
-            defaultValue=""
-            className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700"
-          >
-            <option value="" disabled>
-              اختر العقار
-            </option>
-            {properties.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+            placeholder="ابحث واختر العقار…"
+            options={properties.map((p) => ({ value: p.id, label: p.label }))}
+          />
         </div>
       ) : (
         <input type="hidden" name="property_id" value={propertyId} />
