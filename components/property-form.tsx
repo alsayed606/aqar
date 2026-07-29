@@ -6,6 +6,7 @@ import { createProperty, type PropState } from "@/app/app/properties/actions";
 import { PROPERTY_KIND_AR } from "@/lib/labels";
 import { LandlordPicker, type Landlord } from "@/components/landlord-picker";
 import { UpgradeModal } from "@/components/upgrade-modal";
+import { useFormDrawerClose } from "@/components/form-drawer";
 
 const initial: PropState = {};
 const cls = "w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700";
@@ -15,11 +16,13 @@ export function PropertyForm({ owners = [] }: { owners?: Landlord[] }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [holding, setHolding] = useState("owned");
   const isOwned = holding === "owned";
+  const closeDrawer = useFormDrawerClose();
 
   useEffect(() => {
     if (state.ok) {
       formRef.current?.reset();
       setHolding("owned");
+      closeDrawer?.();
     }
   }, [state.ok]);
 

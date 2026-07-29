@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { createTenant, type TenantState } from "@/app/app/tenants/actions";
+import { useFormDrawerClose } from "@/components/form-drawer";
 
 const initial: TenantState = {};
 
@@ -13,11 +14,13 @@ export function TenantForm() {
   const formRef = useRef<HTMLFormElement>(null);
   const [tenantType, setTenantType] = useState("individual");
   const isEstablishment = tenantType !== "individual";
+  const closeDrawer = useFormDrawerClose();
 
   useEffect(() => {
     if (state.ok) {
       formRef.current?.reset();
       setTenantType("individual");
+      closeDrawer?.();
     }
   }, [state.ok]);
 

@@ -2,15 +2,20 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { createOwner, type OwnerState } from "@/app/app/owners/actions";
+import { useFormDrawerClose } from "@/components/form-drawer";
 
 const initial: OwnerState = {};
 
 export function OwnerForm() {
   const [state, action, pending] = useActionState(createOwner, initial);
   const formRef = useRef<HTMLFormElement>(null);
+  const closeDrawer = useFormDrawerClose();
 
   useEffect(() => {
-    if (state.ok) formRef.current?.reset();
+    if (state.ok) {
+      formRef.current?.reset();
+      closeDrawer?.();
+    }
   }, [state.ok]);
 
   return (

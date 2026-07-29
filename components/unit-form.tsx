@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef } from "react";
 import { createUnit, type UnitState } from "@/app/app/properties/actions";
 import { UNIT_STATUS_AR } from "@/lib/labels";
 import { Combobox } from "@/components/ui";
+import { useFormDrawerClose } from "@/components/form-drawer";
 
 const initial: UnitState = {};
 
@@ -18,9 +19,13 @@ export function UnitForm({
 }) {
   const [state, action, pending] = useActionState(createUnit, initial);
   const formRef = useRef<HTMLFormElement>(null);
+  const closeDrawer = useFormDrawerClose();
 
   useEffect(() => {
-    if (state.ok) formRef.current?.reset();
+    if (state.ok) {
+      formRef.current?.reset();
+      closeDrawer?.();
+    }
   }, [state.ok]);
 
   return (

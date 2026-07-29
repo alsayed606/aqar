@@ -31,9 +31,9 @@ function groups(unread: number): Group[] {
     {
       title: "إدارة العقارات",
       items: [
-        { href: "/app/properties", label: "العقارات", icon: I.building, add: "/app/properties" },
+        { href: "/app/properties", label: "العقارات", icon: I.building, add: "/app/properties?add=1" },
         { href: "/app/units", label: "الوحدات", icon: I.layers },
-        { href: "/app/contracts", label: "عقود التأجير", icon: I.doc, add: "/app/contracts" },
+        { href: "/app/contracts", label: "عقود التأجير", icon: I.doc, add: "/app/contracts?add=1" },
         { href: "/app/owners", label: "الملّاك", icon: I.users },
         { href: "/app/tenants", label: "المستأجرون", icon: I.user },
       ],

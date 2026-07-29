@@ -8,6 +8,7 @@ import { parseListParams, likePattern } from "@/lib/list-params";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
 import { FilterableCards } from "@/components/filterable-list";
+import { FormDrawer } from "@/components/form-drawer";
 
 export const dynamic = "force-dynamic";
 
@@ -37,15 +38,15 @@ export default async function OwnersPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">الملّاك</h1>
-        <span className="text-sm text-neutral-500">{total}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-neutral-500">{total}</span>
+          <FormDrawer label="إضافة مالك" title="إضافة مالك">
+            <OwnerForm />
+          </FormDrawer>
+        </div>
       </div>
-
-      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-        <h2 className="mb-4 text-base font-semibold">إضافة مالك</h2>
-        <OwnerForm />
-      </section>
 
       <ListToolbar q={q} placeholder="بحث باسم المالك…" />
 

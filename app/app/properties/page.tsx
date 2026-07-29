@@ -11,6 +11,7 @@ import { parseListParams, likePattern } from "@/lib/list-params";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
 import { FilterableTable } from "@/components/filterable-list";
+import { FormDrawer } from "@/components/form-drawer";
 
 export const dynamic = "force-dynamic";
 
@@ -85,9 +86,16 @@ export default async function PropertiesPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">العقارات</h1>
-        <span className="text-sm text-neutral-500">{total} عقار</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-neutral-500">{total} عقار</span>
+          {canData && (
+            <FormDrawer label="إضافة عقار" title="إضافة عقار">
+              <PropertyForm owners={owners} />
+            </FormDrawer>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -98,13 +106,6 @@ export default async function PropertiesPage({
       </div>
 
       {flashError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{flashError}</p>}
-
-      {canData && (
-        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-          <h2 className="mb-4 text-base font-semibold">إضافة عقار</h2>
-          <PropertyForm owners={owners} />
-        </section>
-      )}
 
       <ListToolbar q={q} placeholder="بحث باسم العقار…" />
 

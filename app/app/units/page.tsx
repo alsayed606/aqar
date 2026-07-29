@@ -7,6 +7,7 @@ import { UnitForm } from "@/components/unit-form";
 import { UNIT_STATUS_AR, UNIT_STATUS_TONE } from "@/lib/labels";
 import { FilterableCards } from "@/components/filterable-list";
 import { UnitEditDrawer } from "@/components/unit-edit-drawer";
+import { FormDrawer } from "@/components/form-drawer";
 
 export const dynamic = "force-dynamic";
 
@@ -39,32 +40,28 @@ export default async function UnitsPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">الوحدات</h1>
-        <span className="text-sm text-neutral-500">{units.length} وحدة</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-neutral-500">{units.length} وحدة</span>
+          {canData && (
+            <FormDrawer label="إضافة وحدة" title="إضافة وحدة">
+              {properties.length === 0 ? (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+                  أضِف <Link href="/app/properties" className="underline">عقاراً</Link> أولاً لربط الوحدة به.
+                </p>
+              ) : (
+                <UnitForm properties={properties} />
+              )}
+            </FormDrawer>
+          )}
+        </div>
       </div>
 
       {flashError && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
           {flashError}
         </p>
-      )}
-
-      {canData && (
-        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-          <h2 className="mb-4 text-base font-semibold">إضافة وحدة</h2>
-          {properties.length === 0 ? (
-            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
-              أضِف{" "}
-              <Link href="/app/properties" className="underline">
-                عقاراً
-              </Link>{" "}
-              أولاً لربط الوحدة به.
-            </p>
-          ) : (
-            <UnitForm properties={properties} />
-          )}
-        </section>
       )}
 
       {units.length === 0 ? (
