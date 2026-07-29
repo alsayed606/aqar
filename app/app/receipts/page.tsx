@@ -8,6 +8,7 @@ import { first } from "@/lib/rows";
 import { parseListParams, likePattern } from "@/lib/list-params";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
+import { FilterableTable } from "@/components/filterable-list";
 
 export const dynamic = "force-dynamic";
 
@@ -63,36 +64,40 @@ export default async function ReceiptsPage({
         </p>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 text-neutral-500 dark:bg-neutral-900">
-                <tr>
-                  <th className="px-4 py-2 text-right font-medium">رقم السند</th>
-                  <th className="px-4 py-2 text-right font-medium">التاريخ</th>
-                  <th className="px-4 py-2 text-right font-medium">المستلم منه</th>
-                  <th className="px-4 py-2 text-right font-medium">المبلغ (ر.س)</th>
-                  <th className="px-4 py-2 text-right font-medium">الطريقة</th>
-                  <th className="px-4 py-2 text-right font-medium"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                {rows.map((p) => (
-                  <tr key={p.id}>
+          <FilterableTable
+            placeholder="تصفية سريعة في هذه الصفحة…"
+            headers={
+              <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+                <th>رقم السند</th>
+                <th>التاريخ</th>
+                <th>المستلم منه</th>
+                <th>المبلغ (ر.س)</th>
+                <th>الطريقة</th>
+                <th></th>
+              </tr>
+            }
+            rows={rows.map((p) => {
+              const date = new Date(p.received_at).toISOString().slice(0, 10);
+              const payer = first(p.party)?.display_name ?? "";
+              const methodLabel = PAYMENT_METHOD_AR[p.method] ?? p.method;
+              return {
+                id: p.id,
+                search: [p.receipt_no, payer, date, methodLabel].filter(Boolean).join(" "),
+                cells: (
+                  <>
                     <td className="px-4 py-2 font-mono font-medium" dir="ltr">{p.receipt_no ?? "—"}</td>
-                    <td className="px-4 py-2" dir="ltr">{new Date(p.received_at).toISOString().slice(0, 10)}</td>
-                    <td className="px-4 py-2">{first(p.party)?.display_name ?? "—"}</td>
+                    <td className="px-4 py-2" dir="ltr">{date}</td>
+                    <td className="px-4 py-2">{payer || "—"}</td>
                     <td className="px-4 py-2 font-medium">{halalasToSar(p.amount_halalas)}</td>
-                    <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300">{PAYMENT_METHOD_AR[p.method] ?? p.method}</td>
+                    <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{methodLabel}</td>
                     <td className="px-4 py-2">
-                      <Link href={`/app/receipts/${p.id}`} className="text-brand hover:underline">
-                        عرض / طباعة ←
-                      </Link>
+                      <Link href={`/app/receipts/${p.id}`} className="text-brand hover:underline">عرض / طباعة ←</Link>
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  </>
+                ),
+              };
+            })}
+          />
           <Pagination page={page} total={total} q={q} basePath="/app/receipts" />
         </>
       )}

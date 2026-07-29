@@ -8,6 +8,7 @@ import { halalasToSar } from "@/lib/money";
 import { parseListParams, likePattern } from "@/lib/list-params";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
+import { FilterableCards } from "@/components/filterable-list";
 
 export const dynamic = "force-dynamic";
 
@@ -106,44 +107,42 @@ export default async function ContractsPage({
         </p>
       ) : (
         <>
-          <ul className="space-y-3">
-            {contracts.map((c: any) => {
+          <FilterableCards
+            className="space-y-3"
+            placeholder="تصفية سريعة في هذه الصفحة…"
+            items={contracts.map((c: any) => {
               const unit = first(c.unit);
               const tenant = first(c.tenant);
-              return (
-                <li key={c.id}>
+              const propName = first(unit?.property)?.name ?? "";
+              const tenantName = first(tenant?.party)?.display_name ?? "";
+              return {
+                id: c.id,
+                search: [c.contract_number, propName, unit?.unit_number, tenantName, CONTRACT_STATUS_AR[c.status] ?? c.status]
+                  .filter(Boolean)
+                  .join(" "),
+                node: (
                   <Link
                     href={`/app/contracts/${c.id}`}
-                    className="block rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:border-brand dark:border-neutral-800 dark:bg-neutral-900"
+                    className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand dark:border-slate-800 dark:bg-slate-900"
                   >
                     <div className="flex items-center justify-between">
-                      <p className="font-semibold" dir="ltr">
-                        {c.contract_number}
-                      </p>
-                      <span
-                        className={
-                          "rounded-full px-2.5 py-0.5 text-xs font-medium " +
-                          (CONTRACT_STATUS_TONE[c.status] ?? "")
-                        }
-                      >
+                      <p className="font-semibold" dir="ltr">{c.contract_number}</p>
+                      <span className={"rounded-full px-2.5 py-0.5 text-xs font-medium " + (CONTRACT_STATUS_TONE[c.status] ?? "")}>
                         {CONTRACT_STATUS_AR[c.status] ?? c.status}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">
-                      {first(unit?.property)?.name ?? "—"} · وحدة {unit?.unit_number ?? "—"} ·{" "}
-                      {first(tenant?.party)?.display_name ?? "—"}
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                      {propName || "—"} · وحدة {unit?.unit_number ?? "—"} · {tenantName || "—"}
                     </p>
-                    <p className="mt-1 text-sm text-neutral-500">
+                    <p className="mt-1 text-sm text-slate-500">
                       الإيجار السنوي: {halalasToSar(c.annual_rent_halalas)} ر.س ·{" "}
-                      <span dir="ltr">
-                        {c.start_date} → {c.end_date}
-                      </span>
+                      <span dir="ltr">{c.start_date} → {c.end_date}</span>
                     </p>
                   </Link>
-                </li>
-              );
+                ),
+              };
             })}
-          </ul>
+          />
           <Pagination page={page} total={total} q={q} basePath="/app/contracts" />
         </>
       )}
