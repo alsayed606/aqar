@@ -2,13 +2,17 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { safeReturnTo } from "@/lib/return-to";
 
 // Platform-operator override of an org's subscription (comp / extend trial / change plan or status).
 // Empty fields are sent as null and leave the current value unchanged (operator_set_subscription
-// coalesces). The RPC is operator-gated in SQL.
+// coalesces). The RPC is operator-gated in SQL. An optional `back` field lets the in-line editor on
+// the /operator list return there instead of the org detail page (validated against open redirects).
 export async function operatorSetSubscription(formData: FormData) {
   const org = String(formData.get("org_id") ?? "");
   if (!org) redirect("/operator");
+  const back = safeReturnTo(String(formData.get("back") ?? "")) ?? `/operator/${org}`;
+  const withParam = (p: string) => `${back}${back.includes("?") ? "&" : "?"}${p}`;
 
   const nullable = (k: string) => {
     const v = String(formData.get(k) ?? "").trim();
@@ -26,7 +30,7 @@ export async function operatorSetSubscription(formData: FormData) {
   });
   if (error) {
     const msg = /FORBIDDEN/i.test(error.message) ? "غير مصرّح" : error.message;
-    redirect(`/operator/${org}?error=${encodeURIComponent(msg)}`);
+    redirect(withParam(`error=${encodeURIComponent(msg)}`));
   }
-  redirect(`/operator/${org}?ok=1`);
+  redirect(withParam("ok=1"));
 }

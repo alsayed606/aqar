@@ -2,6 +2,9 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fmtDate } from "@/lib/subscription";
+import { Badge } from "@/components/ui";
+import { FilterableTable } from "@/components/filterable-list";
+import { OperatorEditDrawer } from "@/components/operator-edit-drawer";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +28,16 @@ const STATUS_AR: Record<string, string> = {
   canceled: "ملغى",
 };
 
-export default async function OperatorHome() {
+const STATUS_TONE: Record<string, "info" | "success" | "brand" | "warning" | "danger"> = {
+  trialing: "info",
+  active: "success",
+  comped: "brand",
+  past_due: "warning",
+  canceled: "danger",
+};
+
+export default async function OperatorHome({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string }> }) {
+  const { ok, error: flashError } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -41,47 +53,58 @@ export default async function OperatorHome() {
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold">مشغّل المنصّة — المنشآت</h1>
-        <span className="text-sm text-neutral-500">{orgs.length} منشأة</span>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-white">مشغّل المنصّة — المنشآت</h1>
+        <span className="text-sm text-slate-500">{orgs.length} منشأة</span>
       </div>
 
+      {ok && (
+        <p className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">حُدِّث الاشتراك.</p>
+      )}
+      {flashError && (
+        <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{flashError}</p>
+      )}
+
       {error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
-          {error.message}
-        </p>
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{error.message}</p>
+      ) : orgs.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500 dark:border-slate-700">لا توجد منشآت.</p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-right dark:bg-neutral-900">
-              <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-medium">
-                <th>المنشأة</th>
-                <th>الخطة</th>
-                <th>الحالة</th>
-                <th>التجربة</th>
-                <th>التجديد</th>
-                <th>عقارات/وحدات/أعضاء</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {orgs.map((o) => (
-                <tr key={o.org_id} className="border-t border-neutral-200 [&>td]:px-3 [&>td]:py-2 dark:border-neutral-800">
-                  <td className="font-medium">{o.org_name}</td>
-                  <td>{o.plan_code ?? "—"}</td>
-                  <td>{o.status ? (STATUS_AR[o.status] ?? o.status) : "—"}</td>
-                  <td dir="ltr" className="text-left">{fmtDate(o.trial_ends_at)}</td>
-                  <td dir="ltr" className="text-left">{fmtDate(o.current_period_end)}</td>
-                  <td dir="ltr" className="text-left">{o.properties} / {o.units} / {o.members}</td>
-                  <td>
-                    <Link href={`/operator/${o.org_id}`} className="text-brand hover:underline">
-                      إدارة ←
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <FilterableTable
+          placeholder="بحث بالاسم أو الخطة أو الحالة…"
+          headers={
+            <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+              <th>المنشأة</th>
+              <th>الخطة</th>
+              <th>الحالة</th>
+              <th>التجربة</th>
+              <th>التجديد</th>
+              <th>عقارات/وحدات/أعضاء</th>
+              <th></th>
+            </tr>
+          }
+          rows={orgs.map((o) => ({
+            id: o.org_id,
+            search: [o.org_name, o.plan_code, o.status, STATUS_AR[o.status ?? ""] ?? ""].filter(Boolean).join(" "),
+            cells: (
+              <>
+                <td className="px-3 py-2 font-medium">{o.org_name}</td>
+                <td className="px-3 py-2">{o.plan_code ?? "—"}</td>
+                <td className="px-3 py-2">
+                  {o.status ? <Badge tone={STATUS_TONE[o.status] ?? "neutral"}>{STATUS_AR[o.status] ?? o.status}</Badge> : "—"}
+                </td>
+                <td className="px-3 py-2 text-left" dir="ltr">{fmtDate(o.trial_ends_at)}</td>
+                <td className="px-3 py-2 text-left" dir="ltr">{fmtDate(o.current_period_end)}</td>
+                <td className="px-3 py-2 text-left" dir="ltr">{o.properties} / {o.units} / {o.members}</td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <OperatorEditDrawer org={o} />
+                    <Link href={`/operator/${o.org_id}`} className="text-xs text-slate-500 hover:text-brand hover:underline">التفاصيل ←</Link>
+                  </div>
+                </td>
+              </>
+            ),
+          }))}
+        />
       )}
     </main>
   );
