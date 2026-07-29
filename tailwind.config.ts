@@ -9,8 +9,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        // Arabic-first stack; a proper webfont (Cairo/Tajawal) is added in a later polish step.
-        sans: ['"Segoe UI"', "Tahoma", "Arial", "system-ui", "sans-serif"],
+        // Tajawal (self-hosted via next/font) with a system fallback stack.
+        sans: ["var(--font-tajawal)", '"Segoe UI"', "Tahoma", "Arial", "system-ui", "sans-serif"],
       },
       colors: {
         brand: {
