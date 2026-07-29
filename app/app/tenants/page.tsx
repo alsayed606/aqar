@@ -7,6 +7,7 @@ import { TenantPortalInvite } from "@/components/tenant-portal-invite";
 import { parseListParams, likePattern } from "@/lib/list-params";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
+import { FilterableTable } from "@/components/filterable-list";
 
 export const dynamic = "force-dynamic";
 
@@ -66,41 +67,38 @@ export default async function TenantsPage({
         </p>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 text-neutral-500 dark:bg-neutral-900">
-                <tr>
-                  <th className="px-4 py-2 text-right font-medium">الاسم</th>
-                  <th className="px-4 py-2 text-right font-medium">رقم الهوية / الإقامة</th>
-                  <th className="px-4 py-2 text-right font-medium">الجوال</th>
-                  <th className="px-4 py-2 text-right font-medium">بوابة المستأجر</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                {tenants.map((t) => {
-                  const p = party(t);
-                  return (
-                    <tr key={t.id}>
-                      <td className="px-4 py-2 font-medium">
-                        <Link href={`/app/tenants/${t.id}`} className="hover:text-brand hover:underline">
-                          {p?.display_name}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300" dir="ltr">
-                        {p?.national_id ?? "—"}
-                      </td>
-                      <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300" dir="ltr">
-                        {p?.phone_e164 ?? "—"}
-                      </td>
-                      <td className="px-4 py-2">
-                        <TenantPortalInvite tenantId={t.id} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <FilterableTable
+            placeholder="تصفية سريعة في هذه الصفحة…"
+            headers={
+              <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+                <th>الاسم</th>
+                <th>رقم الهوية / الإقامة</th>
+                <th>الجوال</th>
+                <th>بوابة المستأجر</th>
+              </tr>
+            }
+            rows={tenants.map((t) => {
+              const p = party(t);
+              return {
+                id: t.id,
+                search: [p?.display_name, p?.national_id, p?.phone_e164].filter(Boolean).join(" "),
+                cells: (
+                  <>
+                    <td className="px-4 py-2 font-medium">
+                      <Link href={`/app/tenants/${t.id}`} className="hover:text-brand hover:underline">
+                        {p?.display_name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2 text-slate-600 dark:text-slate-300" dir="ltr">{p?.national_id ?? "—"}</td>
+                    <td className="px-4 py-2 text-slate-600 dark:text-slate-300" dir="ltr">{p?.phone_e164 ?? "—"}</td>
+                    <td className="px-4 py-2">
+                      <TenantPortalInvite tenantId={t.id} />
+                    </td>
+                  </>
+                ),
+              };
+            })}
+          />
           <Pagination page={page} total={total} q={q} basePath="/app/tenants" />
         </>
       )}

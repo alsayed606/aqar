@@ -6,6 +6,7 @@ import { getCapabilities } from "@/lib/capabilities";
 import { UnitForm } from "@/components/unit-form";
 import { updateUnit } from "../properties/actions";
 import { UNIT_STATUS_AR, UNIT_STATUS_TONE } from "@/lib/labels";
+import { FilterableCards } from "@/components/filterable-list";
 
 export const dynamic = "force-dynamic";
 
@@ -73,11 +74,15 @@ export default async function UnitsPage({
           لا توجد وحدات بعد.
         </p>
       ) : (
-        <div className="space-y-2">
-          {units.map((u) => {
+        <FilterableCards
+          placeholder="تصفية الوحدات… (رقم الوحدة أو العقار)"
+          items={units.map((u) => {
             const prop = firstOf(u.property);
-            return (
-              <div key={u.id} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+            return {
+              id: u.id,
+              search: [u.unit_number, prop?.name, UNIT_STATUS_AR[u.current_status]].filter(Boolean).join(" "),
+              node: (
+              <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <span className="font-medium">وحدة {u.unit_number}</span>
@@ -117,9 +122,10 @@ export default async function UnitsPage({
                   </details>
                 )}
               </div>
-            );
+              ),
+            };
           })}
-        </div>
+        />
       )}
     </div>
   );

@@ -10,6 +10,7 @@ import { PROPERTY_KIND_AR } from "@/lib/labels";
 import { parseListParams, likePattern } from "@/lib/list-params";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
+import { FilterableTable } from "@/components/filterable-list";
 
 export const dynamic = "force-dynamic";
 
@@ -115,52 +116,55 @@ export default async function PropertiesPage({
         </p>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 text-neutral-500 dark:bg-neutral-900">
-                <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
-                  <th>العقار</th>
-                  <th>التصنيف</th>
-                  <th>الكود</th>
-                  <th>العلاقة</th>
-                  <th>الوحدات</th>
-                  <th>شاغرة</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                {properties.map((p) => {
-                  const u = unitMap.get(p.id) ?? { total: 0, vacant: 0 };
-                  return (
-                    <tr key={p.id} className="[&>td]:px-3 [&>td]:py-2">
-                      <td className="font-medium">
-                        <Link href={`/app/properties/${p.id}`} className="hover:text-brand hover:underline">{p.name}</Link>
-                        {p.city && <span className="mr-2 text-xs text-neutral-400">{p.city}</span>}
-                      </td>
-                      <td>{PROPERTY_KIND_AR[p.property_kind] ?? p.property_kind}</td>
-                      <td dir="ltr" className="text-right text-neutral-500">{p.property_code ?? "—"}</td>
-                      <td>{HOLDING_AR[p.holding_type] ?? p.holding_type}</td>
-                      <td>{u.total}</td>
-                      <td>{u.vacant}</td>
-                      <td>
-                        <div className="flex items-center gap-2">
-                          <Link href={`/app/properties/${p.id}`} className="text-xs text-brand hover:underline">عرض/تعديل</Link>
-                          {canData && (
-                            <form action={deleteProperty}>
-                              <input type="hidden" name="property_id" value={p.id} />
-                              <ConfirmButton message={`حذف العقار «${p.name}»؟ يمكن الرجوع إليه من السجلّات.`} className="text-xs text-red-600 hover:underline">
-                                حذف
-                              </ConfirmButton>
-                            </form>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <FilterableTable
+            placeholder="تصفية سريعة في هذه الصفحة…"
+            headers={
+              <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+                <th>العقار</th>
+                <th>التصنيف</th>
+                <th>الكود</th>
+                <th>العلاقة</th>
+                <th>الوحدات</th>
+                <th>شاغرة</th>
+                <th></th>
+              </tr>
+            }
+            rows={properties.map((p) => {
+              const u = unitMap.get(p.id) ?? { total: 0, vacant: 0 };
+              return {
+                id: p.id,
+                search: [p.name, p.city, p.property_code, PROPERTY_KIND_AR[p.property_kind] ?? p.property_kind, HOLDING_AR[p.holding_type] ?? p.holding_type]
+                  .filter(Boolean)
+                  .join(" "),
+                cells: (
+                  <>
+                    <td className="px-3 py-2 font-medium">
+                      <Link href={`/app/properties/${p.id}`} className="hover:text-brand hover:underline">{p.name}</Link>
+                      {p.city && <span className="mr-2 text-xs text-slate-400">{p.city}</span>}
+                    </td>
+                    <td className="px-3 py-2">{PROPERTY_KIND_AR[p.property_kind] ?? p.property_kind}</td>
+                    <td dir="ltr" className="px-3 py-2 text-right text-slate-500">{p.property_code ?? "—"}</td>
+                    <td className="px-3 py-2">{HOLDING_AR[p.holding_type] ?? p.holding_type}</td>
+                    <td className="px-3 py-2">{u.total}</td>
+                    <td className="px-3 py-2">{u.vacant}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Link href={`/app/properties/${p.id}`} className="text-xs text-brand hover:underline">عرض/تعديل</Link>
+                        {canData && (
+                          <form action={deleteProperty}>
+                            <input type="hidden" name="property_id" value={p.id} />
+                            <ConfirmButton message={`حذف العقار «${p.name}»؟ يمكن الرجوع إليه من السجلّات.`} className="text-xs text-red-600 hover:underline">
+                              حذف
+                            </ConfirmButton>
+                          </form>
+                        )}
+                      </div>
+                    </td>
+                  </>
+                ),
+              };
+            })}
+          />
           <Pagination page={page} total={total} q={q} basePath="/app/properties" />
         </>
       )}

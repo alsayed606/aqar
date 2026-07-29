@@ -7,6 +7,7 @@ import { first } from "@/lib/rows";
 import { parseListParams, likePattern } from "@/lib/list-params";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
+import { FilterableCards } from "@/components/filterable-list";
 
 export const dynamic = "force-dynamic";
 
@@ -58,34 +59,32 @@ export default async function OwnersPage({
         </p>
       ) : (
         <>
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {owners.map((o: any) => {
+          <FilterableCards
+            placeholder="تصفية سريعة في هذه الصفحة…"
+            className="grid gap-3 sm:grid-cols-2"
+            items={owners.map((o: any) => {
               const p = first(o.party);
-              return (
-                <li key={o.id}>
+              return {
+                id: o.id,
+                search: [o.is_self ? "المنشأة مالك ذاتي" : p?.display_name, p?.phone_e164, p?.national_id].filter(Boolean).join(" "),
+                node: (
                   <Link
                     href={`/app/owners/${o.id}`}
-                    className="block rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:border-brand dark:border-neutral-800 dark:bg-neutral-900"
+                    className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand dark:border-slate-800 dark:bg-slate-900"
                   >
                     <div className="flex items-center justify-between">
-                      <p className="font-semibold">
-                        {o.is_self ? "المنشأة (مالك ذاتي)" : p?.display_name}
-                      </p>
+                      <p className="font-semibold">{o.is_self ? "المنشأة (مالك ذاتي)" : p?.display_name}</p>
                       {o.is_self && (
-                        <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                          ذاتي
-                        </span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">ذاتي</span>
                       )}
                     </div>
-                    <p className="mt-1 text-sm text-neutral-500" dir="ltr">
-                      {p?.phone_e164 ?? p?.national_id ?? ""}
-                    </p>
-                    <p className="mt-1 text-xs text-neutral-400">كشف الحساب ←</p>
+                    <p className="mt-1 text-sm text-slate-500" dir="ltr">{p?.phone_e164 ?? p?.national_id ?? ""}</p>
+                    <p className="mt-1 text-xs text-slate-400">كشف الحساب ←</p>
                   </Link>
-                </li>
-              );
+                ),
+              };
             })}
-          </ul>
+          />
           <Pagination page={page} total={total} q={q} basePath="/app/owners" />
         </>
       )}
