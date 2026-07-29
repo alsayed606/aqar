@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { halalasToSar } from "@/lib/money";
-import { CONTRACT_STATUS_AR, CONTRACT_STATUS_TONE, PAYMENT_METHOD_AR } from "@/lib/labels";
+import { CONTRACT_STATUS_AR, PAYMENT_METHOD_AR } from "@/lib/labels";
+import { Card, CardBody, Badge, Tabs } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,12 @@ type Payment = {
   received_at: string;
 };
 
+function chargeBadge(c: Charge) {
+  if (c.is_settled) return <Badge tone="success">مدفوع</Badge>;
+  if (c.is_overdue) return <Badge tone="danger">متأخر</Badge>;
+  return <Badge tone="warning">غير مدفوع</Badge>;
+}
+
 export default async function TenantPortalDashboard({ params }: { params: Promise<{ tenantId: string }> }) {
   const { tenantId } = await params;
   const supabase = await createClient();
@@ -55,124 +62,115 @@ export default async function TenantPortalDashboard({ params }: { params: Promis
 
   const totalDue = charges.reduce((s, c) => s + Number(c.balance_halalas), 0);
 
-  const chargeStatus = (c: Charge) =>
-    c.is_settled
-      ? ["مدفوع", "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"]
-      : c.is_overdue
-        ? ["متأخر", "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"]
-        : ["غير مدفوع", "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"];
+  const contractsTab =
+    contracts.length === 0 ? (
+      <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-slate-500 dark:border-slate-700">لا توجد عقود مسجّلة.</p>
+    ) : (
+      <div className="space-y-5">
+        {contracts.map((ct) => {
+          const rows = charges.filter((c) => c.contract_id === ct.id);
+          return (
+            <Card key={ct.id}>
+              <CardBody className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900 dark:text-white">
+                      <span dir="ltr">{ct.contract_number}</span>
+                      <span className="mr-2 text-sm font-normal text-slate-500">{ct.property_name} · وحدة {ct.unit_number}</span>
+                    </h3>
+                    <p className="text-xs text-slate-500" dir="ltr">{ct.start_date} → {ct.end_date}</p>
+                  </div>
+                  <Badge tone={ct.status === "active" ? "success" : "neutral"}>{CONTRACT_STATUS_AR[ct.status] ?? ct.status}</Badge>
+                </div>
+
+                {rows.length > 0 && (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900/60">
+                        <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+                          <th>الاستحقاق</th>
+                          <th>المبلغ (ر.س)</th>
+                          <th>المسدّد</th>
+                          <th>المتبقّي</th>
+                          <th>الحالة</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {rows.map((c) => (
+                          <tr key={c.charge_id} className="[&>td]:px-3 [&>td]:py-2">
+                            <td dir="ltr">{c.due_date}</td>
+                            <td>{halalasToSar(c.gross_halalas)}</td>
+                            <td className="text-slate-600 dark:text-slate-300">{halalasToSar(c.allocated_halalas)}</td>
+                            <td className="font-medium">{halalasToSar(c.balance_halalas)}</td>
+                            <td>{chargeBadge(c)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          );
+        })}
+      </div>
+    );
+
+  const paymentsTab =
+    payments.length === 0 ? (
+      <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-slate-500 dark:border-slate-700">لا توجد دفعات مسجّلة بعد.</p>
+    ) : (
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900/60">
+            <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+              <th>رقم السند</th>
+              <th>التاريخ</th>
+              <th>المبلغ (ر.س)</th>
+              <th>الطريقة</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {payments.map((p) => (
+              <tr key={p.id} className="[&>td]:px-4 [&>td]:py-2">
+                <td className="font-mono" dir="ltr">{p.receipt_no ?? "—"}</td>
+                <td dir="ltr">{new Date(p.received_at).toISOString().slice(0, 10)}</td>
+                <td className="font-medium">{halalasToSar(p.amount_halalas)}</td>
+                <td className="text-slate-600 dark:text-slate-300">{PAYMENT_METHOD_AR[p.method] ?? p.method}</td>
+                <td><Link href={`/portal/tenant/${tenantId}/receipt/${p.id}`} className="text-brand hover:underline">السند / طباعة ←</Link></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
 
   return (
     <div className="space-y-6">
-      <header>
-        <p className="text-sm text-neutral-500">{link.org_name}</p>
-        <h1 className="text-xl font-bold">{link.display_name}</h1>
-        <p className="mt-1 text-sm">
-          إجمالي المتبقّي عليك: <span className="font-bold">{halalasToSar(totalDue)} ر.س</span>
-        </p>
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-slate-500">{link.org_name}</p>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white">{link.display_name}</h1>
+        </div>
+        <Card>
+          <CardBody className="p-4 text-center">
+            <p className="text-xs text-slate-500">إجمالي المتبقّي عليك (ر.س)</p>
+            <p className={`mt-1 text-xl font-bold ${totalDue > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}>
+              {halalasToSar(totalDue)}
+            </p>
+          </CardBody>
+        </Card>
       </header>
 
-      {/* Contracts + their charge schedules */}
-      {contracts.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-neutral-500 dark:border-neutral-700">
-          لا توجد عقود مسجّلة.
-        </p>
-      ) : (
-        contracts.map((ct) => {
-          const rows = charges.filter((c) => c.contract_id === ct.id);
-          return (
-            <section key={ct.id} className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-base font-semibold">
-                    <span dir="ltr">{ct.contract_number}</span>
-                    <span className="mr-2 text-sm font-normal text-neutral-500">
-                      {ct.property_name} · وحدة {ct.unit_number}
-                    </span>
-                  </h2>
-                  <p className="text-xs text-neutral-500" dir="ltr">{ct.start_date} → {ct.end_date}</p>
-                </div>
-                <span className={"rounded-full px-3 py-1 text-xs font-medium " + (CONTRACT_STATUS_TONE[ct.status] ?? "")}>
-                  {CONTRACT_STATUS_AR[ct.status] ?? ct.status}
-                </span>
-              </div>
+      <Tabs
+        items={[
+          { id: "contracts", label: `العقود والاستحقاقات (${contracts.length})`, content: contractsTab },
+          { id: "payments", label: `دفعاتي (${payments.length})`, content: paymentsTab },
+        ]}
+      />
 
-              {rows.length > 0 && (
-                <div className="overflow-x-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
-                  <table className="w-full text-sm">
-                    <thead className="bg-neutral-50 text-neutral-500 dark:bg-neutral-900">
-                      <tr>
-                        <th className="px-3 py-2 text-right font-medium">الاستحقاق</th>
-                        <th className="px-3 py-2 text-right font-medium">المبلغ (ر.س)</th>
-                        <th className="px-3 py-2 text-right font-medium">المسدّد</th>
-                        <th className="px-3 py-2 text-right font-medium">المتبقّي</th>
-                        <th className="px-3 py-2 text-right font-medium">الحالة</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                      {rows.map((c) => {
-                        const [label, tone] = chargeStatus(c);
-                        return (
-                          <tr key={c.charge_id}>
-                            <td className="px-3 py-2" dir="ltr">{c.due_date}</td>
-                            <td className="px-3 py-2">{halalasToSar(c.gross_halalas)}</td>
-                            <td className="px-3 py-2 text-neutral-600 dark:text-neutral-300">{halalasToSar(c.allocated_halalas)}</td>
-                            <td className="px-3 py-2 font-medium">{halalasToSar(c.balance_halalas)}</td>
-                            <td className="px-3 py-2">
-                              <span className={"rounded-full px-2.5 py-0.5 text-xs font-medium " + tone}>{label}</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          );
-        })
-      )}
-
-      {/* Payments */}
-      <section>
-        <h2 className="mb-3 text-base font-semibold">دفعاتك</h2>
-        {payments.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-neutral-500 dark:border-neutral-700">
-            لا توجد دفعات مسجّلة بعد.
-          </p>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 text-neutral-500 dark:bg-neutral-900">
-                <tr>
-                  <th className="px-4 py-2 text-right font-medium">رقم السند</th>
-                  <th className="px-4 py-2 text-right font-medium">التاريخ</th>
-                  <th className="px-4 py-2 text-right font-medium">المبلغ (ر.س)</th>
-                  <th className="px-4 py-2 text-right font-medium">الطريقة</th>
-                  <th className="px-4 py-2 text-right font-medium"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                {payments.map((p) => (
-                  <tr key={p.id}>
-                    <td className="px-4 py-2 font-mono" dir="ltr">{p.receipt_no ?? "—"}</td>
-                    <td className="px-4 py-2" dir="ltr">{new Date(p.received_at).toISOString().slice(0, 10)}</td>
-                    <td className="px-4 py-2 font-medium">{halalasToSar(p.amount_halalas)}</td>
-                    <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300">{PAYMENT_METHOD_AR[p.method] ?? p.method}</td>
-                    <td className="px-4 py-2">
-                      <Link href={`/portal/tenant/${tenantId}/receipt/${p.id}`} className="text-brand hover:underline">
-                        السند ←
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <p className="text-center text-[11px] text-neutral-400">
+      <p className="text-center text-[11px] text-slate-400">
         <Link href="/portal" className="hover:text-brand">← بوابتك</Link>
       </p>
     </div>
