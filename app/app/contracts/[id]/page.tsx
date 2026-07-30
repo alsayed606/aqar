@@ -83,7 +83,7 @@ export default async function ContractDetail({
   const { data: contract } = await supabase
     .from("contract")
     .select(
-      "id, contract_number, status, contract_kind, start_date, end_date, annual_rent_halalas, payment_frequency, deposit_halalas, service_fees_halalas, deed_number, terminated_at, termination_reason, trade_name, representative_name, representative_capacity, representative_id, representative_phone, unit_id, tenant_id, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
+      "id, contract_number, status, contract_kind, start_date, end_date, annual_rent_halalas, payment_frequency, deposit_halalas, service_fees_halalas, deed_number, terminated_at, termination_reason, trade_name, representative_name, representative_capacity, representative_id, representative_phone, ejar_contract_number, ejar_broker_office, ejar_broker_number, ejar_broker_representative, ejar_has_extra_terms, unit_id, tenant_id, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -265,6 +265,35 @@ export default async function ContractDetail({
           </div>
         )}
 
+        {/* منصة إيجار alignment block (optional, shown only when filled). */}
+        {(contract.ejar_contract_number || contract.ejar_broker_office || contract.ejar_has_extra_terms != null) && (
+          <div className="mt-4 border-t border-neutral-100 pt-3 dark:border-neutral-800">
+            <p className="mb-2 text-xs font-medium text-neutral-500">بيانات منصة إيجار</p>
+            <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              {contract.ejar_contract_number && (
+                <Info label="رقم العقد في إيجار" value={<span dir="ltr">{contract.ejar_contract_number}</span>} />
+              )}
+              {contract.ejar_broker_office && (
+                <Info
+                  label="مكتب الوساطة"
+                  value={
+                    <>
+                      {contract.ejar_broker_office}
+                      {contract.ejar_broker_number ? ` — ${contract.ejar_broker_number}` : ""}
+                    </>
+                  }
+                />
+              )}
+              {contract.ejar_broker_representative && (
+                <Info label="ممثل المكتب" value={contract.ejar_broker_representative} />
+              )}
+              {contract.ejar_has_extra_terms != null && (
+                <Info label="بنود إضافية في عقد إيجار" value={contract.ejar_has_extra_terms ? "نعم" : "لا"} />
+              )}
+            </dl>
+          </div>
+        )}
+
         {(predecessor || successor) && (
           <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 border-t border-neutral-100 pt-3 text-sm dark:border-neutral-800">
             {predecessor && (
@@ -379,10 +408,6 @@ export default async function ContractDetail({
                 <input name="service_fees" inputMode="decimal" defaultValue={Number(contract.service_fees_halalas) / 100} className={efCls} />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">رقم العقد</label>
-                <input name="contract_number" dir="ltr" defaultValue={contract.contract_number} className={efCls + " text-right"} />
-              </div>
-              <div>
                 <label className="mb-1 block text-sm font-medium">اسم المحل التجاري</label>
                 <input name="trade_name" defaultValue={(contract as any).trade_name ?? ""} className={efCls} />
               </div>
@@ -398,6 +423,42 @@ export default async function ContractDetail({
                 <label className="mb-1 block text-sm font-medium">جوال الممثل</label>
                 <input name="representative_phone" dir="ltr" defaultValue={(contract as any).representative_phone ?? ""} className={efCls + " text-right"} />
               </div>
+              <details className="rounded-lg border border-neutral-200 sm:col-span-2 dark:border-neutral-800">
+                <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-300">
+                  بيانات منصة إيجار (اختياري)
+                </summary>
+                <div className="grid gap-3 border-t border-neutral-100 p-3 sm:grid-cols-2 dark:border-neutral-800">
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-sm font-medium">رقم العقد في منصة إيجار</label>
+                    <input name="ejar_contract_number" dir="ltr" defaultValue={(contract as any).ejar_contract_number ?? ""} className={efCls + " text-right"} />
+                  </div>
+                  <div className="sm:col-span-2 text-xs font-medium text-neutral-500">معلومات الوسيط العقاري</div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">اسم المكتب</label>
+                    <input name="ejar_broker_office" defaultValue={(contract as any).ejar_broker_office ?? ""} className={efCls} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">رقم المكتب</label>
+                    <input name="ejar_broker_number" dir="ltr" defaultValue={(contract as any).ejar_broker_number ?? ""} className={efCls + " text-right"} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-sm font-medium">ممثل المكتب</label>
+                    <input name="ejar_broker_representative" defaultValue={(contract as any).ejar_broker_representative ?? ""} className={efCls} />
+                  </div>
+                  <fieldset className="sm:col-span-2">
+                    <legend className="mb-1 text-sm font-medium">هل توجد بنود أو شروط إضافية في عقد منصة إيجار؟</legend>
+                    <div className="flex items-center gap-4 text-sm">
+                      <label className="flex items-center gap-1.5">
+                        <input type="radio" name="ejar_has_extra_terms" value="yes" defaultChecked={(contract as any).ejar_has_extra_terms === true} className="accent-brand" /> نعم
+                      </label>
+                      <label className="flex items-center gap-1.5">
+                        <input type="radio" name="ejar_has_extra_terms" value="no" defaultChecked={(contract as any).ejar_has_extra_terms === false} className="accent-brand" /> لا
+                      </label>
+                    </div>
+                  </fieldset>
+                </div>
+              </details>
+
               <div className="sm:col-span-2">
                 <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-fg">حفظ تعديلات المسودة</button>
               </div>
@@ -694,15 +755,9 @@ export default async function ContractDetail({
                   className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
                 />
               </label>
-              <label className="block text-sm">
-                <span className="mb-0.5 block text-xs text-neutral-500">رقم العقد الجديد (اختياري)</span>
-                <input
-                  name="contract_number"
-                  placeholder="يُشتق تلقائياً من رقم العقد"
-                  dir="ltr"
-                  className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-                />
-              </label>
+              <p className="self-end text-xs text-neutral-500">
+                رقم عقد التجديد يُشتق تلقائياً من رقم العقد الحالي.
+              </p>
             </div>
             <button className="rounded-lg bg-brand px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-fg">
               إنشاء عقد التجديد

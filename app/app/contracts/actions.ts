@@ -34,8 +34,8 @@ export async function createContract(
   const deposit = sarToHalalas(String(formData.get("deposit") ?? "")) ?? 0;
   const service_fees = sarToHalalas(String(formData.get("service_fees") ?? "")) ?? 0;
   const deed_number = String(formData.get("deed_number") ?? "").trim() || null;
-  let contract_number = String(formData.get("contract_number") ?? "").trim();
-  if (!contract_number) contract_number = "CT-" + Date.now();
+  // contract_number is NOT taken from the form: migration 0045 assigns CT-YYYY-NNNNN atomically in
+  // the DB, so every contract is numbered by the same gapless per-(org, year) sequence.
 
   // Optional commercial details (per contract): shop/trade name + signing representative (Sprint J).
   const trade_name = String(formData.get("trade_name") ?? "").trim() || null;
@@ -43,6 +43,14 @@ export async function createContract(
   const representative_capacity = String(formData.get("representative_capacity") ?? "").trim() || null;
   const representative_id = String(formData.get("representative_id") ?? "").trim() || null;
   const representative_phone = String(formData.get("representative_phone") ?? "").trim() || null;
+
+  // Optional منصة إيجار alignment block (presentation only — never drives logic).
+  const ejar_contract_number = String(formData.get("ejar_contract_number") ?? "").trim() || null;
+  const ejar_broker_office = String(formData.get("ejar_broker_office") ?? "").trim() || null;
+  const ejar_broker_number = String(formData.get("ejar_broker_number") ?? "").trim() || null;
+  const ejar_broker_representative = String(formData.get("ejar_broker_representative") ?? "").trim() || null;
+  const ejarExtra = String(formData.get("ejar_has_extra_terms") ?? "").trim();
+  const ejar_has_extra_terms = ejarExtra === "yes" ? true : ejarExtra === "no" ? false : null;
 
   const supabase = await createClient();
 
@@ -61,7 +69,6 @@ export async function createContract(
       property_id: unit.property_id,
       unit_id,
       tenant_id,
-      contract_number,
       deed_number,
       contract_kind,
       status: "draft",
@@ -76,12 +83,17 @@ export async function createContract(
       representative_capacity,
       representative_id,
       representative_phone,
+      ejar_contract_number,
+      ejar_broker_office,
+      ejar_broker_number,
+      ejar_broker_representative,
+      ejar_has_extra_terms,
     })
     .select("id")
     .single();
 
   if (error) {
-    if (/contract_number/i.test(error.message)) return { error: "رقم العقد مستخدم بالفعل" };
+    if (/contract_number/i.test(error.message)) return { error: "تعذّر توليد رقم العقد. أعد المحاولة." };
     return { error: translateSubscriptionError(error.message) ?? error.message };
   }
 
@@ -110,7 +122,8 @@ export async function updateDraftContract(formData: FormData) {
   const { data: unit } = await supabase.from("unit").select("property_id").eq("id", unit_id).maybeSingle();
   if (!unit) redirect(`${back}?error=${encodeURIComponent("الوحدة غير موجودة")}`);
 
-  const contract_number = String(formData.get("contract_number") ?? "").trim();
+  // contract_number is system-assigned (0045) and never edited by hand.
+  const ejarExtra = String(formData.get("ejar_has_extra_terms") ?? "").trim();
   const { error, data } = await supabase
     .from("contract")
     .update({
@@ -125,12 +138,16 @@ export async function updateDraftContract(formData: FormData) {
       deposit_halalas: sarToHalalas(String(formData.get("deposit") ?? "")) ?? 0,
       service_fees_halalas: sarToHalalas(String(formData.get("service_fees") ?? "")) ?? 0,
       deed_number: String(formData.get("deed_number") ?? "").trim() || null,
-      ...(contract_number ? { contract_number } : {}),
       trade_name: String(formData.get("trade_name") ?? "").trim() || null,
       representative_name: String(formData.get("representative_name") ?? "").trim() || null,
       representative_capacity: String(formData.get("representative_capacity") ?? "").trim() || null,
       representative_id: String(formData.get("representative_id") ?? "").trim() || null,
       representative_phone: String(formData.get("representative_phone") ?? "").trim() || null,
+      ejar_contract_number: String(formData.get("ejar_contract_number") ?? "").trim() || null,
+      ejar_broker_office: String(formData.get("ejar_broker_office") ?? "").trim() || null,
+      ejar_broker_number: String(formData.get("ejar_broker_number") ?? "").trim() || null,
+      ejar_broker_representative: String(formData.get("ejar_broker_representative") ?? "").trim() || null,
+      ejar_has_extra_terms: ejarExtra === "yes" ? true : ejarExtra === "no" ? false : null,
     })
     .eq("id", contract_id)
     .eq("status", "draft")

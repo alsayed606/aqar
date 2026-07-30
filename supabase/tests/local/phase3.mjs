@@ -537,6 +537,40 @@ try {
   ok("create_organization: first org for a user succeeds", oneOrg.ok && !!oneOrg.value.firstId, oneOrg.error);
   ok("create_organization: a second org is blocked (OWN_ORG_EXISTS)", oneOrg.ok && /OWN_ORG_EXISTS/i.test(oneOrg.value.secondErr), JSON.stringify(oneOrg.value));
 
+  // ============ Sprint P: enforced contract numbering + ejar block (0045) ============
+  const year = new Date().toLocaleString("en-CA", { timeZone: "Asia/Riyadh" }).slice(0, 4);
+  // A contract inserted WITHOUT a number gets CT-YYYY-NNNNN from the trigger.
+  const cAuto1 = await one(
+    "insert into app.contract(org_id,property_id,unit_id,tenant_id,contract_kind,status,start_date,end_date,annual_rent_halalas,payment_frequency) values($1,$2,$3,$4,'residential','draft','2031-01-01','2031-12-31',120000,'quarterly') returning id, contract_number, ejar_broker_office",
+    [orgR, propR, uEst, tEst.id]);
+  ok("contract number auto-assigned in CT-YYYY-NNNNN format",
+    new RegExp(`^CT-${year}-\\d{5}$`).test(cAuto1.contract_number), cAuto1.contract_number);
+
+  const cAuto2 = await one(
+    "insert into app.contract(org_id,property_id,unit_id,tenant_id,contract_kind,status,start_date,end_date,annual_rent_halalas,payment_frequency) values($1,$2,$3,$4,'residential','draft','2032-01-01','2032-12-31',120000,'quarterly') returning contract_number",
+    [orgR, propR, uEst, tEst.id]);
+  const seq1 = Number(cAuto1.contract_number.split("-")[2]);
+  const seq2 = Number(cAuto2.contract_number.split("-")[2]);
+  ok("contract numbering increments by one (gapless)", seq2 === seq1 + 1, `${cAuto1.contract_number} → ${cAuto2.contract_number}`);
+
+  // An explicitly supplied number is respected (renew_contract relies on this).
+  const cGiven = await one(
+    "insert into app.contract(org_id,property_id,unit_id,tenant_id,contract_number,contract_kind,status,start_date,end_date,annual_rent_halalas,payment_frequency) values($1,$2,$3,$4,'MY-CUSTOM-1','residential','draft','2033-01-01','2033-12-31',120000,'quarterly') returning contract_number",
+    [orgR, propR, uEst, tEst.id]);
+  ok("explicit contract number is preserved", cGiven.contract_number === "MY-CUSTOM-1", cGiven.contract_number);
+
+  // Ejar block: optional, and the broker fields stay editable after activation
+  // (they are outside tg_contract_immutable's frozen set, unlike ejar_contract_number).
+  const cEjar = await one(
+    "insert into app.contract(org_id,property_id,unit_id,tenant_id,contract_kind,status,start_date,end_date,annual_rent_halalas,payment_frequency,ejar_contract_number,ejar_broker_office,ejar_broker_number,ejar_broker_representative,ejar_has_extra_terms) values($1,$2,$3,$4,'residential','draft','2034-01-01','2034-12-31',120000,'quarterly','EJ-77','مكتب الوساطة','011','ممثل',true) returning id, ejar_contract_number, ejar_broker_office, ejar_has_extra_terms",
+    [orgR, propR, uEst, tEst.id]);
+  ok("ejar block stored (number/office/extra-terms)",
+    cEjar.ejar_contract_number === "EJ-77" && cEjar.ejar_broker_office === "مكتب الوساطة" && cEjar.ejar_has_extra_terms === true,
+    JSON.stringify(cEjar));
+  ok("ejar fields are optional (null when not supplied)", cAuto1.ejar_broker_office === null, String(cAuto1.ejar_broker_office));
+  ok("ejar broker fields stay editable",
+    (await q("update app.contract set ejar_broker_office='مكتب آخر' where id=$1", [cEjar.id])).rowCount === 1);
+
   console.log(`\nPhase-3: ${pass} passed, ${fail} failed`);
 } catch (e) {
   console.error("HARNESS ERROR:", e.message, "\n", e.stack);

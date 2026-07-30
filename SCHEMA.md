@@ -56,6 +56,7 @@
 | `0042_tenant_establishment.sql` | نموذج المستأجر/المنشأة (إضافي): `tenant.tenant_type` (text+CHECK فرد/مؤسسة فردية/شركة، مبذور من `tenant_kind`) + أعمدة منشأة على `party` (`vat_number`/`unified_number`/`cr_expiry`) + على `contract` (`trade_name` + `representative_name/_capacity/_id/_phone`). بلا تعديل enum، بلا فقدان بيانات |
 | `0043_payment_method_ejar.sql` | `ALTER TYPE app.payment_method ADD VALUE 'ejar'` (منصة إيجار كطريقة دفع). آمن على PG12+ (يُضاف فقط، لا يُستخدم في نفس المعاملة)، idempotent |
 | `0044_property_fields.sql` | حقول عقار **عرضية** إضافية (`holding_type` مملوك/إدارة/استثمار CHECK + بذر · `property_code`/`property_type`/`occupancy_type` عوائل/عزّاب CHECK · `deed_type`/`deed_date`/`water_meter`/`electricity_meter`/`planned_*_units`) + `create_organization` يرفض المنشأة الثانية لنفس المالك (`OWN_ORG_EXISTS`). بلا فقدان بيانات، بلا منطق يُقاد بها |
+| `0045_contract_numbering_ejar.sql` | **ترقيم العقود إلزامي في القاعدة**: `tg_assign_contract_no` (BEFORE INSERT) يولّد `CT-YYYY-NNNNN` عبر `next_counter(org,'contract:'||السنة)` حين لا يُمرَّر رقم — يحترم الرقم الصريح فيبقى تجديد `<الأصل>-R<سنة>` (0031) سليماً · + أعمدة **منصة إيجار** الاختيارية `ejar_broker_office`/`ejar_broker_number`/`ejar_broker_representative`/`ejar_has_extra_terms` (عرضية بحتة، خارج مجموعة تجميد العقد؛ `ejar_contract_number` من 0007 يبقى داخلها) |
 
 ---
 

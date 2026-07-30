@@ -137,18 +137,10 @@ export function ContractForm({
         />
       </div>
 
-      <div>
-        <label className="mb-1 block text-sm font-medium" htmlFor="contract_number">
-          رقم العقد (اختياري)
-        </label>
-        <input
-          id="contract_number"
-          name="contract_number"
-          dir="ltr"
-          placeholder="يُولّد تلقائياً إن تُرك فارغاً"
-          className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700"
-        />
-      </div>
+      {/* Contract number is assigned by the system (CT-YYYY-NNNNN) — no manual entry. */}
+      <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 sm:col-span-2 dark:bg-slate-800/50 dark:text-slate-400">
+        رقم العقد يُولَّد تلقائياً بصيغة موحّدة <span dir="ltr" className="font-mono">CT-YYYY-NNNNN</span> عند الحفظ.
+      </p>
 
       {/* Optional commercial details: shop/trade name + signing representative (per contract). */}
       <details className="rounded-lg border border-neutral-200 sm:col-span-2 dark:border-neutral-800">
@@ -186,6 +178,47 @@ export function ContractForm({
             </label>
             <input id="representative_phone" name="representative_phone" dir="ltr" placeholder="05XXXXXXXX" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700" />
           </div>
+        </div>
+      </details>
+
+      {/* Optional منصة إيجار alignment block — entirely optional, presentation only. */}
+      <details className="rounded-lg border border-neutral-200 sm:col-span-2 dark:border-neutral-800">
+        <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-300">
+          بيانات منصة إيجار (اختياري)
+        </summary>
+        <div className="grid gap-3 border-t border-neutral-100 p-3 sm:grid-cols-2 dark:border-neutral-800">
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium" htmlFor="ejar_contract_number">
+              رقم العقد في منصة إيجار
+            </label>
+            <input id="ejar_contract_number" name="ejar_contract_number" dir="ltr" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700" />
+          </div>
+
+          <div className="sm:col-span-2 mt-1 text-xs font-medium text-neutral-500">معلومات الوسيط العقاري</div>
+          <div>
+            <label className="mb-1 block text-sm font-medium" htmlFor="ejar_broker_office">اسم المكتب</label>
+            <input id="ejar_broker_office" name="ejar_broker_office" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium" htmlFor="ejar_broker_number">رقم المكتب</label>
+            <input id="ejar_broker_number" name="ejar_broker_number" dir="ltr" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700" />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium" htmlFor="ejar_broker_representative">ممثل المكتب</label>
+            <input id="ejar_broker_representative" name="ejar_broker_representative" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700" />
+          </div>
+
+          <fieldset className="sm:col-span-2">
+            <legend className="mb-1 text-sm font-medium">هل توجد بنود أو شروط إضافية في عقد منصة إيجار؟</legend>
+            <div className="flex items-center gap-4 text-sm">
+              <label className="flex items-center gap-1.5">
+                <input type="radio" name="ejar_has_extra_terms" value="yes" className="accent-brand" /> نعم
+              </label>
+              <label className="flex items-center gap-1.5">
+                <input type="radio" name="ejar_has_extra_terms" value="no" className="accent-brand" /> لا
+              </label>
+            </div>
+          </fieldset>
         </div>
       </details>
 
