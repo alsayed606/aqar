@@ -5,10 +5,9 @@ import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { getCapabilities } from "@/lib/capabilities";
 import { UnitForm } from "@/components/unit-form";
-import { UNIT_STATUS_AR, UNIT_STATUS_TONE } from "@/lib/labels";
-import { FilterableCards } from "@/components/filterable-list";
-import { UnitEditDrawer } from "@/components/unit-edit-drawer";
 import { FormDrawer } from "@/components/form-drawer";
+import { UnitsGrid } from "@/components/units-grid";
+import type { UnitCardData } from "@/components/unit-card";
 
 export const dynamic = "force-dynamic";
 
@@ -26,17 +25,45 @@ export default async function UnitsPage({
   const canData = caps.has("manage_data");
 
   const supabase = await createClient();
-  const [{ data: propData }, { data: unitData }] = await Promise.all([
+  // Active contracts supply the occupancy block (tenant + rent) for rented units.
+  const [{ data: propData }, { data: unitData }, { data: contractData }] = await Promise.all([
     supabase.from("property").select("id, name").is("deleted_at", null).order("name"),
     supabase
       .from("unit")
-      .select("id, unit_number, floor, area_sqm, bedrooms, bathrooms, current_status, property:property_id(id, name)")
+      .select("id, unit_number, floor, area_sqm, bedrooms, bathrooms, current_status, property:property_id(id, name, property_kind)")
       .is("deleted_at", null)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("contract")
+      .select("id, unit_id, annual_rent_halalas, tenant:tenant_id(party:party_id(display_name))")
+      .eq("status", "active")
+      .is("deleted_at", null),
   ]);
 
   const properties = (propData ?? []).map((p: any) => ({ id: p.id, label: p.name }));
-  const units = (unitData ?? []) as any[];
+
+  const activeByUnit = new Map<string, any>();
+  for (const contract of contractData ?? []) activeByUnit.set(contract.unit_id, contract);
+
+  const units: UnitCardData[] = (unitData ?? []).map((u: any) => {
+    const property = first(u.property);
+    const contract = activeByUnit.get(u.id);
+    return {
+      id: u.id,
+      unit_number: u.unit_number,
+      current_status: u.current_status,
+      floor: u.floor,
+      area_sqm: u.area_sqm,
+      bedrooms: u.bedrooms,
+      bathrooms: u.bathrooms,
+      property_id: property?.id ?? null,
+      property_name: property?.name ?? null,
+      property_kind: property?.property_kind ?? null,
+      tenant_name: contract ? first(first(contract.tenant)?.party)?.display_name ?? null : null,
+      annual_rent_halalas: contract ? Number(contract.annual_rent_halalas) : null,
+      contract_id: contract?.id ?? null,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -69,49 +96,7 @@ export default async function UnitsPage({
           لا توجد وحدات بعد.
         </p>
       ) : (
-        <FilterableCards
-          placeholder="تصفية الوحدات… (رقم الوحدة أو العقار)"
-          items={units.map((u) => {
-            const prop = first(u.property);
-            return {
-              id: u.id,
-              search: [u.unit_number, prop?.name, UNIT_STATUS_AR[u.current_status]].filter(Boolean).join(" "),
-              node: (
-              <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <span className="font-medium">وحدة {u.unit_number}</span>
-                    <span className="mr-2 text-sm text-neutral-500">
-                      <Link href={`/app/properties/${prop?.id}`} className="hover:text-brand">
-                        {prop?.name ?? "—"}
-                      </Link>
-                    </span>
-                  </div>
-                  <span className={"rounded-full px-2.5 py-0.5 text-xs font-medium " + (UNIT_STATUS_TONE[u.current_status] ?? "bg-neutral-100 text-neutral-700")}>
-                    {UNIT_STATUS_AR[u.current_status] ?? u.current_status}
-                  </span>
-                </div>
-
-                {canData && (
-                  <div className="mt-2">
-                    <UnitEditDrawer
-                      unit={{
-                        id: u.id,
-                        unit_number: u.unit_number,
-                        current_status: u.current_status,
-                        floor: u.floor,
-                        area_sqm: u.area_sqm,
-                        bedrooms: u.bedrooms,
-                        bathrooms: u.bathrooms,
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-              ),
-            };
-          })}
-        />
+        <UnitsGrid units={units} canData={canData} />
       )}
     </div>
   );

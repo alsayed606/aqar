@@ -11,9 +11,12 @@ type Option = { id: string; label: string };
 export function ContractForm({
   units,
   tenants,
+  // Preselected when the form is opened from a vacant unit's "إنشاء عقد" action.
+  defaultUnitId = "",
 }: {
   units: Option[];
   tenants: Option[];
+  defaultUnitId?: string;
 }) {
   const [state, action, pending] = useActionState(createContract, initial);
 
@@ -26,6 +29,7 @@ export function ContractForm({
         <label className="mb-1 block text-sm font-medium">الوحدة *</label>
         <Combobox
           name="unit_id"
+          defaultValue={defaultUnitId}
           placeholder={noUnits ? "لا توجد وحدات — أضِفها أولاً" : "ابحث واختر الوحدة…"}
           options={units.map((u) => ({ value: u.id, label: u.label }))}
         />

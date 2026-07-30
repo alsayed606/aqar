@@ -18,11 +18,12 @@ export const dynamic = "force-dynamic";
 export default async function ContractsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; unit?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
   const { q, page, from, to } = parseListParams(await searchParams);
+  const { unit: presetUnitId } = await searchParams;
 
   const supabase = await createClient();
 
@@ -93,7 +94,7 @@ export default async function ContractsPage({
                 قبل إنشاء عقد.
               </p>
             ) : (
-              <ContractForm units={units} tenants={tenants} />
+              <ContractForm units={units} tenants={tenants} defaultUnitId={presetUnitId ?? ""} />
             )}
           </FormDrawer>
         </div>
