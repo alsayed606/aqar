@@ -250,6 +250,34 @@ try {
   ok('IMPORT year-day-month row is reported per field, batch survives',
      dateErrs.includes('تاريخ البداية') && dateErrs.includes('تاريخ النهاية'), dateErrs);
 
+  // The per-row net in import_validate catches by category name, so prove the category actually
+  // matches a member code — if it does not, the net is decoration (migration 0047).
+  await q(`do $$ begin perform 'abc'::numeric; exception when data_exception then null; end $$`);
+  ok('IMPORT data_exception category catches a member error code (22P02)', true);
+
+  const rates = await one(`select app.normalize_rate('0.15') fraction, app.normalize_rate('15') bare,
+                                  app.normalize_rate('15%') pct, app.normalize_rate('٪١٥') pct_ar,
+                                  app.normalize_rate('0') zero, app.normalize_rate('abc') junk,
+                                  app.normalize_rate('150') absurd`);
+  ok('IMPORT tax rate reads 0.15, 15, 15% and ٪١٥ as the same fifteen percent',
+     Number(rates.fraction) === 0.15 && Number(rates.bare) === 0.15
+       && Number(rates.pct) === 0.15 && Number(rates.pct_ar) === 0.15, JSON.stringify(rates));
+  ok('IMPORT tax rate keeps zero and rejects what it cannot read',
+     Number(rates.zero) === 0 && rates.junk === null && rates.absurd === null, JSON.stringify(rates));
+
+  // '120 م²' used to pass validation and then raise inside import_commit, rolling back the batch
+  // after the operator had already pressed commit. It must fail its own row during validation.
+  const areaBatch = (await one("insert into app.import_batch(org_id,kind,source_filename) values($1,'units','area.xlsx') returning id", [org1])).id;
+  await q(`insert into app.import_row(batch_id,org_id,row_number,raw) values
+     ($1,$2,2, jsonb_build_object('اسم العقار','عقار الاستيراد','رقم الوحدة','A1','المساحة','مئة')),
+     ($1,$2,3, jsonb_build_object('اسم العقار','عقار الاستيراد','رقم الوحدة','A2','المساحة','120 م²'))`,
+     [areaBatch, org1]);
+  await q('select app.import_validate($1)', [areaBatch]);
+  const areaRows = (await q("select row_number, is_valid, errors, normalized->>'area_sqm' area from app.import_row where batch_id=$1 order by row_number", [areaBatch])).rows;
+  ok('IMPORT unreadable area fails its own row instead of the commit',
+     areaRows[0].is_valid === false && JSON.stringify(areaRows[0].errors).includes('المساحة'), JSON.stringify(areaRows[0]));
+  ok('IMPORT area survives its unit suffix', Number(areaRows[1].area) === 120, JSON.stringify(areaRows[1]));
+
   // ================= audit append-only =================
   await q("insert into app.audit_log(org_id,identity_id,action) values($1,$2,'test.event')", [org1, idA]);
   await expectThrow('AUDIT update blocked', () => q("update app.audit_log set action='x' where org_id=$1", [org1]), 'AUDIT_APPEND_ONLY');
