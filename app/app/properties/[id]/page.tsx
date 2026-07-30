@@ -4,8 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { UnitForm } from "@/components/unit-form";
 import { ConfirmButton } from "@/components/confirm-button";
+import { FormDrawer } from "@/components/form-drawer";
 import { changePropertyOwner } from "../actions";
-import { PROPERTY_KIND_AR, UNIT_STATUS_AR, UNIT_STATUS_TONE } from "@/lib/labels";
+import { PROPERTY_KIND_AR, UNIT_STATUS_AR, CONTRACT_STATUS_AR } from "@/lib/labels";
+import { halalasToSar } from "@/lib/money";
+import { Card, CardBody, Badge, Tabs } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +16,11 @@ export const dynamic = "force-dynamic";
 const firstOf = (x: any) => (Array.isArray(x) ? x[0] : x);
 const ownerLabel = (o: any) =>
   o?.is_self ? "المنشأة (مالك ذاتي)" : firstOf(o?.party)?.display_name ?? "مالك";
+
+const UNIT_TONE: Record<string, "success" | "warning" | "neutral"> = {
+  rented: "success",
+  vacant: "warning",
+};
 
 type UnitRow = {
   id: string;
@@ -23,6 +31,17 @@ type UnitRow = {
   bathrooms: number | null;
   current_status: string;
 };
+
+function Kpi({ label, value }: { label: string; value: number }) {
+  return (
+    <Card>
+      <CardBody className="p-4 text-center">
+        <div className="text-2xl font-bold text-slate-900 dark:text-white">{value}</div>
+        <div className="text-xs text-slate-500">{label}</div>
+      </CardBody>
+    </Card>
+  );
+}
 
 export default async function PropertyDetail({
   params,
@@ -41,7 +60,7 @@ export default async function PropertyDetail({
   const { data: property } = await supabase
     .from("property")
     .select(
-      "id, name, property_kind, city, district, deed_number, owner_id, owner:owner_id(is_self, party:party_id(display_name))",
+      "id, name, property_kind, property_code, city, district, deed_number, owner_id, owner:owner_id(is_self, party:party_id(display_name))",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -49,7 +68,7 @@ export default async function PropertyDetail({
 
   if (!property) notFound();
 
-  const [{ data: unitData }, { data: ownerData }] = await Promise.all([
+  const [{ data: unitData }, { data: ownerData }, { data: contractData }] = await Promise.all([
     supabase
       .from("unit")
       .select("id, unit_number, floor, area_sqm, bedrooms, bathrooms, current_status")
@@ -61,134 +80,187 @@ export default async function PropertyDetail({
       .select("id, is_self, party:party_id(display_name)")
       .is("deleted_at", null)
       .order("is_self", { ascending: false }),
+    supabase
+      .from("contract")
+      .select(
+        "id, contract_number, status, start_date, end_date, annual_rent_halalas, unit:unit_id(unit_number), tenant:tenant_id(party:party_id(display_name))",
+      )
+      .eq("property_id", id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false }),
   ]);
 
   const units = (unitData ?? []) as UnitRow[];
   const owners = ownerData ?? [];
+  const contracts = (contractData ?? []) as any[];
+  const rented = units.filter((u) => u.current_status === "rented").length;
+  const vacant = units.filter((u) => u.current_status === "vacant").length;
+  const activeContracts = contracts.filter((c) => c.status === "active").length;
+
+  const unitsTab = (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-sm text-slate-500">{units.length} وحدة</span>
+        <FormDrawer label="إضافة وحدة جديدة" title={`إضافة وحدة — ${property.name}`}>
+          <UnitForm propertyId={property.id} />
+        </FormDrawer>
+      </div>
+
+      {units.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500 dark:border-slate-700">
+          لا توجد وحدات بعد. أضِف أول وحدة من الزر أعلاه.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900/60">
+              <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+                <th>رقم الوحدة</th>
+                <th>الحالة</th>
+                <th>الدور</th>
+                <th>المساحة</th>
+                <th>غرف</th>
+                <th>دورات مياه</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {units.map((u) => (
+                <tr key={u.id} className="[&>td]:px-4 [&>td]:py-2">
+                  <td className="font-medium">{u.unit_number}</td>
+                  <td>
+                    <Badge tone={UNIT_TONE[u.current_status] ?? "neutral"}>
+                      {UNIT_STATUS_AR[u.current_status] ?? u.current_status}
+                    </Badge>
+                  </td>
+                  <td className="text-slate-600 dark:text-slate-300">{u.floor ?? "—"}</td>
+                  <td className="text-slate-600 dark:text-slate-300">{u.area_sqm != null ? `${u.area_sqm} م²` : "—"}</td>
+                  <td className="text-slate-600 dark:text-slate-300">{u.bedrooms ?? "—"}</td>
+                  <td className="text-slate-600 dark:text-slate-300">{u.bathrooms ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const contractsTab =
+    contracts.length === 0 ? (
+      <p className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500 dark:border-slate-700">
+        لا توجد عقود مرتبطة بهذا العقار.
+      </p>
+    ) : (
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900/60">
+            <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+              <th>رقم العقد</th>
+              <th>الوحدة</th>
+              <th>المستأجر</th>
+              <th>الحالة</th>
+              <th>الفترة</th>
+              <th>الإيجار السنوي</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {contracts.map((c) => (
+              <tr key={c.id} className="[&>td]:px-4 [&>td]:py-2">
+                <td className="font-medium" dir="ltr">{c.contract_number}</td>
+                <td>{firstOf(c.unit)?.unit_number ?? "—"}</td>
+                <td>{firstOf(firstOf(c.tenant)?.party)?.display_name ?? "—"}</td>
+                <td>
+                  <Badge tone={c.status === "active" ? "success" : "neutral"}>
+                    {CONTRACT_STATUS_AR[c.status] ?? c.status}
+                  </Badge>
+                </td>
+                <td className="text-xs text-slate-500" dir="ltr">{c.start_date} → {c.end_date}</td>
+                <td>{halalasToSar(c.annual_rent_halalas)} ر.س</td>
+                <td>
+                  <Link href={`/app/contracts/${c.id}`} className="text-xs text-brand hover:underline">عرض ←</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
 
   return (
     <div className="space-y-6">
-      <nav className="text-sm text-neutral-500">
-        <Link href="/app/properties" className="hover:text-brand">
-          العقارات
-        </Link>{" "}
-        / <span className="text-neutral-700 dark:text-neutral-300">{property.name}</span>
+      <nav className="text-sm text-slate-500">
+        <Link href="/app/properties" className="hover:text-brand">العقارات</Link>{" "}
+        / <span className="text-slate-700 dark:text-slate-300">{property.name}</span>
       </nav>
 
       {flashError && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
-          {flashError}
-        </p>
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{flashError}</p>
       )}
 
-      <header className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">{property.name}</h1>
-          <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-            {PROPERTY_KIND_AR[property.property_kind] ?? property.property_kind}
-          </span>
-        </div>
-        <p className="mt-1 text-sm text-neutral-500">
-          {[property.city, property.district].filter(Boolean).join(" · ") || "—"}
-        </p>
-        {property.deed_number && (
-          <p className="mt-1 text-xs text-neutral-400" dir="ltr">
-            صك: {property.deed_number}
-          </p>
-        )}
-
-        <form
-          action={changePropertyOwner}
-          className="mt-4 flex flex-wrap items-end gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-800"
-        >
-          <input type="hidden" name="property_id" value={property.id} />
-          <div>
-            <label className="mb-1 block text-xs text-neutral-500" htmlFor="owner_id">
-              المالك
-            </label>
-            <select
-              id="owner_id"
-              name="owner_id"
-              defaultValue={property.owner_id}
-              className="rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-            >
-              {owners.map((o: any) => (
-                <option key={o.id} value={o.id}>
-                  {ownerLabel(o)}
-                </option>
-              ))}
-            </select>
+      <Card>
+        <CardBody>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">{property.name}</h1>
+            <div className="flex items-center gap-2">
+              {property.property_code && <Badge tone="neutral">{property.property_code}</Badge>}
+              <Badge tone="brand">{PROPERTY_KIND_AR[property.property_kind] ?? property.property_kind}</Badge>
+            </div>
           </div>
-          <ConfirmButton
-            message="تغيير مالك العقار قد يؤثّر على العقود والالتزامات المالية والبيانات المرتبطة به. هل تريد المتابعة؟"
-            className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
-          >
-            حفظ المالك
-          </ConfirmButton>
-          <span className="self-center text-xs text-neutral-400">
-            الحالي: {ownerLabel((property as any).owner)}
-          </span>
-        </form>
-        <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">
-          ⚠️ تغيير المالك قد يؤثّر على العقود والالتزامات المالية المرتبطة بالعقار.
-        </p>
-      </header>
-
-      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-        <h2 className="mb-4 text-base font-semibold">إضافة وحدة</h2>
-        <UnitForm propertyId={property.id} />
-      </section>
-
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold">الوحدات</h2>
-          <span className="text-sm text-neutral-500">{units.length} وحدة</span>
-        </div>
-
-        {units.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-neutral-300 p-8 text-center text-neutral-500 dark:border-neutral-700">
-            لا توجد وحدات بعد. أضِف أول وحدة من النموذج أعلاه.
+          <p className="mt-1 text-sm text-slate-500">
+            {[property.city, property.district].filter(Boolean).join(" · ") || "—"}
           </p>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 text-neutral-500 dark:bg-neutral-900">
-                <tr>
-                  <th className="px-4 py-2 text-right font-medium">رقم الوحدة</th>
-                  <th className="px-4 py-2 text-right font-medium">الحالة</th>
-                  <th className="px-4 py-2 text-right font-medium">الدور</th>
-                  <th className="px-4 py-2 text-right font-medium">المساحة</th>
-                  <th className="px-4 py-2 text-right font-medium">غرف</th>
-                  <th className="px-4 py-2 text-right font-medium">دورات مياه</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                {units.map((u) => (
-                  <tr key={u.id}>
-                    <td className="px-4 py-2 font-medium">{u.unit_number}</td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={
-                          "rounded-full px-2.5 py-0.5 text-xs font-medium " +
-                          (UNIT_STATUS_TONE[u.current_status] ?? "bg-neutral-100 text-neutral-700")
-                        }
-                      >
-                        {UNIT_STATUS_AR[u.current_status] ?? u.current_status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300">{u.floor ?? "—"}</td>
-                    <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300">
-                      {u.area_sqm != null ? `${u.area_sqm} م²` : "—"}
-                    </td>
-                    <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300">{u.bedrooms ?? "—"}</td>
-                    <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300">{u.bathrooms ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+          {property.deed_number && (
+            <p className="mt-1 text-xs text-slate-400" dir="ltr">صك: {property.deed_number}</p>
+          )}
+
+          <details className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
+            <summary className="cursor-pointer select-none text-sm font-medium text-slate-600 dark:text-slate-300">
+              تغيير مالك العقار
+            </summary>
+            <form action={changePropertyOwner} className="mt-3 flex flex-wrap items-end gap-2">
+              <input type="hidden" name="property_id" value={property.id} />
+              <div>
+                <label className="mb-1 block text-xs text-slate-500" htmlFor="owner_id">المالك</label>
+                <select
+                  id="owner_id"
+                  name="owner_id"
+                  defaultValue={property.owner_id}
+                  className="rounded-lg border border-slate-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-slate-700"
+                >
+                  {owners.map((o: any) => (
+                    <option key={o.id} value={o.id}>{ownerLabel(o)}</option>
+                  ))}
+                </select>
+              </div>
+              <ConfirmButton
+                message="تغيير مالك العقار قد يؤثّر على العقود والالتزامات المالية والبيانات المرتبطة به. هل تريد المتابعة؟"
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+              >
+                حفظ المالك
+              </ConfirmButton>
+              <span className="self-center text-xs text-slate-400">الحالي: {ownerLabel((property as any).owner)}</span>
+              <p className="w-full text-xs text-amber-600 dark:text-amber-500">
+                ⚠️ تغيير المالك قد يؤثّر على العقود والالتزامات المالية المرتبطة بالعقار.
+              </p>
+            </form>
+          </details>
+        </CardBody>
+      </Card>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Kpi label="إجمالي الوحدات" value={units.length} />
+        <Kpi label="مؤجرة" value={rented} />
+        <Kpi label="شاغرة" value={vacant} />
+        <Kpi label="عقود نشطة" value={activeContracts} />
+      </div>
+
+      <Tabs
+        items={[
+          { id: "units", label: `الوحدات (${units.length})`, content: unitsTab },
+          { id: "contracts", label: `العقود (${contracts.length})`, content: contractsTab },
+        ]}
+      />
     </div>
   );
 }
