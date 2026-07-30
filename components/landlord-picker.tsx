@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button, Drawer } from "@/components/ui";
 
 export type Landlord = { id: string; label: string; national_id?: string | null };
 
@@ -77,28 +78,41 @@ export function LandlordPicker({ owners }: { owners: Landlord[] }) {
               ))}
             </ul>
           )}
-          <button type="button" onClick={() => setShowAdd((s) => !s)} className="text-xs text-brand hover:underline">
-            {showAdd ? "إخفاء" : "لم تجد المالك؟ أضِف مالكاً جديداً"}
+          <button type="button" onClick={() => setShowAdd(true)} className="text-xs text-brand hover:underline">
+            لم تجد المالك؟ أضِف مالكاً جديداً
           </button>
-          {showAdd && (
-            <div className="grid gap-2 rounded-lg border border-neutral-200 p-3 sm:grid-cols-2 dark:border-neutral-800">
-              <input value={nn.display_name} onChange={(e) => setNn({ ...nn, display_name: e.target.value })} placeholder="الاسم الكامل *" className={inp} />
-              <select value={nn.legal_kind} onChange={(e) => setNn({ ...nn, legal_kind: e.target.value })} className={inp}>
-                <option value="individual">فرد</option>
-                <option value="company">شركة</option>
-              </select>
-              <input value={nn.national_id} onChange={(e) => setNn({ ...nn, national_id: e.target.value })} placeholder="رقم الهوية" dir="ltr" className={inp + " text-right"} />
-              <input value={nn.phone} onChange={(e) => setNn({ ...nn, phone: e.target.value })} placeholder="الجوال" dir="ltr" className={inp + " text-right"} />
-              {err && <p className="text-xs text-red-600 sm:col-span-2 dark:text-red-400">{err}</p>}
-              <div className="sm:col-span-2">
-                <button type="button" onClick={addOwner} disabled={busy} className="rounded-lg bg-brand px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-fg disabled:opacity-60">
-                  {busy ? "جارٍ الإضافة…" : "إضافة المالك"}
-                </button>
-              </div>
-            </div>
-          )}
         </>
       )}
+
+      {/* Slide-over: add an owner without losing the property form behind it. Nested above the
+          add-property drawer (z-[60]); on success we select the new owner and slide back. */}
+      <Drawer open={showAdd} onClose={() => setShowAdd(false)} title="إضافة مالك جديد" zClass="z-[60]">
+        <div className="grid gap-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium">الاسم الكامل *</label>
+            <input value={nn.display_name} onChange={(e) => setNn({ ...nn, display_name: e.target.value })} className={inp} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">النوع</label>
+            <select value={nn.legal_kind} onChange={(e) => setNn({ ...nn, legal_kind: e.target.value })} className={inp}>
+              <option value="individual">فرد</option>
+              <option value="company">شركة</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">رقم الهوية / السجل</label>
+            <input value={nn.national_id} onChange={(e) => setNn({ ...nn, national_id: e.target.value })} dir="ltr" className={inp + " text-right"} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">الجوال</label>
+            <input value={nn.phone} onChange={(e) => setNn({ ...nn, phone: e.target.value })} dir="ltr" placeholder="05XXXXXXXX" className={inp + " text-right"} />
+          </div>
+          {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{err}</p>}
+          <Button type="button" onClick={addOwner} disabled={busy} className="w-full">
+            {busy ? "جارٍ الإضافة…" : "إضافة المالك واختياره"}
+          </Button>
+        </div>
+      </Drawer>
     </div>
   );
 }

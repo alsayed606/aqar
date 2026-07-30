@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 // Right-anchored sliding panel (natural start-side in RTL) for quick add/edit without a page change.
 // Enter animation only (conditional mount); overlay-click and Esc close it.
@@ -10,12 +11,15 @@ export function Drawer({
   title,
   children,
   footer,
+  // Raise this on a nested drawer (e.g. add-owner opened from inside the add-property drawer).
+  zClass = "z-50",
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   footer?: ReactNode;
+  zClass?: string;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const prevFocus = useRef<HTMLElement | null>(null);
@@ -37,10 +41,12 @@ export function Drawer({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={title}>
+  // Portal to <body>: a `fixed` panel would otherwise be positioned against an ancestor that has a
+  // transform (e.g. another drawer mid-slide), which matters for nested drawers.
+  return createPortal(
+    <div className={"fixed inset-0 " + zClass} role="dialog" aria-modal="true" aria-label={title}>
       <div className="absolute inset-0 animate-fade-in-plain bg-slate-900/50" onClick={onClose} />
       <div
         ref={panelRef}
@@ -63,6 +69,7 @@ export function Drawer({
         <div className="flex-1 overflow-y-auto p-5">{children}</div>
         {footer && <div className="border-t border-slate-200 px-5 py-4 dark:border-slate-800">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
