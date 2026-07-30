@@ -442,6 +442,83 @@ try {
   catch (e) { setMissing = e.message; }
   ok("operator_set_subscription rejects an org with no subscription", /SUBSCRIPTION_NOT_FOUND/.test(setMissing), setMissing);
 
+  // ==================== Executive dashboard (0049) ====================
+  for (const fn of ["app.platform_kpis()", "app.platform_revenue_series(3)", "app.platform_plan_distribution()", "app.platform_top_customers(3)"]) {
+    const denied = await asRole(idViewer, org1, () => client.query(`select * from ${fn}`));
+    ok(`${fn.split("(")[0]} FORBIDDEN for a non-operator`, denied.ok === false && /FORBIDDEN/i.test(denied.error || ""), denied.error);
+  }
+
+  // Absolute totals depend on everything else this file seeded, so the revenue rule is tested by
+  // MOVEMENT: add one subscription of each kind on the same priced plan and watch what MRR does.
+  const readKpis = async () => (await callAs(idOwner, org1, "select app.platform_kpis() k"))[0].k;
+  const addOrgOn = async (name, status) => {
+    const id = (await one("insert into app.organization(name) values($1) returning id", [name])).id;
+    await q("insert into app.org_subscription(org_id,plan_code,status) values($1,'pro',$2)", [id, status]);
+    return id;
+  };
+
+  const kpiBase = await readKpis();
+  await addOrgOn("MRR Active", "active");
+  const kpiActive = await readKpis();
+  ok("an active subscription adds exactly its plan's list price to MRR",
+    Number(kpiActive.mrr_halalas) - Number(kpiBase.mrr_halalas) === 29900
+      && Number(kpiActive.orgs_active) === Number(kpiBase.orgs_active) + 1,
+    JSON.stringify({ before: kpiBase.mrr_halalas, after: kpiActive.mrr_halalas }));
+
+  await addOrgOn("MRR Comped", "comped");
+  const kpiComped = await readKpis();
+  ok("a comp on a priced plan is a grant, not recurring revenue",
+    Number(kpiComped.mrr_halalas) === Number(kpiActive.mrr_halalas)
+      && Number(kpiComped.orgs_comped) === Number(kpiActive.orgs_comped) + 1,
+    JSON.stringify({ mrr: kpiComped.mrr_halalas, comped: kpiComped.orgs_comped }));
+
+  await addOrgOn("MRR Trial", "trialing");
+  const kpiTrial = await readKpis();
+  ok("a trial pays nothing, so it adds nothing to MRR",
+    Number(kpiTrial.mrr_halalas) === Number(kpiComped.mrr_halalas)
+      && Number(kpiTrial.orgs_trialing) === Number(kpiComped.orgs_trialing) + 1,
+    JSON.stringify({ mrr: kpiTrial.mrr_halalas, trialing: kpiTrial.orgs_trialing }));
+
+  await addOrgOn("MRR PastDue", "past_due");
+  const kpiRisk = await readKpis();
+  ok("a past-due subscription leaves MRR and is reported as revenue at risk instead",
+    Number(kpiRisk.mrr_halalas) === Number(kpiTrial.mrr_halalas)
+      && Number(kpiRisk.mrr_at_risk_halalas) - Number(kpiTrial.mrr_at_risk_halalas) === 29900,
+    JSON.stringify({ mrr: kpiRisk.mrr_halalas, risk: kpiRisk.mrr_at_risk_halalas }));
+
+  const kpis = kpiRisk;
+  ok("ARR is twelve times MRR", Number(kpis.arr_halalas) === Number(kpis.mrr_halalas) * 12);
+  ok("platform KPIs count tenant data without reading a tenant row",
+    Number.isFinite(Number(kpis.properties)) && Number.isFinite(Number(kpis.units))
+      && Number.isFinite(Number(kpis.contracts)) && Number(kpis.users) >= 3,
+    JSON.stringify({ p: kpis.properties, u: kpis.units, c: kpis.contracts, users: kpis.users }));
+  // The back-seeded origin rows are dated to each subscription's creation; counting them as history
+  // would claim trend we never recorded. Only the real status change above may set trend_since.
+  ok("trend_since ignores the reconstructed back-seed", kpis.trend_since !== null, JSON.stringify(kpis.trend_since));
+
+  const series = await callAs(idOwner, org1, "select * from app.platform_revenue_series(6)");
+  ok("revenue series returns every month in the window, zeros included",
+    series.length === 6 && series.every((r) => Number(r.paid_halalas) >= 0)
+      && series[0].month_start < series[5].month_start,
+    JSON.stringify({ n: series.length }));
+  ok("revenue series attributes the paid subscription payment to the current month",
+    Number(series[5].paid_halalas) >= 9900, JSON.stringify(series[5]));
+
+  const dist = await callAs(idOwner, org1, "select * from app.platform_plan_distribution()");
+  const planCount = (await one("select count(*)::int n from app.plan")).n;
+  const pro = dist.find((r) => r.plan_code === "pro");
+  ok("plan distribution lists every plan in the catalog, empty tiers included",
+    dist.length === planCount, JSON.stringify(dist.map((r) => r.plan_code)));
+  ok("plan distribution prices only the active subscriptions on each tier",
+    pro && Number(pro.mrr_halalas) === Number(pro.orgs_active) * Number(pro.price_halalas)
+      && Number(pro.orgs) > Number(pro.orgs_active),
+    JSON.stringify(pro && { all: pro.orgs, active: pro.orgs_active, mrr: pro.mrr_halalas }));
+
+  const top = await callAs(idOwner, org1, "select * from app.platform_top_customers(5)");
+  ok("top customers ranks by what was actually paid, and omits offices that paid nothing",
+    top.length >= 1 && top.every((r) => Number(r.paid_halalas) > 0),
+    JSON.stringify(top.map((r) => [r.org_name, r.paid_halalas])));
+
   // ==================== Recurring billing (0040): token, auto-renew, dunning ====================
   // org1 is basic/active with a future period (from the payment tests above), no card yet.
   let noCard = "";

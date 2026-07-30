@@ -47,10 +47,13 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname, search, origin } = request.nextUrl;
+  // Next.js runs exactly one middleware, so each surface is a branch here rather than a file of its
+  // own. This only decides "signed in or not"; whether the caller may see the platform console is
+  // decided by the database, in app/platform/layout.tsx and again inside every platform RPC.
   const isProtected =
     pathname === "/app" || pathname.startsWith("/app/") ||
     pathname === "/portal" || pathname.startsWith("/portal/") ||
-    pathname === "/operator" || pathname.startsWith("/operator/");
+    pathname === "/platform" || pathname.startsWith("/platform/");
   const isLogin = pathname === "/login";
 
   // Unauthenticated → send to login, remembering where they wanted to go.

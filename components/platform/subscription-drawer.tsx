@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { operatorSetSubscription } from "@/app/operator/actions";
+import { setSubscription } from "@/app/platform/actions";
 import { fmtDate } from "@/lib/subscription";
 import { SUBSCRIPTION_STATUS_AR } from "@/lib/labels";
 import { Button, Drawer } from "@/components/ui";
@@ -20,9 +20,9 @@ type Org = {
 
 const fieldCls = "mt-1 w-full rounded-lg border border-slate-300 bg-transparent px-3 py-2 text-sm dark:border-slate-700";
 
-// In-line subscription editor for the /operator list: opens a slide-over instead of navigating to
-// the org page. operatorSetSubscription redirects back to /operator (back field), reloading the list.
-export function OperatorEditDrawer({ org }: { org: Org }) {
+// In-line subscription editor for the tenant list: opens a slide-over instead of navigating away.
+// setSubscription redirects back to the list (the `back` field), reloading it with the new values.
+export function SubscriptionDrawer({ org }: { org: Org }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -30,9 +30,9 @@ export function OperatorEditDrawer({ org }: { org: Org }) {
         تعديل
       </Button>
       <Drawer open={open} onClose={() => setOpen(false)} title={`اشتراك: ${org.org_name}`}>
-        <form action={operatorSetSubscription} className="space-y-4">
+        <form action={setSubscription} className="space-y-4">
           <input type="hidden" name="org_id" value={org.org_id} />
-          <input type="hidden" name="back" value="/operator" />
+          <input type="hidden" name="back" value="/platform/tenants" />
           <p className="text-xs text-slate-500">اترك الحقل فارغاً لإبقاء قيمته الحالية.</p>
 
           <label className="block text-sm">

@@ -164,12 +164,15 @@ Party (داخل المنظمة: من هو في سجلاتنا؟  identity_id ق�
 - **import_batch**(`org_id`, `kind`, `status`, عدّادات, `committed_at`, `reverted_at`).
 - **import_row**(`batch_id`, `row_number`, `raw` jsonb, `normalized` jsonb, `is_valid`, `errors` jsonb[], `created_entity_type/id`).
 
-### منصة الإدارة العليا | Platform console (`0039`, `0048`)
+### منصة الإدارة العليا | Platform console (`0039`, `0048`, `0049`)
 سطح **فوق** كل المنشآت. النموذج الكامل في [ADR-0006](docs/adr/0006-platform-console-access.md).
 - **platform_operator**(`identity_id`) — RLS مفعّل **بلا policy**: لا وصول مباشر؛ يُبذَر بـ SQL فقط، ولا شاشة لإضافة مشغّل.
 - **subscription_event**(`org_id`, `kind`, `from_plan/to_plan`, `from_status/to_status`, `plan_price_halalas`, `actor_identity_id`, `detail`) — **append-only**، يكتبه trigger على `org_subscription` فيلتقط كل تغيير أيّاً كان مصدره. السعر **لقطة لحظية** حتى لا يُعيد تسعيرٌ لاحق كتابةَ إيراد الماضي. RLS بلا policy.
 - **الدوال** (كلها `SECURITY DEFINER` + `FORBIDDEN` كأول سطر + `revoke from public`): `is_platform_operator()` · `platform_list_orgs(org?, search?, status?, limit, offset)` (تُرجع الخطة وحدودها والاستهلاك وآخر دخول و`total_count`؛ تمرير `p_org` يعطي صفّاً واحداً فتقرأ صفحة التفاصيل من نفس الدالة) · `platform_org_activity()` (من `auth.users`؛ تُرجع صفراً من الصفوف عند غيابها بدل الفشل) · `platform_subscription_history(org)` · `operator_set_subscription(...)` (تكتب `platform.subscription_update` في `audit_log`) · `operator_list_payments(org)`.
+- **مؤشرات اللوحة (`0049`، قراءة فقط):** `platform_kpis()` (jsonb: MRR/ARR وحالات الاشتراك والفقد والنمو وإيراد الشهر والأعداد الكلية و`trend_since`) · `platform_revenue_series(months)` (المحصَّل والمكاتب الجديدة شهرياً، **الأشهر الفارغة تُرجَع أصفاراً**) · `platform_plan_distribution()` (**كل خطة** ولو بلا مشتركين) · `platform_top_customers(limit)` (بما دُفع فعلاً).
+- **قاعدتا صدق مفروضتان في SQL:** `MRR` يجمع `active` فقط — التجربة لا تدفع و«الممنوح» منحة، و`past_due` يُعرض منفصلاً كإيراد معرّض للخطر؛ و`trend_since` يستثني بذرة `0048` المُستنتَجة حتى لا تُدَّعى أشهر اتجاه لم تُسجَّل.
 - **القاعدة الحاكمة:** المنصة ترى بيانات المنصة كاملةً، وبيانات المكتب **أعداداً فقط — لا صفّاً واحداً**.
+- **السطح:** `app/platform/` (layout يحمل بوّابة `is_platform_operator()` + قائمة جانبية مستقلة). `/operator` حُذف في T‑1.
 - **`write_audit`** صُحِّحت في `0048`: `membership_id` يُسجَّل فقط حين تكون العضوية في **نفس** المنشأة المُدقَّقة؛ عمليات المنصة تظهر بلا عضوية، وهو ما يميّزها.
 
 ---
