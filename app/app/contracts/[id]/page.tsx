@@ -209,6 +209,9 @@ export default async function ContractDetail({
           العقود
         </Link>{" "}
         / <span className="text-neutral-700 dark:text-neutral-300" dir="ltr">{contract.contract_number}</span>
+        <Link href={`/app/contracts/${contract.id}/print`} className="float-left text-brand hover:underline">
+          طباعة العقد ←
+        </Link>
       </nav>
 
       {flashError && (

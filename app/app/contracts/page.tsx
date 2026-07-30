@@ -4,13 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { ContractForm } from "@/components/contract-form";
-import { CONTRACT_STATUS_AR, CONTRACT_STATUS_TONE } from "@/lib/labels";
-import { halalasToSar } from "@/lib/money";
 import { parseListParams, likePattern } from "@/lib/list-params";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
-import { FilterableCards } from "@/components/filterable-list";
 import { FormDrawer } from "@/components/form-drawer";
+import { ContractsGrid } from "@/components/contracts-grid";
+import type { ContractCardData } from "@/components/contract-card";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +29,7 @@ export default async function ContractsPage({
   let contractQuery = supabase
     .from("contract")
     .select(
-      "id, contract_number, status, annual_rent_halalas, start_date, end_date, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
+      "id, contract_number, status, annual_rent_halalas, start_date, end_date, property_id, tenant_id, unit:unit_id(unit_number, property:property_id(name)), tenant:tenant_id(party:party_id(display_name))",
       { count: "exact" },
     )
     .is("deleted_at", null);
@@ -58,8 +57,24 @@ export default async function ContractsPage({
     id: t.id,
     label: first(t.party)?.display_name ?? "مستأجر",
   }));
-  const contracts = contractData ?? [];
   const total = count ?? 0;
+  // Flatten the embedded relations into the plain shape the client grid expects.
+  const contracts: ContractCardData[] = (contractData ?? []).map((c: any) => {
+    const unit = first(c.unit);
+    return {
+      id: c.id,
+      contract_number: c.contract_number,
+      status: c.status,
+      start_date: c.start_date,
+      end_date: c.end_date,
+      annual_rent_halalas: Number(c.annual_rent_halalas),
+      unit_number: unit?.unit_number ?? null,
+      property_name: first(unit?.property)?.name ?? null,
+      property_id: c.property_id ?? null,
+      tenant_name: first(first(c.tenant)?.party)?.display_name ?? null,
+      tenant_id: c.tenant_id ?? null,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -96,42 +111,7 @@ export default async function ContractsPage({
         </p>
       ) : (
         <>
-          <FilterableCards
-            className="space-y-3"
-            placeholder="تصفية سريعة في هذه الصفحة…"
-            items={contracts.map((c: any) => {
-              const unit = first(c.unit);
-              const tenant = first(c.tenant);
-              const propName = first(unit?.property)?.name ?? "";
-              const tenantName = first(tenant?.party)?.display_name ?? "";
-              return {
-                id: c.id,
-                search: [c.contract_number, propName, unit?.unit_number, tenantName, CONTRACT_STATUS_AR[c.status] ?? c.status]
-                  .filter(Boolean)
-                  .join(" "),
-                node: (
-                  <Link
-                    href={`/app/contracts/${c.id}`}
-                    className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand dark:border-slate-800 dark:bg-slate-900"
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold" dir="ltr">{c.contract_number}</p>
-                      <span className={"rounded-full px-2.5 py-0.5 text-xs font-medium " + (CONTRACT_STATUS_TONE[c.status] ?? "")}>
-                        {CONTRACT_STATUS_AR[c.status] ?? c.status}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                      {propName || "—"} · وحدة {unit?.unit_number ?? "—"} · {tenantName || "—"}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      الإيجار السنوي: {halalasToSar(c.annual_rent_halalas)} ر.س ·{" "}
-                      <span dir="ltr">{c.start_date} → {c.end_date}</span>
-                    </p>
-                  </Link>
-                ),
-              };
-            })}
-          />
+          <ContractsGrid contracts={contracts} />
           <Pagination page={page} total={total} q={q} basePath="/app/contracts" />
         </>
       )}
