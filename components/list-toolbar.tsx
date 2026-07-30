@@ -1,8 +1,21 @@
 // Search box for list pages. A plain GET form (no client JS): submitting sets ?q= and resets to
 // page 1 (the page param is intentionally omitted). Rendered as a server component.
-export function ListToolbar({ q, placeholder }: { q: string; placeholder: string }) {
+// `keep` carries the page's other URL filters through the submit — a GET form replaces the whole
+// query string, so anything not re-posted here would be silently cleared by searching.
+export function ListToolbar({
+  q,
+  placeholder,
+  keep,
+}: {
+  q: string;
+  placeholder: string;
+  keep?: Record<string, string | undefined>;
+}) {
   return (
     <form method="get" className="flex items-center gap-2">
+      {Object.entries(keep ?? {}).map(([name, value]) =>
+        value ? <input key={name} type="hidden" name={name} value={value} /> : null,
+      )}
       <input
         name="q"
         defaultValue={q}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { operatorSetSubscription } from "@/app/operator/actions";
 import { fmtDate } from "@/lib/subscription";
+import { SUBSCRIPTION_STATUS_AR } from "@/lib/labels";
 import { Button, Drawer } from "@/components/ui";
 
 const PLANS = ["basic", "pro", "enterprise"];
@@ -43,10 +44,10 @@ export function OperatorEditDrawer({ org }: { org: Org }) {
           </label>
 
           <label className="block text-sm">
-            الحالة <span className="text-slate-400">(الحالية: {org.status ?? "—"})</span>
+            الحالة <span className="text-slate-400">(الحالية: {org.status ? SUBSCRIPTION_STATUS_AR[org.status] ?? org.status : "—"})</span>
             <select name="status" defaultValue="" className={fieldCls}>
               <option value="">— بدون تغيير —</option>
-              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+              {STATUSES.map((s) => <option key={s} value={s}>{SUBSCRIPTION_STATUS_AR[s] ?? s}</option>)}
             </select>
           </label>
 

@@ -1,22 +1,27 @@
 import Link from "next/link";
 import { PAGE_SIZE } from "@/lib/list-params";
 
-// Prev/next pager for list pages. Preserves the current search query. Hidden when a single page.
+// Prev/next pager for list pages. Preserves the current search query — and any other filter the
+// page keeps in the URL, via `params`, so paging never silently drops a filter the user set.
+// Hidden when a single page.
 export function Pagination({
   page,
   total,
   q,
   basePath,
+  params,
 }: {
   page: number;
   total: number;
   q: string;
   basePath: string;
+  params?: Record<string, string | undefined>;
 }) {
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const href = (p: number) => {
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
+    for (const [key, value] of Object.entries(params ?? {})) if (value) sp.set(key, value);
     sp.set("page", String(p));
     return `${basePath}?${sp.toString()}`;
   };

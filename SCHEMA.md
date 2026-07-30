@@ -164,12 +164,21 @@ Party (داخل المنظمة: من هو في سجلاتنا؟  identity_id ق�
 - **import_batch**(`org_id`, `kind`, `status`, عدّادات, `committed_at`, `reverted_at`).
 - **import_row**(`batch_id`, `row_number`, `raw` jsonb, `normalized` jsonb, `is_valid`, `errors` jsonb[], `created_entity_type/id`).
 
+### منصة الإدارة العليا | Platform console (`0039`, `0048`)
+سطح **فوق** كل المنشآت. النموذج الكامل في [ADR-0006](docs/adr/0006-platform-console-access.md).
+- **platform_operator**(`identity_id`) — RLS مفعّل **بلا policy**: لا وصول مباشر؛ يُبذَر بـ SQL فقط، ولا شاشة لإضافة مشغّل.
+- **subscription_event**(`org_id`, `kind`, `from_plan/to_plan`, `from_status/to_status`, `plan_price_halalas`, `actor_identity_id`, `detail`) — **append-only**، يكتبه trigger على `org_subscription` فيلتقط كل تغيير أيّاً كان مصدره. السعر **لقطة لحظية** حتى لا يُعيد تسعيرٌ لاحق كتابةَ إيراد الماضي. RLS بلا policy.
+- **الدوال** (كلها `SECURITY DEFINER` + `FORBIDDEN` كأول سطر + `revoke from public`): `is_platform_operator()` · `platform_list_orgs(org?, search?, status?, limit, offset)` (تُرجع الخطة وحدودها والاستهلاك وآخر دخول و`total_count`؛ تمرير `p_org` يعطي صفّاً واحداً فتقرأ صفحة التفاصيل من نفس الدالة) · `platform_org_activity()` (من `auth.users`؛ تُرجع صفراً من الصفوف عند غيابها بدل الفشل) · `platform_subscription_history(org)` · `operator_set_subscription(...)` (تكتب `platform.subscription_update` في `audit_log`) · `operator_list_payments(org)`.
+- **القاعدة الحاكمة:** المنصة ترى بيانات المنصة كاملةً، وبيانات المكتب **أعداداً فقط — لا صفّاً واحداً**.
+- **`write_audit`** صُحِّحت في `0048`: `membership_id` يُسجَّل فقط حين تكون العضوية في **نفس** المنشأة المُدقَّقة؛ عمليات المنصة تظهر بلا عضوية، وهو ما يميّزها.
+
 ---
 
 ## 4) الاختبارات | Tests
 
 **pgTAP (لِـ `supabase test db`):** [`supabase/tests/01_isolation_rls.sql`](supabase/tests/01_isolation_rls.sql) · [`02_auth.sql`](supabase/tests/02_auth.sql) · [`03_modeling.sql`](supabase/tests/03_modeling.sql).
-**Runner محلي مُثبت (Node + PG17، بلا Supabase):** [`supabase/tests/local/`](supabase/tests/local/) → `npm i && npm run verify` → **36 passed, 0 failed**.
+**Runner محلي مُثبت (Node + PG17، بلا Supabase):** [`supabase/tests/local/`](supabase/tests/local/) — لا يوجد سكربت `npm run verify`؛ تُشغَّل الملفات مباشرة:
+`node supabase/tests/local/verify.mjs` → **41 passed** (طبقة البيانات) · `node supabase/tests/local/phase3.mjs` → **122 passed** (السلوك والعزل).
 
 يغطيان الاختبارات الإلزامية ١–١٣ حرفياً، زائد: جولة استيراد كاملة (تحقّق/اعتماد/تراجع)، منع تعديل/حذف سجل التدقيق، وحماية آخر مالك.
 

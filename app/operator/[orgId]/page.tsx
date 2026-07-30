@@ -3,18 +3,14 @@ import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { halalasToSar } from "@/lib/money";
 import { fmtDate } from "@/lib/subscription";
+import { SUBSCRIPTION_STATUS_AR, SUBSCRIPTION_STATUS_TONE, SUBSCRIPTION_EVENT_AR } from "@/lib/labels";
+import { Badge } from "@/components/ui";
+import { UsageMeter } from "@/components/usage-meter";
+import type { PlatformOrgRow, SubscriptionEventRow } from "@/lib/platform";
 import { operatorSetSubscription } from "../actions";
 
 export const dynamic = "force-dynamic";
 
-type OrgRow = {
-  org_id: string;
-  org_name: string;
-  plan_code: string | null;
-  status: string | null;
-  trial_ends_at: string | null;
-  current_period_end: string | null;
-};
 type PaymentRow = {
   id: string;
   plan_code: string;
@@ -46,21 +42,36 @@ export default async function OperatorOrgPage({
   const { data: isOp } = await supabase.rpc("is_platform_operator");
   if (!isOp) notFound();
 
-  const [{ data: orgsData }, { data: paymentsData }] = await Promise.all([
-    supabase.rpc("operator_list_orgs"),
+  const [{ data: orgsData }, { data: paymentsData }, { data: historyData }] = await Promise.all([
+    supabase.rpc("platform_list_orgs", { p_org: orgId }),
     supabase.rpc("operator_list_payments", { p_org: orgId }),
+    supabase.rpc("platform_subscription_history", { p_org: orgId }),
   ]);
-  const org = ((orgsData ?? []) as OrgRow[]).find((o) => o.org_id === orgId);
+  const org = ((orgsData ?? []) as PlatformOrgRow[])[0];
   if (!org) notFound();
   const payments = (paymentsData ?? []) as PaymentRow[];
+  const history = (historyData ?? []) as SubscriptionEventRow[];
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">{org.org_name}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold">{org.org_name}</h1>
+          {org.status && (
+            <Badge tone={SUBSCRIPTION_STATUS_TONE[org.status] ?? "neutral"}>
+              {SUBSCRIPTION_STATUS_AR[org.status] ?? org.status}
+            </Badge>
+          )}
+        </div>
         <Link href="/operator" className="text-sm text-brand hover:underline">
           → كل المنشآت
         </Link>
+      </div>
+
+      <div className="grid gap-4 rounded-2xl border border-neutral-200 bg-white p-5 sm:grid-cols-3 dark:border-neutral-800 dark:bg-neutral-900">
+        <UsageMeter label="عقارات" used={org.properties} limit={org.max_properties} />
+        <UsageMeter label="وحدات" used={org.units} limit={org.max_units} />
+        <UsageMeter label="أعضاء" used={org.members} limit={org.max_members} />
       </div>
 
       {ok && (
@@ -93,7 +104,7 @@ export default async function OperatorOrgPage({
             </select>
           </label>
           <label className="block text-sm">
-            الحالة <span className="text-neutral-400">(الحالية: {org.status ?? "—"})</span>
+            الحالة <span className="text-neutral-400">(الحالية: {org.status ? SUBSCRIPTION_STATUS_AR[org.status] ?? org.status : "—"})</span>
             <select name="status" defaultValue="" className="mt-1 w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 dark:border-neutral-700">
               <option value="">— بدون تغيير —</option>
               {STATUSES.map((s) => (
@@ -149,6 +160,48 @@ export default async function OperatorOrgPage({
               </tbody>
             </table>
           </div>
+        )}
+      </div>
+
+      {/* Subscription timeline (0048). Every plan/status change lands here whatever made it — the
+          operator console, the billing engine, or a webhook — because a trigger records it. */}
+      <div className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+        <h2 className="mb-3 font-semibold">مسار الاشتراك</h2>
+        {history.length === 0 ? (
+          <p className="text-sm text-neutral-500">لا تغييرات مسجّلة.</p>
+        ) : (
+          <ol className="space-y-3">
+            {history.map((e) => (
+              <li key={e.id} className="flex gap-3 text-sm">
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand" />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="font-medium">{SUBSCRIPTION_EVENT_AR[e.kind] ?? e.kind}</span>
+                    <span className="text-xs text-neutral-400" dir="ltr">{fmtDate(e.created_at)}</span>
+                    {e.detail?.reconstructed && (
+                      <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:bg-neutral-800">
+                        مُستنتَج قبل بدء التسجيل
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-neutral-500">
+                    {e.from_plan && e.from_plan !== e.to_plan && (
+                      <span dir="ltr">{e.from_plan} → {e.to_plan}</span>
+                    )}
+                    {e.from_status && e.from_status !== e.to_status && (
+                      <span className="ms-2">
+                        {SUBSCRIPTION_STATUS_AR[e.from_status] ?? e.from_status} ←{" "}
+                        {SUBSCRIPTION_STATUS_AR[e.to_status ?? ""] ?? e.to_status}
+                      </span>
+                    )}
+                    {!e.from_plan && !e.from_status && (
+                      <span dir="ltr">{e.to_plan}</span>
+                    )}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
         )}
       </div>
     </main>

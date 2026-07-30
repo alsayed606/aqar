@@ -354,20 +354,93 @@ try {
   // ==================== Platform operator (0039) ====================
   const opNo = await asRole(idOwner, org1, () => client.query("select app.is_platform_operator() b"));
   ok("is_platform_operator false for a normal user", opNo.ok && opNo.value.rows[0].b === false, opNo.error);
-  const opForbidden = await asRole(idOwner, org1, () => client.query("select * from app.operator_list_orgs()"));
-  ok("operator_list_orgs FORBIDDEN for a non-operator", opForbidden.ok === false && /FORBIDDEN/i.test(opForbidden.error || ""));
+  const opForbidden = await asRole(idOwner, org1, () => client.query("select * from app.platform_list_orgs()"));
+  ok("platform_list_orgs FORBIDDEN for a non-operator", opForbidden.ok === false && /FORBIDDEN/i.test(opForbidden.error || ""));
+  const actForbidden = await asRole(idOwner, org1, () => client.query("select * from app.platform_org_activity()"));
+  ok("platform_org_activity FORBIDDEN for a non-operator", actForbidden.ok === false && /FORBIDDEN/i.test(actForbidden.error || ""));
+  const histForbidden = await asRole(idOwner, org1, () => client.query("select * from app.platform_subscription_history($1)", [org1]));
+  ok("platform_subscription_history FORBIDDEN for a non-operator", histForbidden.ok === false && /FORBIDDEN/i.test(histForbidden.error || ""));
 
   await q("insert into app.platform_operator(identity_id) values($1)", [idOwner]);
   const opYes = await asRole(idOwner, org1, () => client.query("select app.is_platform_operator() b"));
   ok("is_platform_operator true after seeding", opYes.ok && opYes.value.rows[0].b === true);
-  const opList = await asRole(idOwner, org1, () => client.query("select count(*)::int n from app.operator_list_orgs()"));
-  ok("operator_list_orgs returns orgs for an operator", opList.ok && opList.value.rows[0].n >= 1, opList.error);
 
   await callAs(idOwner, org1, "select app.operator_set_subscription($1,'pro','active'::app.subscription_status,null,null,'partner')", [org2]);
   const org2sub = await one("select plan_code, status, notes from app.org_subscription where org_id=$1", [org2]);
   ok("operator_set_subscription applies the override (org2 → pro/active/partner)", org2sub.plan_code === "pro" && org2sub.status === "active" && org2sub.notes === "partner", JSON.stringify(org2sub));
   const opPay = await asRole(idOwner, org1, () => client.query("select count(*)::int n from app.operator_list_payments($1)", [org1]));
   ok("operator_list_payments works for an operator", opPay.ok && opPay.value.rows[0].n >= 1, opPay.error);
+
+  // ==================== Platform foundation (0048) ====================
+  const listed = await callAs(idOwner, org1, "select * from app.platform_list_orgs(null,null,null,20,0)");
+  const org2Row = listed.find((r) => r.org_id === org2);
+  ok("platform_list_orgs pages every org with its plan limits and usage",
+    listed.length >= 2 && org2Row && org2Row.plan_code === "pro" && Number(org2Row.total_count) === listed.length
+      && org2Row.max_properties !== undefined && org2Row.properties !== null,
+    JSON.stringify(org2Row && { p: org2Row.plan_code, t: org2Row.total_count, mx: org2Row.max_properties }));
+
+  // total_count is the size of the FILTERED set, not of the page — that is what drives the pager.
+  const firstPage = await callAs(idOwner, org1, "select * from app.platform_list_orgs(null,null,null,1,0)");
+  const secondPage = await callAs(idOwner, org1, "select * from app.platform_list_orgs(null,null,null,1,1)");
+  ok("platform_list_orgs paging returns one row per page but the full total",
+    firstPage.length === 1 && secondPage.length === 1 && Number(firstPage[0].total_count) >= 2
+      && firstPage[0].org_id !== secondPage[0].org_id,
+    JSON.stringify({ a: firstPage.length, b: secondPage.length, t: firstPage[0] && firstPage[0].total_count }));
+
+  const searched = await callAs(idOwner, org1, "select * from app.platform_list_orgs(null,'Org Two',null,20,0)");
+  const filtered = await callAs(idOwner, org1, "select * from app.platform_list_orgs(null,null,'active'::app.subscription_status,20,0)");
+  ok("platform_list_orgs filters by name and by status",
+    searched.length === 1 && searched[0].org_id === org2
+      && filtered.length >= 1 && filtered.every((r) => r.status === "active"),
+    JSON.stringify({ s: searched.length, f: filtered.map((r) => r.status) }));
+
+  // The detail page reads one office through the same function, so the list and the 360 view can
+  // never drift apart into two versions of "what an office looks like".
+  const single = await callAs(idOwner, org1, "select * from app.platform_list_orgs($1)", [org2]);
+  ok("platform_list_orgs narrows to a single org for the detail view",
+    single.length === 1 && single[0].org_id === org2, JSON.stringify(single.map((r) => r.org_name)));
+
+  // auth.users does not exist on bare Postgres: no rows, no error (the console shows "—").
+  const activity = await callAs(idOwner, org1, "select * from app.platform_org_activity()");
+  ok("platform_org_activity degrades to empty without auth.users instead of raising", Array.isArray(activity));
+
+  // The trigger must capture the change made by operator_set_subscription above (org2 → pro/active).
+  const evs = await callAs(idOwner, org1, "select * from app.platform_subscription_history($1)", [org2]);
+  const changed = evs.find((e) => e.kind === "plan_changed");
+  const seeded = evs.find((e) => e.kind === "created");
+  ok("subscription history records the plan change with both sides and a price snapshot",
+    changed && changed.from_plan === "enterprise" && changed.to_plan === "pro"
+      && changed.to_status === "active" && Number(changed.plan_price_halalas) === 29900,
+    JSON.stringify(changed && { f: changed.from_plan, t: changed.to_plan, p: changed.plan_price_halalas }));
+  ok("the origin event snapshots the plan the subscription started on",
+    seeded && seeded.to_plan === "enterprise" && seeded.from_plan === null && Number(seeded.plan_price_halalas) === 0,
+    JSON.stringify(seeded && { t: seeded.to_plan, f: seeded.from_plan, p: seeded.plan_price_halalas }));
+  // Whether the trigger wrote it (fresh DB) or the backfill did (the live one), no subscription may
+  // sit on the timeline without an origin — that is what makes growth countable from day one.
+  const orphans = await one(`select count(*)::int n from app.org_subscription s
+     where not exists (select 1 from app.subscription_event e where e.org_id = s.org_id and e.kind='created')`);
+  ok("every subscription has an origin event", orphans.n === 0, "orphans: " + orphans.n);
+
+  let evUpd = "", evDel = "";
+  try { await q("update app.subscription_event set kind='created' where org_id=$1", [org2]); } catch (e) { evUpd = e.message; }
+  try { await q("delete from app.subscription_event where org_id=$1", [org2]); } catch (e) { evDel = e.message; }
+  ok("subscription_event is append-only", /APPEND_ONLY/.test(evUpd) && /APPEND_ONLY/.test(evDel), evUpd + " | " + evDel);
+
+  // Changing a customer's plan is the most sensitive action on the platform; it must leave a trail.
+  const opAudit = await one(
+    "select action, org_id, identity_id, membership_id, detail from app.audit_log where action='platform.subscription_update' and org_id=$1 order by id desc limit 1",
+    [org2]);
+  ok("operator_set_subscription writes an audit row carrying the before state",
+    opAudit && opAudit.identity_id === idOwner && opAudit.detail.before.plan === "enterprise"
+      && opAudit.detail.requested.plan === "pro",
+    JSON.stringify(opAudit && opAudit.detail));
+  ok("the platform audit row has no membership — a platform action, not an office action",
+    opAudit && opAudit.membership_id === null);
+
+  let setMissing = "";
+  try { await callAs(idOwner, org1, "select app.operator_set_subscription($1,'pro')", ["00000000-0000-0000-0000-000000000000"]); }
+  catch (e) { setMissing = e.message; }
+  ok("operator_set_subscription rejects an org with no subscription", /SUBSCRIPTION_NOT_FOUND/.test(setMissing), setMissing);
 
   // ==================== Recurring billing (0040): token, auto-renew, dunning ====================
   // org1 is basic/active with a future period (from the payment tests above), no card yet.

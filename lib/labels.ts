@@ -96,3 +96,29 @@ export const MEMBER_STATUS_TONE: Record<string, string> = {
   suspended: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
   revoked: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
 };
+
+// Subscription vocabulary — read by both the platform list and the office detail view.
+export const SUBSCRIPTION_STATUS_AR: Record<string, string> = {
+  trialing: "تجريبي",
+  active: "نشط",
+  comped: "ممنوح",
+  past_due: "متأخر",
+  canceled: "ملغى",
+};
+
+export const SUBSCRIPTION_STATUS_TONE: Record<string, "neutral" | "info" | "success" | "brand" | "warning" | "danger"> = {
+  trialing: "info",
+  active: "success",
+  comped: "brand",
+  past_due: "warning",
+  canceled: "danger",
+};
+
+// What changed on a subscription, in the words the console shows.
+export const SUBSCRIPTION_EVENT_AR: Record<string, string> = {
+  created: "بداية الاشتراك",
+  plan_changed: "تغيير الخطة",
+  status_changed: "تغيير الحالة",
+  trial_extended: "تمديد التجربة",
+  period_extended: "تمديد الفترة",
+};
