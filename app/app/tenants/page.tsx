@@ -1,28 +1,18 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { TenantForm } from "@/components/tenant-form";
-import { TenantPortalInvite } from "@/components/tenant-portal-invite";
 import { parseListParams, likePattern } from "@/lib/list-params";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
-import { FilterableTable } from "@/components/filterable-list";
 import { FormDrawer } from "@/components/form-drawer";
+import { TenantsGrid } from "@/components/tenants-grid";
+import type { TenantCardData } from "@/components/tenant-card";
 
 export const dynamic = "force-dynamic";
 
-type TenantRow = {
-  id: string;
-  party:
-    | { display_name: string; national_id: string | null; phone_e164: string | null }
-    | { display_name: string; national_id: string | null; phone_e164: string | null }[]
-    | null;
-};
-
-function party(t: TenantRow) {
-  return Array.isArray(t.party) ? t.party[0] : t.party;
-}
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default async function TenantsPage({
   searchParams,
@@ -36,13 +26,46 @@ export default async function TenantsPage({
   const supabase = await createClient();
   let query = supabase
     .from("tenant")
-    .select("id, party:party_id!inner(display_name, national_id, phone_e164)", { count: "exact" })
+    .select("id, tenant_type, party:party_id!inner(display_name, national_id, phone_e164)", { count: "exact" })
     .is("deleted_at", null);
   if (q) query = query.ilike("party.display_name", likePattern(q));
-  const { data, error, count } = await query.order("created_at", { ascending: false }).range(from, to);
+  // Active contracts drive the "N عقد نشط" block and the rented unit list on each card.
+  const [{ data, error, count }, { data: contractData }] = await Promise.all([
+    query.order("created_at", { ascending: false }).range(from, to),
+    supabase
+      .from("contract")
+      .select("tenant_id, unit:unit_id(unit_number, property:property_id(name))")
+      .eq("status", "active")
+      .is("deleted_at", null),
+  ]);
 
-  const tenants = (data ?? []) as TenantRow[];
   const total = count ?? 0;
+  // Count every active contract, but only list units we can actually label.
+  const activeByTenant = new Map<string, { count: number; units: string[] }>();
+  for (const contract of contractData ?? []) {
+    const unit = first((contract as any).unit);
+    const label = [first(unit?.property)?.name, unit?.unit_number ? `وحدة ${unit.unit_number}` : null]
+      .filter(Boolean)
+      .join(" — ");
+    const entry = activeByTenant.get(contract.tenant_id) ?? { count: 0, units: [] };
+    entry.count += 1;
+    if (label) entry.units.push(label);
+    activeByTenant.set(contract.tenant_id, entry);
+  }
+
+  const tenants: TenantCardData[] = (data ?? []).map((t: any) => {
+    const p = first(t.party);
+    const active = activeByTenant.get(t.id);
+    return {
+      id: t.id,
+      display_name: p?.display_name ?? "مستأجر",
+      tenant_type: t.tenant_type ?? "individual",
+      national_id: p?.national_id ?? null,
+      phone_e164: p?.phone_e164 ?? null,
+      active_contracts: active?.count ?? 0,
+      units: active?.units ?? [],
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -68,38 +91,7 @@ export default async function TenantsPage({
         </p>
       ) : (
         <>
-          <FilterableTable
-            placeholder="تصفية سريعة في هذه الصفحة…"
-            headers={
-              <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
-                <th>الاسم</th>
-                <th>رقم الهوية / الإقامة</th>
-                <th>الجوال</th>
-                <th>بوابة المستأجر</th>
-              </tr>
-            }
-            rows={tenants.map((t) => {
-              const p = party(t);
-              return {
-                id: t.id,
-                search: [p?.display_name, p?.national_id, p?.phone_e164].filter(Boolean).join(" "),
-                cells: (
-                  <>
-                    <td className="px-4 py-2 font-medium">
-                      <Link href={`/app/tenants/${t.id}`} className="hover:text-brand hover:underline">
-                        {p?.display_name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 text-slate-600 dark:text-slate-300" dir="ltr">{p?.national_id ?? "—"}</td>
-                    <td className="px-4 py-2 text-slate-600 dark:text-slate-300" dir="ltr">{p?.phone_e164 ?? "—"}</td>
-                    <td className="px-4 py-2">
-                      <TenantPortalInvite tenantId={t.id} />
-                    </td>
-                  </>
-                ),
-              };
-            })}
-          />
+          <TenantsGrid tenants={tenants} />
           <Pagination page={page} total={total} q={q} basePath="/app/tenants" />
         </>
       )}

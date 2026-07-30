@@ -7,8 +7,9 @@ import { first } from "@/lib/rows";
 import { parseListParams, likePattern } from "@/lib/list-params";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
-import { FilterableCards } from "@/components/filterable-list";
 import { FormDrawer } from "@/components/form-drawer";
+import { OwnersGrid } from "@/components/owners-grid";
+import type { OwnerCardData } from "@/components/owner-card";
 
 export const dynamic = "force-dynamic";
 
@@ -26,15 +27,36 @@ export default async function OwnersPage({
   const supabase = await createClient();
   let query = supabase
     .from("owner")
-    .select("id, is_self, iban, party:party_id!inner(display_name, national_id, phone_e164)", {
+    .select("id, is_self, owner_kind, iban, bank_name, party:party_id!inner(display_name, national_id, phone_e164)", {
       count: "exact",
     })
     .is("deleted_at", null);
   if (q) query = query.ilike("party.display_name", likePattern(q));
-  const { data, error, count } = await query.order("is_self", { ascending: false }).range(from, to);
+  const [{ data, error, count }, { data: propertyData }] = await Promise.all([
+    query.order("is_self", { ascending: false }).range(from, to),
+    supabase.from("property").select("owner_id").is("deleted_at", null),
+  ]);
 
-  const owners = data ?? [];
   const total = count ?? 0;
+  const propertiesPerOwner = new Map<string, number>();
+  for (const property of propertyData ?? []) {
+    propertiesPerOwner.set(property.owner_id, (propertiesPerOwner.get(property.owner_id) ?? 0) + 1);
+  }
+
+  const owners: OwnerCardData[] = (data ?? []).map((o: any) => {
+    const p = first(o.party);
+    return {
+      id: o.id,
+      display_name: p?.display_name ?? "مالك",
+      is_self: o.is_self,
+      owner_kind: o.owner_kind ?? "individual",
+      national_id: p?.national_id ?? null,
+      phone_e164: p?.phone_e164 ?? null,
+      iban: o.iban ?? null,
+      bank_name: o.bank_name ?? null,
+      property_count: propertiesPerOwner.get(o.id) ?? 0,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -60,32 +82,7 @@ export default async function OwnersPage({
         </p>
       ) : (
         <>
-          <FilterableCards
-            placeholder="تصفية سريعة في هذه الصفحة…"
-            className="grid gap-3 sm:grid-cols-2"
-            items={owners.map((o: any) => {
-              const p = first(o.party);
-              return {
-                id: o.id,
-                search: [o.is_self ? "المنشأة مالك ذاتي" : p?.display_name, p?.phone_e164, p?.national_id].filter(Boolean).join(" "),
-                node: (
-                  <Link
-                    href={`/app/owners/${o.id}`}
-                    className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand dark:border-slate-800 dark:bg-slate-900"
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold">{o.is_self ? "المنشأة (مالك ذاتي)" : p?.display_name}</p>
-                      {o.is_self && (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">ذاتي</span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-sm text-slate-500" dir="ltr">{p?.phone_e164 ?? p?.national_id ?? ""}</p>
-                    <p className="mt-1 text-xs text-slate-400">كشف الحساب ←</p>
-                  </Link>
-                ),
-              };
-            })}
-          />
+          <OwnersGrid owners={owners} />
           <Pagination page={page} total={total} q={q} basePath="/app/owners" />
         </>
       )}
