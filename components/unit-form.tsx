@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef } from "react";
 import { createUnit, type UnitState } from "@/app/app/properties/actions";
 import { UNIT_STATUS_AR } from "@/lib/labels";
-import { Combobox } from "@/components/ui";
+import { Combobox, useToast } from "@/components/ui";
 import { useFormDrawerClose } from "@/components/form-drawer";
 
 const initial: UnitState = {};
@@ -20,11 +20,13 @@ export function UnitForm({
   const [state, action, pending] = useActionState(createUnit, initial);
   const formRef = useRef<HTMLFormElement>(null);
   const closeDrawer = useFormDrawerClose();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (state.ok) {
       formRef.current?.reset();
       closeDrawer?.();
+      toast({ title: "تمت إضافة الوحدة", tone: "success" });
     }
   }, [state.ok]);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Drawer } from "@/components/ui";
 
@@ -22,11 +22,17 @@ export function FormDrawer({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const sp = useSearchParams();
+  const searchParams = useSearchParams();
+  const consumedAddParam = useRef(false);
 
+  // Open once on arrival. Without the ref this re-fires whenever the route refreshes (a successful
+  // create calls revalidatePath), re-opening the drawer right after the form closed it.
   useEffect(() => {
-    if (sp.get("add") === "1") setOpen(true);
-  }, [sp]);
+    if (!consumedAddParam.current && searchParams.get("add") === "1") {
+      consumedAddParam.current = true;
+      setOpen(true);
+    }
+  }, [searchParams]);
 
   const close = useCallback(() => setOpen(false), []);
 

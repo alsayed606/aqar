@@ -27,7 +27,7 @@ export function Combobox({
   const [selected, setSelected] = useState(defaultValue);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [hi, setHi] = useState(0);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const selectedLabel = options.find((o) => o.value === selected)?.label ?? "";
@@ -57,14 +57,14 @@ export function Combobox({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
-      setHi((h) => Math.min(h + 1, filtered.length - 1));
+      setHighlightedIndex((h) => Math.min(h + 1, filtered.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHi((h) => Math.max(h - 1, 0));
+      setHighlightedIndex((h) => Math.max(h - 1, 0));
     } else if (e.key === "Enter") {
-      if (open && filtered[hi]) {
+      if (open && filtered[highlightedIndex]) {
         e.preventDefault();
-        choose(filtered[hi].value);
+        choose(filtered[highlightedIndex].value);
       }
     } else if (e.key === "Escape") {
       setOpen(false);
@@ -85,7 +85,7 @@ export function Combobox({
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
-          setHi(0);
+          setHighlightedIndex(0);
         }}
         onKeyDown={onKey}
         className="w-full rounded-lg border border-slate-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-slate-700"
@@ -107,10 +107,10 @@ export function Combobox({
                   e.preventDefault();
                   choose(o.value);
                 }}
-                onMouseEnter={() => setHi(i)}
+                onMouseEnter={() => setHighlightedIndex(i)}
                 className={cx(
                   "flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm",
-                  i === hi ? "bg-brand/10 text-brand" : "text-slate-700 dark:text-slate-200",
+                  i === highlightedIndex ? "bg-brand/10 text-brand" : "text-slate-700 dark:text-slate-200",
                 )}
               >
                 <span>{o.label}</span>

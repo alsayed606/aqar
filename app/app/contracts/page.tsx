@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { ContractForm } from "@/components/contract-form";
 import { CONTRACT_STATUS_AR, CONTRACT_STATUS_TONE } from "@/lib/labels";
@@ -14,9 +15,6 @@ import { FormDrawer } from "@/components/form-drawer";
 export const dynamic = "force-dynamic";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function first(x: any) {
-  return Array.isArray(x) ? x[0] : x;
-}
 
 export default async function ContractsPage({
   searchParams,

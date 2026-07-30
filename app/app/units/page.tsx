@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { getCapabilities } from "@/lib/capabilities";
 import { UnitForm } from "@/components/unit-form";
@@ -12,7 +13,6 @@ import { FormDrawer } from "@/components/form-drawer";
 export const dynamic = "force-dynamic";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const firstOf = (x: any) => (Array.isArray(x) ? x[0] : x);
 
 export default async function UnitsPage({
   searchParams,
@@ -72,7 +72,7 @@ export default async function UnitsPage({
         <FilterableCards
           placeholder="تصفية الوحدات… (رقم الوحدة أو العقار)"
           items={units.map((u) => {
-            const prop = firstOf(u.property);
+            const prop = first(u.property);
             return {
               id: u.id,
               search: [u.unit_number, prop?.name, UNIT_STATUS_AR[u.current_status]].filter(Boolean).join(" "),

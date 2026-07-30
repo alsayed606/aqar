@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { getCapabilities } from "@/lib/capabilities";
 import { updateTenant } from "../actions";
@@ -8,7 +9,6 @@ import { updateTenant } from "../actions";
 export const dynamic = "force-dynamic";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const firstOf = (x: any) => (Array.isArray(x) ? x[0] : x);
 const cls = "w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700";
 
 const TYPE_AR: Record<string, string> = { individual: "فرد", sole_establishment: "مؤسسة فردية", company: "شركة" };
@@ -35,7 +35,7 @@ export default async function TenantEditPage({
     .is("deleted_at", null)
     .maybeSingle();
   if (!tenant) notFound();
-  const p = firstOf((tenant as any).party);
+  const p = first((tenant as any).party);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

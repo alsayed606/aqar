@@ -7,7 +7,7 @@ import { PROPERTY_KIND_AR } from "@/lib/labels";
 import { LandlordPicker, type Landlord } from "@/components/landlord-picker";
 import { UpgradeModal } from "@/components/upgrade-modal";
 import { useFormDrawerClose } from "@/components/form-drawer";
-import { Button } from "@/components/ui";
+import { Button, useToast } from "@/components/ui";
 import { cx } from "@/lib/cx";
 
 const initial: PropState = {};
@@ -36,6 +36,7 @@ export function PropertyForm({ owners = [] }: { owners?: Landlord[] }) {
   const [step, setStep] = useState(0);
   const isOwned = holding === "owned";
   const closeDrawer = useFormDrawerClose();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (state.ok) {
@@ -43,6 +44,7 @@ export function PropertyForm({ owners = [] }: { owners?: Landlord[] }) {
       setHolding("owned");
       setStep(0);
       closeDrawer?.();
+      toast({ title: "تمت إضافة العقار", tone: "success" });
     }
   }, [state.ok]);
 

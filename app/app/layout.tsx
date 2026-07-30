@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { daysLeft, type Summary } from "@/lib/subscription";
 import { AppSidebar } from "@/components/app-sidebar";
+import { ToastProvider } from "@/components/ui";
 import { signOut } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -68,13 +69,15 @@ export default async function AppLayout({
   // With an active org: grouped sidebar (desktop) / drawer (mobile) + shifted content.
   if (activeOrg && orgName) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-        <AppSidebar orgName={orgName} unread={unread} />
-        <div className="md:pr-64 print:pr-0">
-          {banner}
-          <main className="mx-auto max-w-4xl px-4 py-6">{children}</main>
+      <ToastProvider>
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+          <AppSidebar orgName={orgName} unread={unread} />
+          <div className="md:pr-64 print:pr-0">
+            {banner}
+            <main className="mx-auto max-w-4xl px-4 py-6">{children}</main>
+          </div>
         </div>
-      </div>
+      </ToastProvider>
     );
   }
 

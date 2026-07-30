@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { createTenant, type TenantState } from "@/app/app/tenants/actions";
 import { useFormDrawerClose } from "@/components/form-drawer";
+import { useToast } from "@/components/ui";
 
 const initial: TenantState = {};
 
@@ -15,12 +16,14 @@ export function TenantForm() {
   const [tenantType, setTenantType] = useState("individual");
   const isEstablishment = tenantType !== "individual";
   const closeDrawer = useFormDrawerClose();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (state.ok) {
       formRef.current?.reset();
       setTenantType("individual");
       closeDrawer?.();
+      toast({ title: "تمت إضافة المستأجر", tone: "success" });
     }
   }, [state.ok]);
 

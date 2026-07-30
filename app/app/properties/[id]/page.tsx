@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { UnitForm } from "@/components/unit-form";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -13,9 +14,8 @@ import { Card, CardBody, Badge, Tabs } from "@/components/ui";
 export const dynamic = "force-dynamic";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const firstOf = (x: any) => (Array.isArray(x) ? x[0] : x);
 const ownerLabel = (o: any) =>
-  o?.is_self ? "المنشأة (مالك ذاتي)" : firstOf(o?.party)?.display_name ?? "مالك";
+  o?.is_self ? "المنشأة (مالك ذاتي)" : first(o?.party)?.display_name ?? "مالك";
 
 const UNIT_TONE: Record<string, "success" | "warning" | "neutral"> = {
   rented: "success",
@@ -168,8 +168,8 @@ export default async function PropertyDetail({
             {contracts.map((c) => (
               <tr key={c.id} className="[&>td]:px-4 [&>td]:py-2">
                 <td className="font-medium" dir="ltr">{c.contract_number}</td>
-                <td>{firstOf(c.unit)?.unit_number ?? "—"}</td>
-                <td>{firstOf(firstOf(c.tenant)?.party)?.display_name ?? "—"}</td>
+                <td>{first(c.unit)?.unit_number ?? "—"}</td>
+                <td>{first(first(c.tenant)?.party)?.display_name ?? "—"}</td>
                 <td>
                   <Badge tone={c.status === "active" ? "success" : "neutral"}>
                     {CONTRACT_STATUS_AR[c.status] ?? c.status}

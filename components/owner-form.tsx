@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef } from "react";
 import { createOwner, type OwnerState } from "@/app/app/owners/actions";
 import { useFormDrawerClose } from "@/components/form-drawer";
+import { useToast } from "@/components/ui";
 
 const initial: OwnerState = {};
 
@@ -10,11 +11,13 @@ export function OwnerForm() {
   const [state, action, pending] = useActionState(createOwner, initial);
   const formRef = useRef<HTMLFormElement>(null);
   const closeDrawer = useFormDrawerClose();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (state.ok) {
       formRef.current?.reset();
       closeDrawer?.();
+      toast({ title: "تمت إضافة المالك", tone: "success" });
     }
   }, [state.ok]);
 

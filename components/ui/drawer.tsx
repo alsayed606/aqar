@@ -37,7 +37,7 @@ export function Drawer({
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
-      prevFocus.current?.focus?.();
+      prevFocus.current?.focus();
     };
   }, [open, onClose]);
 
