@@ -51,6 +51,10 @@ export default async function ImportPage() {
             </a>
           ))}
         </div>
+        <p className="mt-4 text-xs text-neutral-500">
+          التواريخ بصيغة <span dir="ltr">YYYY-MM-DD</span> (السنة ثم الشهر ثم اليوم) أو{" "}
+          <span dir="ltr">DD/MM/YYYY</span> — مثال: <span dir="ltr">2026-06-16</span> ليوم ١٦ يونيو ٢٠٢٦.
+        </p>
       </section>
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">

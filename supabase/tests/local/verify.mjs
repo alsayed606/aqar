@@ -225,6 +225,31 @@ try {
   const afterRevert = (await one("select count(*)::int c from app.property where org_id=$1 and name='عقار الاستيراد' and deleted_at is null", [org1])).c;
   ok('IMPORT revert soft-deletes the whole batch', afterRevert === 0);
 
+  // A cell the parser cannot read must fail its own row, never the batch (migration 0046).
+  const badParse = await one(`select app.normalize_date('2026-16-06') d_ydm,
+                                    app.normalize_date('2026-02-30') d_feb30,
+                                    app.normalize_date('2026-06-16') = date '2026-06-16' d_ok,
+                                    app.normalize_date('16/06/2026') = date '2026-06-16' d_dmy,
+                                    app.normalize_amount_halalas('1.2.3') a_bad,
+                                    app.normalize_amount_halalas('1,200.50 ر.س') a_riyal,
+                                    app.normalize_amount_halalas('١٬٢٠٠٫٥٠') a_arabic`);
+  ok('IMPORT out-of-range date returns null instead of raising',
+     badParse.d_ydm === null && badParse.d_feb30 === null, JSON.stringify(badParse));
+  ok('IMPORT valid dates still parse in both accepted formats',
+     badParse.d_ok === true && badParse.d_dmy === true, JSON.stringify(badParse));
+  ok('IMPORT amount keeps its decimals through a currency suffix',
+     Number(badParse.a_riyal) === 120050 && Number(badParse.a_arabic) === 120050, JSON.stringify(badParse));
+  ok('IMPORT ambiguous amount returns null instead of raising or guessing', badParse.a_bad === null);
+
+  const dateBatch = (await one("insert into app.import_batch(org_id,kind,source_filename) values($1,'contracts','ydm.xlsx') returning id", [org1])).id;
+  await q(`insert into app.import_row(batch_id,org_id,row_number,raw) values
+     ($1,$2,2, jsonb_build_object('رقم العقد','X-1','تاريخ البداية','2026-16-06','تاريخ النهاية','2027-15-06'))`,
+     [dateBatch, org1]);
+  await q('select app.import_validate($1)', [dateBatch]);
+  const dateErrs = JSON.stringify((await one("select errors from app.import_row where batch_id=$1", [dateBatch])).errors);
+  ok('IMPORT year-day-month row is reported per field, batch survives',
+     dateErrs.includes('تاريخ البداية') && dateErrs.includes('تاريخ النهاية'), dateErrs);
+
   // ================= audit append-only =================
   await q("insert into app.audit_log(org_id,identity_id,action) values($1,$2,'test.event')", [org1, idA]);
   await expectThrow('AUDIT update blocked', () => q("update app.audit_log set action='x' where org_id=$1", [org1]), 'AUDIT_APPEND_ONLY');
