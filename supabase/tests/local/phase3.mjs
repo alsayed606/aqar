@@ -645,6 +645,88 @@ try {
     Number.isInteger(centre.active_without_card) && Number(centre.active_without_card) >= 1,
     JSON.stringify(centre.active_without_card));
 
+  // ==================== Health, alerts, audit centre (0052) ====================
+  for (const fn of ["app.platform_health()", "app.platform_alerts()", "app.platform_list_audit()", "app.platform_audit_actions()"]) {
+    const denied = await asRole(idViewer, org1, () => client.query(`select * from ${fn}`));
+    ok(`${fn.split("(")[0]} FORBIDDEN for a non-operator`, denied.ok === false && /FORBIDDEN/i.test(denied.error || ""), denied.error);
+  }
+  // Service-role-only functions have NO internal gate — the grant is the whole defence. 0001 sets
+  // `alter default privileges ... grant execute on functions to anon, authenticated`, so revoking
+  // from PUBLIC alone leaves them wide open to any signed-in user. These assert the revoke covered
+  // the roles that actually matter.
+  const forge = await asRole(idOwner, org1, () => client.query("select app.record_cron_run('drain-notifications',true)"));
+  ok("record_cron_run is not callable by a signed-in user, operator or not",
+    forge.ok === false && /permission denied/i.test(forge.error || ""), forge.error);
+  const forgePay = await asRole(idOwner, org1, () =>
+    client.query("select app.apply_subscription_payment($1,'forged','{}'::jsonb)", ["00000000-0000-0000-0000-000000000000"]));
+  ok("a signed-in user cannot mark their own subscription paid (webhook-only surface)",
+    forgePay.ok === false && /permission denied/i.test(forgePay.error || ""), forgePay.error);
+  const forgeFail = await asRole(idOwner, org1, () =>
+    client.query("select app.mark_subscription_payment_failed($1,'{}'::jsonb)", ["00000000-0000-0000-0000-000000000000"]));
+  ok("a signed-in user cannot mark a subscription payment failed either",
+    forgeFail.ok === false && /permission denied/i.test(forgeFail.error || ""), forgeFail.error);
+
+  // The rest of the ungated surface, locked by 0053. Each of these has NO internal check — the
+  // grant is the entire defence, so the test is the only thing that keeps it honest.
+  for (const [what, sql, params] of [
+    ["lease the email outbox", "select * from app.claim_email_deliveries(5)", []],
+    ["declare an email sent", "select app.mark_email_delivery_sent($1,'x',null)", ["00000000-0000-0000-0000-000000000000"]],
+    ["lease due renewals", "select * from app.claim_due_renewals(5)", []],
+    ["push an office into dunning", "select app.record_dunning_failure($1,'{}'::jsonb)", [org2]],
+    ["attach a card token to any office", "select app.save_payment_method($1,'tok','visa','1111',1,2030)", [org2]],
+    ["read another office's usage", "select app.usage_count($1,'units')", [org2]],
+  ]) {
+    const attempt = await asRole(idOwner, org1, () => client.query(sql, params));
+    ok(`a signed-in user cannot ${what}`, attempt.ok === false && /permission denied/i.test(attempt.error || ""), attempt.error);
+  }
+
+  await q("select app.record_cron_run('drain-notifications', true, now() - interval '2 seconds', '{\"sent\":3}'::jsonb)");
+  await q("select app.record_cron_run('renew-subscriptions', false, now() - interval '1 second', '{}'::jsonb, 'gateway timeout')");
+  const sys = (await callAs(idOwner, org1, "select app.platform_health() v"))[0].v;
+  const drain = sys.cron.find((c) => c.job === "drain-notifications");
+  const renew = sys.cron.find((c) => c.job === "renew-subscriptions");
+  ok("health reports the LAST run of each cron job, with its outcome",
+    sys.cron.length === 2 && drain.ok === true && renew.ok === false && renew.error === "gateway timeout",
+    JSON.stringify(sys.cron));
+  ok("a run records how long it took", Number(drain.duration_ms) >= 1000, String(drain.duration_ms));
+  ok("health reports the queues we can observe from in here",
+    "pending" in sys.email_queue && "awaiting_webhook" in sys.payments && "unread" in sys.notifications,
+    JSON.stringify(Object.keys(sys)));
+
+  const alerts = await callAs(idOwner, org1, "select * from app.platform_alerts()");
+  const byKind = Object.fromEntries(alerts.map((a) => [a.kind, a]));
+  ok("a failed cron is the most severe alert — it hides every other one",
+    byKind.cron_failed && byKind.cron_failed.severity === 1 && byKind.cron_failed.detail.includes("renew-subscriptions"),
+    JSON.stringify(byKind.cron_failed));
+  ok("alerts come back ordered by severity and never with a zero count",
+    alerts.every((a) => a.count > 0) && alerts.every((a, i) => i === 0 || alerts[i - 1].severity <= a.severity),
+    JSON.stringify(alerts.map((a) => [a.kind, a.severity, a.count])));
+  ok("a suspended office shows up as past-due or stopped work, not as an alert of its own",
+    !("suspended" in byKind), JSON.stringify(Object.keys(byKind)));
+
+  const audit = await callAs(idOwner, org1, "select * from app.platform_list_audit(null,null,null,false,100,0)");
+  const platformRow = audit.find((r) => r.action === "platform.subscription_update");
+  const officeRow = audit.find((r) => !r.is_platform_action);
+  ok("the audit centre spans every office and names the actor",
+    audit.length >= 2 && Number(audit[0].total_count) === audit.length, JSON.stringify({ n: audit.length }));
+  ok("a platform action shows its full detail — that is our own record",
+    platformRow && platformRow.is_platform_action === true && platformRow.detail !== null,
+    JSON.stringify(platformRow && platformRow.action));
+  // The isolation line: the console sees THAT an office acted, never what was inside the action.
+  ok("an office action shows its metadata but never its payload",
+    officeRow && officeRow.action && officeRow.detail === null,
+    JSON.stringify(officeRow && { a: officeRow.action, d: officeRow.detail }));
+  const platformOnly = await callAs(idOwner, org1, "select * from app.platform_list_audit(null,null,null,true,100,0)");
+  ok("the audit centre can narrow to platform actions alone",
+    platformOnly.length >= 1 && platformOnly.every((r) => r.action.startsWith("platform.")),
+    JSON.stringify(platformOnly.map((r) => r.action)));
+  const orgScoped = await callAs(idOwner, org1, "select * from app.platform_list_audit($1,null,null,false,100,0)", [org2]);
+  ok("the audit centre filters to one office", orgScoped.every((r) => r.org_id === org2) && orgScoped.length >= 1);
+  const actions = await callAs(idOwner, org1, "select * from app.platform_audit_actions()");
+  ok("the action filter is built from what the log actually contains",
+    actions.length >= 2 && actions.some((a) => a.action.startsWith("platform.")),
+    JSON.stringify(actions.slice(0, 4).map((a) => a.action)));
+
   // ==================== Recurring billing (0040): token, auto-renew, dunning ====================
   // org1 is basic/active with a future period (from the payment tests above), no card yet.
   let noCard = "";

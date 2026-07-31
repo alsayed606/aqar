@@ -53,6 +53,34 @@ export type Tenant360 = {
   generated_at: string;
 };
 
+// platform_alerts() returns a stable `kind` and leaves the wording and the destination to the UI,
+// so SQL never carries a route. Anything the function can emit must have an entry here.
+export type AlertRow = { kind: string; severity: number; count: number; detail: unknown };
+
+export const ALERT_META: Record<string, { title: string; hint: string; href: string }> = {
+  cron_failed: {
+    title: "فشل مهمة مجدولة",
+    hint: "المهمة الفاشلة تُخفي بقية التنبيهات: الطوابير التي تُصرّفها تتوقف",
+    href: "/platform/health",
+  },
+  email_failed: { title: "رسائل بريد فشلت نهائياً", hint: "استُنفدت محاولاتها", href: "/platform/health" },
+  email_overdue: { title: "بريد متأخر في الطابور", hint: "حان موعد إعادة إرساله ولم يُرسَل", href: "/platform/health" },
+  payment_failed: { title: "مدفوعات فاشلة (٧ أيام)", hint: "راجع أسباب الفشل", href: "/platform/billing?status=failed" },
+  payment_awaiting_webhook: {
+    title: "عمليات بانتظار إشعار البوابة",
+    hint: "بدأت ولم يصل إشعارها — قد يكون الـwebhook متوقفاً",
+    href: "/platform/billing?status=initiated",
+  },
+  subscription_past_due: { title: "اشتراكات متأخرة", hint: "إيراد معرّض للخطر", href: "/platform/tenants?status=past_due" },
+  trial_lapsed: { title: "تجارب منقضية بلا قرار", hint: "انتهى تاريخها ولم يُبتّ فيها", href: "/platform/subscriptions" },
+  renewal_without_card: {
+    title: "تجديد قريب بلا بطاقة محفوظة",
+    hint: "لن يُجدَّد تلقائياً وسينقضي بصمت",
+    href: "/platform/subscriptions",
+  },
+  limit_reached: { title: "مكاتب بلغت سقف خطتها", hint: "فرصة ترقية، لا عُطل", href: "/platform/tenants" },
+};
+
 export type SubscriptionEventRow = {
   id: number;
   kind: string;

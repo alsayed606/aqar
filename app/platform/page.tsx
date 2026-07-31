@@ -4,6 +4,7 @@ import { halalasToSar } from "@/lib/money";
 import { fmtDate } from "@/lib/subscription";
 import { StatCard } from "@/components/platform/stat-card";
 import { BarChart } from "@/components/platform/bar-chart";
+import { ALERT_META, type AlertRow } from "@/lib/platform";
 
 export const dynamic = "force-dynamic";
 
@@ -30,12 +31,14 @@ const monthLabel = (iso: string) => {
 
 export default async function PlatformDashboard() {
   const supabase = await createClient();
-  const [{ data: kpiData, error }, { data: seriesData }, { data: planData }, { data: topData }] = await Promise.all([
-    supabase.rpc("platform_kpis"),
-    supabase.rpc("platform_revenue_series", { p_months: 12 }),
-    supabase.rpc("platform_plan_distribution"),
-    supabase.rpc("platform_top_customers", { p_limit: 5 }),
-  ]);
+  const [{ data: kpiData, error }, { data: seriesData }, { data: planData }, { data: topData }, { data: alertData }] =
+    await Promise.all([
+      supabase.rpc("platform_kpis"),
+      supabase.rpc("platform_revenue_series", { p_months: 12 }),
+      supabase.rpc("platform_plan_distribution"),
+      supabase.rpc("platform_top_customers", { p_limit: 5 }),
+      supabase.rpc("platform_alerts"),
+    ]);
 
   if (error) {
     const pending = error.message?.includes("platform_kpis");
@@ -51,6 +54,10 @@ export default async function PlatformDashboard() {
   const plans = (planData ?? []) as PlanRow[];
   const top = (topData ?? []) as TopRow[];
 
+  // Alerts ride at the top of the dashboard rather than waiting on their own page: an executive
+  // opens this screen, and a failed cron or a stalled webhook should not need a second click.
+  const alerts = (alertData ?? []) as AlertRow[];
+  const urgent = alerts.filter((a) => a.severity === 1);
   const revenueDelta = k.revenue_month_halalas - k.revenue_prev_halalas;
   const totals = [
     { label: "عقارات", value: k.properties },
@@ -70,6 +77,26 @@ export default async function PlatformDashboard() {
             : "لم تُسجَّل تغيّرات اشتراك بعد؛ مؤشرات الاتجاه تبدأ من أول تغيير."}
         </p>
       </div>
+
+      {alerts.length > 0 && (
+        <Link
+          href="/platform/alerts"
+          className={
+            "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border px-4 py-3 text-sm transition-colors " +
+            (urgent.length > 0
+              ? "border-red-300 bg-red-50 text-red-800 hover:bg-red-100 dark:border-red-900/60 dark:bg-red-900/20 dark:text-red-200"
+              : "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-900/20 dark:text-amber-200")
+          }
+        >
+          <span className="font-medium">
+            {urgent.length > 0 ? `${urgent.length} تنبيه يستدعي تصرّفاً الآن` : `${alerts.length} تنبيه للمراجعة`}
+          </span>
+          <span className="text-xs opacity-80">
+            {alerts.slice(0, 3).map((a) => ALERT_META[a.kind]?.title ?? a.kind).join(" · ")}
+          </span>
+          <span className="ms-auto text-xs underline">عرض الكل ←</span>
+        </Link>
+      )}
 
       {/* Recurring revenue. MRR counts active subscriptions only — a trial pays nothing and a comp
           is a grant, so both are shown as counts elsewhere, never folded into revenue. */}

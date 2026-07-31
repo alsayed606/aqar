@@ -5,6 +5,8 @@ import { renderNotificationEmail } from "@/lib/email/templates";
 
 export const dynamic = "force-dynamic";
 
+const JOB = "drain-notifications";
+
 // Vercel Cron drainer for the notification email outbox (0038). Idempotent + concurrency-safe:
 // claim_email_deliveries atomically leases rows (SKIP LOCKED) so overlapping runs never double-send;
 // each row is then sent once and marked sent/failed. service_role is used ONLY here.
@@ -18,6 +20,7 @@ export async function GET(request: Request) {
   }
 
   const origin = new URL(request.url).origin;
+  const startedAt = new Date().toISOString();
 
   let admin;
   try {
@@ -29,9 +32,17 @@ export async function GET(request: Request) {
     );
   }
 
+  // Record every outcome, success or failure. A cron that silently stops firing looks exactly like a
+  // cron with nothing to do, so the health page can only tell them apart if each run leaves a mark.
+  const record = (ok: boolean, detail: Record<string, unknown>, error?: string) =>
+    admin.rpc("record_cron_run", {
+      p_job: JOB, p_ok: ok, p_started_at: startedAt, p_detail: detail, p_error: error ?? null,
+    });
+
   // 1. Claim a batch of eligible email deliveries (attempts incremented, next_attempt_at leased).
   const { data: claimed, error: claimErr } = await admin.rpc("claim_email_deliveries", { p_max: 50 });
   if (claimErr) {
+    await record(false, {}, claimErr.message);
     return NextResponse.json({ error: claimErr.message }, { status: 500 });
   }
   const rows = (claimed ?? []) as Array<{
@@ -41,6 +52,7 @@ export async function GET(request: Request) {
     target: string;
   }>;
   if (rows.length === 0) {
+    await record(true, { claimed: 0, sent: 0, failed: 0 });
     return NextResponse.json({ claimed: 0, sent: 0, failed: 0 });
   }
 
@@ -89,5 +101,7 @@ export async function GET(request: Request) {
     }
   }
 
+  // The run itself succeeded even when individual messages did not — those are counted, not raised.
+  await record(true, { claimed: rows.length, sent, failed });
   return NextResponse.json({ claimed: rows.length, sent, failed });
 }
