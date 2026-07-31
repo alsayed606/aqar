@@ -7,7 +7,7 @@ import { SUBSCRIPTION_STATUS_AR } from "@/lib/labels";
 import { Button, Drawer } from "@/components/ui";
 
 const PLANS = ["basic", "pro", "enterprise"];
-const STATUSES = ["trialing", "active", "comped", "past_due", "canceled"];
+const STATUSES = ["trialing", "active", "comped", "past_due", "suspended", "canceled"];
 
 type Org = {
   org_id: string;

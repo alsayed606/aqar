@@ -519,6 +519,68 @@ try {
     top.length >= 1 && top.every((r) => Number(r.paid_halalas) > 0),
     JSON.stringify(top.map((r) => [r.org_name, r.paid_halalas])));
 
+  // ==================== Tenant 360 + operator levers (0050) ====================
+  for (const fn of ["app.platform_tenant_360($1)", "app.platform_identity_activity()"]) {
+    const denied = await asRole(idViewer, org1, () => client.query(`select * from ${fn}`, fn.includes("$1") ? [org1] : []));
+    ok(`${fn.split("(")[0]} FORBIDDEN for a non-operator`, denied.ok === false && /FORBIDDEN/i.test(denied.error || ""), denied.error);
+  }
+  const extDenied = await asRole(idViewer, org1, () => client.query("select app.operator_extend_trial($1,7)", [org1]));
+  ok("operator_extend_trial FORBIDDEN for a non-operator", extDenied.ok === false && /FORBIDDEN/i.test(extDenied.error || ""));
+
+  // A dedicated office so suspending it cannot disturb the fixtures the rest of the file relies on.
+  const orgSusp = (await one("insert into app.organization(name) values('Suspend Me') returning id")).id;
+  await q("insert into app.org_subscription(org_id,plan_code,status) values($1,'pro','active')", [orgSusp]);
+  const idSusp = await mkId("+966500000031");
+  await mkMember(idSusp, orgSusp, "owner");
+  const ownerSusp = (await one("insert into app.party(org_id,display_name,roles) values($1,'مالك',array['owner']::app.party_role[]) returning id", [orgSusp])).id;
+  await q("insert into app.owner(org_id,party_id,is_self) values($1,$2,true)", [orgSusp, ownerSusp]);
+  const propSusp = (await one("insert into app.property(org_id,owner_id,name) values($1,(select id from app.owner where org_id=$1),'عقار قائم') returning id", [orgSusp])).id;
+
+  await callAs(idOwner, org1, "select app.operator_set_subscription($1,null,'suspended'::app.subscription_status,null,null,'عدم سداد')", [orgSusp]);
+  const suspActive = (await one("select app.subscription_active($1) a", [orgSusp])).a;
+  ok("a suspended subscription is not live", suspActive === false);
+  const blocked = await tryWrite(idSusp, orgSusp, "insert into app.property(org_id,owner_id,name) values($1,(select id from app.owner where org_id=$1),'عقار جديد')", [orgSusp]);
+  ok("suspension blocks NEW business, like every other inactive status", blocked.ok === false, blocked.error);
+  const stillEditable = await tryWrite(idSusp, orgSusp, "update app.property set city='الرياض' where id=$1", [propSusp]);
+  ok("suspension leaves existing data readable and editable (Charter ق-هـ)", stillEditable.ok === true, stillEditable.error);
+  // Suspension is not churn: the office was cut off, it did not leave.
+  const suspEvent = await one("select to_status from app.subscription_event where org_id=$1 order by id desc limit 1", [orgSusp]);
+  ok("suspension is recorded as its own status, never as a cancellation", suspEvent.to_status === "suspended", JSON.stringify(suspEvent));
+
+  let badDays = "", notTrialing = "";
+  try { await callAs(idOwner, org1, "select app.operator_extend_trial($1,0)", [orgSusp]); } catch (e) { badDays = e.message; }
+  try { await callAs(idOwner, org1, "select app.operator_extend_trial($1,14)", [orgSusp]); } catch (e) { notTrialing = e.message; }
+  ok("extend_trial refuses a nonsense day count", /INVALID_DAYS/.test(badDays), badDays);
+  ok("extend_trial refuses an office that is not on a trial", /NOT_TRIALING/.test(notTrialing), notTrialing);
+
+  // A trial that lapsed a month ago must not be extended from its old end date.
+  const orgLapsed = (await one("insert into app.organization(name) values('Lapsed Trial') returning id")).id;
+  await q(`insert into app.org_subscription(org_id,plan_code,status,trial_ends_at)
+           values($1,'basic','trialing', now() - interval '30 days')`, [orgLapsed]);
+  const newEnd = (await callAs(idOwner, org1, "select app.operator_extend_trial($1,14) t", [orgLapsed]))[0].t;
+  ok("extend_trial counts from today, not from a trial that already expired",
+    new Date(newEnd).getTime() > Date.now() + 13 * 86400000, String(newEnd));
+  const trialAudit = await one("select action, detail from app.audit_log where org_id=$1 and action='platform.trial_extend'", [orgLapsed]);
+  ok("extending a trial writes an audit row with both dates", trialAudit && Number(trialAudit.detail.days) === 14, JSON.stringify(trialAudit?.detail));
+
+  const t360 = (await callAs(idOwner, org1, "select app.platform_tenant_360($1) v", [org1]))[0].v;
+  ok("tenant 360 returns the office, its subscription, usage and limits in one call",
+    t360.org.id === org1 && t360.subscription.plan_code && t360.usage.properties >= 1 && "properties" in t360.limits,
+    JSON.stringify({ plan: t360.subscription?.plan_code, usage: t360.usage }));
+  ok("tenant 360 reports the portfolio as COUNTS — no tenant row is returned",
+    Number.isInteger(t360.portfolio.contracts) && Number.isInteger(t360.portfolio.owners)
+      && Number.isInteger(t360.portfolio.tenants) && !JSON.stringify(t360.portfolio).includes("display_name"),
+    JSON.stringify(t360.portfolio));
+  ok("tenant 360 shows what the office paid US, and none of the office's own money",
+    "paid_halalas" in t360.revenue && !("collected_halalas" in t360.revenue) && !("outstanding_halalas" in t360.revenue),
+    JSON.stringify(Object.keys(t360.revenue)));
+  const teamOwner = (t360.team ?? []).find((m) => m.identity_id === idOwner);
+  ok("tenant 360 lists the office team — who to call and what they may do",
+    Array.isArray(t360.team) && teamOwner && teamOwner.role === "owner" && "last_sign_in_at" in teamOwner,
+    JSON.stringify((t360.team ?? []).map((m) => m.role)));
+  const t360Missing = (await callAs(idOwner, org1, "select app.platform_tenant_360($1) v", ["00000000-0000-0000-0000-000000000000"]))[0].v;
+  ok("tenant 360 returns null for an office that does not exist, not an error", t360Missing === null);
+
   // ==================== Recurring billing (0040): token, auto-renew, dunning ====================
   // org1 is basic/active with a future period (from the payment tests above), no card yet.
   let noCard = "";

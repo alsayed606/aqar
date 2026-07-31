@@ -25,6 +25,34 @@ export type PlatformOrgRow = {
   total_count: number;
 };
 
+// platform_tenant_360(org). `portfolio` is counts of what the office manages and `revenue` is what
+// the office paid US — the office's own collections are its business and are not in this payload.
+// `team` is the exception the console needs: the identities that sign in to our platform, because
+// support cannot help an office without knowing who to call. Its customers stay counts.
+export type Tenant360 = {
+  org: { id: string; name: string; org_type: string | null; created_at: string };
+  subscription: {
+    plan_code: string | null; plan_name: string | null; price_halalas: number | null;
+    status: string | null; trial_ends_at: string | null; current_period_end: string | null;
+    auto_renew: boolean | null; notes: string | null; active: boolean;
+  } | null;
+  limits: { properties: number | null; units: number | null; members: number | null };
+  usage: { properties: number; units: number; members: number };
+  portfolio: {
+    properties: number; units: number; units_rented: number; units_vacant: number;
+    contracts: number; contracts_active: number; owners: number; tenants: number;
+  };
+  revenue: { paid_halalas: number; payments: number; last_paid_at: string | null; failed_30d: number };
+  payment_method: { brand: string | null; last4: string | null; exp_month: number | null; exp_year: number | null } | null;
+  team: {
+    identity_id: string; full_name: string | null; email: string | null; phone_e164: string | null;
+    role: string; status: string; scope_all: boolean; joined_at: string; last_sign_in_at: string | null;
+  }[];
+  activity: { last_sign_in_at: string | null; active_today: number };
+  import_batches: number;
+  generated_at: string;
+};
+
 export type SubscriptionEventRow = {
   id: number;
   kind: string;

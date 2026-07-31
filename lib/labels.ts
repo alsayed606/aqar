@@ -98,11 +98,14 @@ export const MEMBER_STATUS_TONE: Record<string, string> = {
 };
 
 // Subscription vocabulary — read by both the platform list and the office detail view.
+// `suspended` and `canceled` are different facts: we cut them off vs they left. Keeping them apart
+// is what stops a suspension for non-payment from being counted as churn.
 export const SUBSCRIPTION_STATUS_AR: Record<string, string> = {
   trialing: "تجريبي",
   active: "نشط",
   comped: "ممنوح",
   past_due: "متأخر",
+  suspended: "موقوف",
   canceled: "ملغى",
 };
 
@@ -111,7 +114,8 @@ export const SUBSCRIPTION_STATUS_TONE: Record<string, "neutral" | "info" | "succ
   active: "success",
   comped: "brand",
   past_due: "warning",
-  canceled: "danger",
+  suspended: "danger",
+  canceled: "neutral",
 };
 
 // What changed on a subscription, in the words the console shows.

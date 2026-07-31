@@ -8,12 +8,13 @@ import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
 import { UsageMeter } from "@/components/usage-meter";
 import { SubscriptionDrawer } from "@/components/platform/subscription-drawer";
+import { TenantActions } from "@/components/platform/tenant-actions";
 import type { PlatformOrgRow } from "@/lib/platform";
 
 export const dynamic = "force-dynamic";
 
 // The operator gate lives in the layout (and in every RPC). Pages under /platform do not repeat it.
-const STATUS_FILTERS = ["", "trialing", "active", "comped", "past_due", "canceled"] as const;
+const STATUS_FILTERS = ["", "trialing", "active", "comped", "past_due", "suspended", "canceled"] as const;
 
 export default async function PlatformTenants({
   searchParams,
@@ -141,11 +142,17 @@ export default async function PlatformTenants({
                       )}
                     </td>
                     <td className="px-3 py-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <SubscriptionDrawer org={o} />
                         <Link href={`/platform/tenants/${o.org_id}`} className="text-xs text-slate-500 hover:text-brand hover:underline">
                           التفاصيل ←
                         </Link>
+                        <TenantActions
+                          orgId={o.org_id}
+                          status={o.status}
+                          planCode={o.plan_code}
+                          back="/platform/tenants"
+                        />
                       </div>
                     </td>
                   </tr>
