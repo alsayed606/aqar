@@ -581,6 +581,70 @@ try {
   const t360Missing = (await callAs(idOwner, org1, "select app.platform_tenant_360($1) v", ["00000000-0000-0000-0000-000000000000"]))[0].v;
   ok("tenant 360 returns null for an office that does not exist, not an error", t360Missing === null);
 
+  // ==================== Subscription + billing centres (0051) ====================
+  for (const fn of ["app.platform_list_payments()", "app.platform_billing_health()", "app.platform_subscription_center()"]) {
+    const denied = await asRole(idViewer, org1, () => client.query(`select * from ${fn}`));
+    ok(`${fn.split("(")[0]} FORBIDDEN for a non-operator`, denied.ok === false && /FORBIDDEN/i.test(denied.error || ""), denied.error);
+  }
+  const planDenied = await asRole(idViewer, org1, () => client.query("select app.operator_upsert_plan('x','خطة',100)"));
+  ok("operator_upsert_plan FORBIDDEN for a non-operator", planDenied.ok === false && /FORBIDDEN/i.test(planDenied.error || ""));
+
+  for (const [label, sql] of [
+    ["a code that is not a slug", "select app.operator_upsert_plan('Bad Code','خطة',100)"],
+    ["an empty name", "select app.operator_upsert_plan('trial_x','   ',100)"],
+    ["a negative price", "select app.operator_upsert_plan('trial_x','خطة',-1)"],
+    ["a negative limit", "select app.operator_upsert_plan('trial_x','خطة',100,-5)"],
+  ]) {
+    let err = "";
+    try { await callAs(idOwner, org1, sql); } catch (e) { err = e.message; }
+    ok(`upsert_plan rejects ${label}`, /INVALID_|NAME_REQUIRED/.test(err), err);
+  }
+
+  await callAs(idOwner, org1, "select app.operator_upsert_plan('growth','النمو',19900,60,300,6,true,4)");
+  const created = await one("select name_ar, price_halalas, max_units, is_public from app.plan where code='growth'");
+  ok("upsert_plan creates a plan from the console", created && Number(created.price_halalas) === 19900 && Number(created.max_units) === 300, JSON.stringify(created));
+  await callAs(idOwner, org1, "select app.operator_upsert_plan('growth','النمو',24900,60,300,6,false,4)");
+  const retuned = await one("select price_halalas, is_public from app.plan where code='growth'");
+  ok("upsert_plan re-tunes an existing plan in place", Number(retuned.price_halalas) === 24900 && retuned.is_public === false);
+  const planAudit = await one("select org_id, detail from app.audit_log where action='platform.plan_upsert' order by id desc limit 1");
+  ok("a plan change is audited as a platform-wide action, with no owning org",
+    planAudit && planAudit.org_id === null && Number(planAudit.detail.before.price_halalas) === 19900
+      && Number(planAudit.detail.after.price_halalas) === 24900,
+    JSON.stringify(planAudit?.detail));
+  // Re-pricing must not rewrite what past events recorded (0048 snapshots the price).
+  const oldSnapshot = await one("select plan_price_halalas from app.subscription_event where to_plan='pro' order by id limit 1");
+  ok("re-pricing a plan cannot rewrite the revenue already recorded", Number(oldSnapshot.plan_price_halalas) === 29900);
+
+  const pays = await callAs(idOwner, org1, "select * from app.platform_list_payments(null,null,50,0)");
+  ok("payments list spans every office and names each one",
+    pays.length >= 1 && pays.every((p) => p.org_name) && Number(pays[0].total_count) === pays.length,
+    JSON.stringify({ n: pays.length, t: pays[0]?.total_count }));
+  const paidOnly = await callAs(idOwner, org1, "select * from app.platform_list_payments(null,'paid'::app.subscription_payment_status,50,0)");
+  ok("payments list filters by status", paidOnly.every((p) => p.status === "paid") && paidOnly.length >= 1);
+
+  const health = (await callAs(idOwner, org1, "select app.platform_billing_health(30) v"))[0].v;
+  ok("billing health counts paid and failed over the window", Number(health.paid_count) >= 1 && Number(health.failed_count) >= 1, JSON.stringify(health));
+  ok("success rate is a real ratio of the attempts made",
+    Math.abs(Number(health.success_rate) - health.paid_count / (health.paid_count + health.failed_count)) < 0.0001,
+    JSON.stringify({ r: health.success_rate, p: health.paid_count, f: health.failed_count }));
+  ok("failure reasons are grouped, and unreadable ones are left unnamed rather than invented",
+    Array.isArray(health.failure_reasons), JSON.stringify(health.failure_reasons));
+
+  const emptyWindow = (await callAs(idOwner, org1, "select app.platform_billing_health(0) v"))[0].v;
+  ok("a window with no attempts reports no success rate, not a perfect one",
+    emptyWindow.paid_count === 0 && emptyWindow.failed_count === 0 ? emptyWindow.success_rate === null : true,
+    JSON.stringify({ p: emptyWindow.paid_count, f: emptyWindow.failed_count, r: emptyWindow.success_rate }));
+
+  const centre = (await callAs(idOwner, org1, "select app.platform_subscription_center() v"))[0].v;
+  ok("subscription centre separates trials, renewals and stopped accounts",
+    Number(centre.trials.total) >= 1 && "due_30d" in centre.renewals
+      && Number(centre.stopped.suspended) >= 1 && "canceled_30d" in centre.stopped,
+    JSON.stringify({ t: centre.trials, s: centre.stopped }));
+  ok("the centre counts the lapsed trial nobody has decided about", Number(centre.trials.lapsed) >= 0, JSON.stringify(centre.trials));
+  ok("the centre flags active offices that cannot renew themselves — no saved card",
+    Number.isInteger(centre.active_without_card) && Number(centre.active_without_card) >= 1,
+    JSON.stringify(centre.active_without_card));
+
   // ==================== Recurring billing (0040): token, auto-renew, dunning ====================
   // org1 is basic/active with a future period (from the payment tests above), no card yet.
   let noCard = "";

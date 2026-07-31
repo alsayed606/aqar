@@ -43,8 +43,8 @@ const GROUPS: Group[] = [
   {
     title: "الإيراد",
     items: [
-      { href: "#", label: "مركز الاشتراكات", icon: I.card, soon: true },
-      { href: "#", label: "مركز الفوترة", icon: I.receipt, soon: true },
+      { href: "/platform/subscriptions", label: "مركز الاشتراكات", icon: I.card },
+      { href: "/platform/billing", label: "مركز الفوترة", icon: I.receipt },
     ],
   },
   {

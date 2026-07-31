@@ -107,3 +107,42 @@ export async function reactivateTenant(formData: FormData) {
   await runLever(formData, (org, supabase) =>
     supabase.rpc("operator_set_subscription", { p_org: org, p_status: "active" }));
 }
+
+// Plan catalog. An empty limit field means UNLIMITED, not "unchanged" — the form always posts the
+// whole row, so a blank box is a deliberate ceiling removal rather than an omission.
+export async function upsertPlan(formData: FormData) {
+  const text = (k: string) => String(formData.get(k) ?? "").trim();
+  const limit = (k: string) => {
+    const v = text(k);
+    return v === "" ? null : Number(v);
+  };
+  const back = "/platform/subscriptions";
+  const withParam = (p: string) => `${back}?${p}`;
+
+  const sar = Number(text("price_sar"));
+  if (!Number.isFinite(sar) || sar < 0) redirect(withParam(`error=${encodeURIComponent("سعر غير صالح")}`));
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("operator_upsert_plan", {
+    p_code: text("code"),
+    p_name_ar: text("name_ar"),
+    p_price_halalas: Math.round(sar * 100),
+    p_max_properties: limit("max_properties"),
+    p_max_units: limit("max_units"),
+    p_max_members: limit("max_members"),
+    p_is_public: formData.get("is_public") === "on",
+    p_sort: Number(text("sort") || 0),
+  });
+  if (error) {
+    const messages: Record<string, string> = {
+      INVALID_PLAN_CODE: "رمز الخطة يجب أن يكون حروفاً إنجليزية صغيرة",
+      NAME_REQUIRED: "اسم الخطة مطلوب",
+      INVALID_PRICE: "سعر غير صالح",
+      INVALID_LIMIT: "حد غير صالح",
+      FORBIDDEN: "غير مصرّح",
+    };
+    const key = Object.keys(messages).find((k) => error.message.includes(k));
+    redirect(withParam(`error=${encodeURIComponent(key ? messages[key] : error.message)}`));
+  }
+  redirect(withParam("ok=1"));
+}
