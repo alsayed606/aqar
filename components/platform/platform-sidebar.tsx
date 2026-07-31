@@ -59,9 +59,9 @@ const GROUPS: Group[] = [
   {
     title: "الضبط",
     items: [
-      { href: "#", label: "البثّ", icon: I.send, soon: true },
-      { href: "#", label: "الميزات", icon: I.flag, soon: true },
-      { href: "#", label: "إعدادات المنصة", icon: I.gear, soon: true },
+      { href: "/platform/broadcast", label: "البثّ", icon: I.send },
+      { href: "/platform/features", label: "الميزات", icon: I.flag },
+      { href: "/platform/settings", label: "إعدادات المنصة", icon: I.gear },
     ],
   },
 ];

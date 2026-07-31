@@ -727,6 +727,107 @@ try {
     actions.length >= 2 && actions.some((a) => a.action.startsWith("platform.")),
     JSON.stringify(actions.slice(0, 4).map((a) => a.action)));
 
+  // ==================== Settings, flags, broadcast (0054) ====================
+  for (const fn of ["app.platform_settings()", "app.platform_list_flags()", "app.platform_list_broadcasts(5)"]) {
+    const denied = await asRole(idViewer, org1, () => client.query(`select * from ${fn}`));
+    ok(`${fn.split("(")[0]} FORBIDDEN for a non-operator`, denied.ok === false && /FORBIDDEN/i.test(denied.error || ""), denied.error);
+  }
+  const settingDenied = await asRole(idViewer, org1, () => client.query("select app.operator_set_setting('trial_days','7'::jsonb)"));
+  ok("operator_set_setting FORBIDDEN for a non-operator", settingDenied.ok === false && /FORBIDDEN/i.test(settingDenied.error || ""));
+  const castDenied = await asRole(idViewer, org1, () => client.query("select app.platform_broadcast('x',null,'{}'::jsonb,'in_app',true)"));
+  ok("platform_broadcast FORBIDDEN for a non-operator", castDenied.ok === false && /FORBIDDEN/i.test(castDenied.error || ""));
+  // app.setting() is an internal helper with no gate of its own — it must not be reachable at all.
+  const settingHelper = await asRole(idOwner, org1, () => client.query("select app.setting('trial_days')"));
+  ok("the internal setting() helper is not callable by a signed-in user",
+    settingHelper.ok === false && /permission denied/i.test(settingHelper.error || ""), settingHelper.error);
+
+  for (const [label, sql] of [
+    ["an unknown key", "select app.operator_set_setting('nope','1'::jsonb)"],
+    ["a trial length that is not a number", "select app.operator_set_setting('trial_days','\"many\"'::jsonb)"],
+    ["a trial length beyond a year", "select app.operator_set_setting('trial_days','400'::jsonb)"],
+    ["a starting plan that does not exist", "select app.operator_set_setting('default_plan','\"ghost\"'::jsonb)"],
+  ]) {
+    let err = "";
+    try { await callAs(idOwner, org1, sql); } catch (e) { err = e.message; }
+    ok(`set_setting rejects ${label}`, /UNKNOWN_SETTING|INVALID_SETTING|PLAN_NOT_FOUND/.test(err), err);
+  }
+
+  // The trial length stopped being a literal in create_organization: changing it here changes what
+  // the next office gets, with no migration.
+  await callAs(idOwner, org1, "select app.operator_set_setting('trial_days','45'::jsonb)");
+  await callAs(idOwner, org1, "select app.operator_set_setting('default_plan','\"pro\"'::jsonb)");
+  const idSettings = await mkId("+966500000041");
+  const freshOrg = (await callAs(idSettings, null, "select app.create_organization('مكتب الإعدادات') id"))[0].id;
+  const freshSub = await one("select plan_code, status, trial_ends_at from app.org_subscription where org_id=$1", [freshOrg]);
+  const daysGranted = Math.round((new Date(freshSub.trial_ends_at) - Date.now()) / 86400000);
+  ok("a new office starts on the configured plan for the configured number of days",
+    freshSub.plan_code === "pro" && daysGranted >= 44 && daysGranted <= 45,
+    JSON.stringify({ plan: freshSub.plan_code, days: daysGranted }));
+  const settingAudit = await one("select org_id, detail from app.audit_log where action='platform.setting_update' order by id desc limit 1");
+  ok("a settings change is audited platform-wide with both values",
+    settingAudit && settingAudit.org_id === null && settingAudit.detail.key === "default_plan",
+    JSON.stringify(settingAudit?.detail));
+
+  let flagErr = "";
+  try { await callAs(idOwner, org1, "select app.operator_set_flag('Bad Key','علم')"); } catch (e) { flagErr = e.message; }
+  ok("set_flag rejects a key that is not a slug", /INVALID_FLAG_KEY/.test(flagErr), flagErr);
+  try { await callAs(idOwner, org1, "select app.operator_set_flag('rollout_x','علم',null,false,150)"); } catch (e) { flagErr = e.message; }
+  ok("set_flag rejects a rollout outside 0..100", /INVALID_ROLLOUT/.test(flagErr), flagErr);
+
+  ok("an unknown feature is OFF — never on by accident",
+    (await callAs(idOwner, org1, "select app.feature_enabled($1,'never_defined') b", [org1]))[0].b === false);
+
+  await callAs(idOwner, org1, "select app.operator_set_flag('maintenance_module','وحدة الصيانة',null,true,0,null,true)");
+  ok("a globally enabled flag is on for an office",
+    (await callAs(idOwner, org1, "select app.feature_enabled($1,'maintenance_module') b", [org1]))[0].b === true);
+  // A per-org row is an explicit decision for THIS office and outranks the global default.
+  await q("insert into app.feature_flag(org_id,key,is_enabled) values($1,'maintenance_module',false)", [org1]);
+  ok("a per-office override beats the global default, in both directions",
+    (await callAs(idOwner, org1, "select app.feature_enabled($1,'maintenance_module') b", [org1]))[0].b === false
+      && (await callAs(idOwner, org1, "select app.feature_enabled($1,'maintenance_module') b", [org2]))[0].b === true);
+
+  await callAs(idOwner, org1, "select app.operator_set_flag('pro_reports','تقارير متقدمة',null,true,0,'pro',false)");
+  ok("a plan gate keeps a feature off below the required tier, and on at or above it",
+    (await callAs(idOwner, org1, "select app.feature_enabled($1,'pro_reports') b", [org2]))[0].b === true,
+    "org2 is on pro");
+
+  // The same office must get the same answer every time, or a rollout would flicker per request.
+  await callAs(idOwner, org1, "select app.operator_set_flag('slow_rollout','إطلاق تدريجي',null,false,50)");
+  const r1 = (await callAs(idOwner, org1, "select app.feature_enabled($1,'slow_rollout') b", [org1]))[0].b;
+  const r2 = (await callAs(idOwner, org1, "select app.feature_enabled($1,'slow_rollout') b", [org1]))[0].b;
+  ok("a percentage rollout is stable for the same office", r1 === r2, JSON.stringify({ r1, r2 }));
+  const zero = (await callAs(idOwner, org1, "select app.feature_enabled($1,'slow_rollout') b", [freshOrg]))[0].b;
+  await callAs(idOwner, org1, "select app.operator_set_flag('slow_rollout','إطلاق تدريجي',null,false,0)");
+  ok("a rollout of zero reaches nobody",
+    (await callAs(idOwner, org1, "select app.feature_enabled($1,'slow_rollout') b", [freshOrg]))[0].b === false,
+    JSON.stringify({ before: zero }));
+
+  // A broadcast is the least reversible action here, so the dry run must count without writing.
+  const notesBefore = (await one("select count(*)::int n from app.notification where kind='platform_broadcast'")).n;
+  const dry = (await callAs(idOwner, org1, "select app.platform_broadcast('صيانة مجدولة','الليلة','{}'::jsonb,'in_app',true) v"))[0].v;
+  const notesAfterDry = (await one("select count(*)::int n from app.notification where kind='platform_broadcast'")).n;
+  ok("a dry run counts the audience and writes nothing",
+    dry.dry_run === true && dry.orgs >= 2 && notesAfterDry === notesBefore, JSON.stringify(dry));
+
+  const sent = (await callAs(idOwner, org1, "select app.platform_broadcast('صيانة مجدولة','الليلة','{}'::jsonb,'in_app',false) v"))[0].v;
+  const notesAfter = (await one("select count(*)::int n from app.notification where kind='platform_broadcast'")).n;
+  ok("sending reaches exactly the offices the dry run counted",
+    sent.orgs === dry.orgs && notesAfter - notesBefore === sent.orgs, JSON.stringify({ dry: dry.orgs, sent: sent.orgs }));
+
+  const targeted = (await callAs(idOwner, org1, "select app.platform_broadcast('للمتأخرين',null,$1::jsonb,'in_app',true) v", [JSON.stringify({ status: "past_due" })]))[0].v;
+  const everyone = (await callAs(idOwner, org1, "select app.platform_broadcast('للجميع',null,'{}'::jsonb,'in_app',true) v"))[0].v;
+  ok("an audience filter narrows the send", targeted.orgs < everyone.orgs, JSON.stringify({ targeted: targeted.orgs, all: everyone.orgs }));
+
+  let castErr = "";
+  try { await callAs(idOwner, org1, "select app.platform_broadcast('  ',null,'{}'::jsonb,'in_app',false)"); } catch (e) { castErr = e.message; }
+  ok("a broadcast with no title is refused", /TITLE_REQUIRED/.test(castErr), castErr);
+
+  const history = await callAs(idOwner, org1, "select * from app.platform_list_broadcasts(10)");
+  ok("every send is kept with what it reached", history.length >= 1 && Number(history[0].orgs_count) === sent.orgs);
+  const castAudit = await one("select org_id, detail from app.audit_log where action='platform.broadcast' order by id desc limit 1");
+  ok("a broadcast is audited with its audience and reach",
+    castAudit && castAudit.org_id === null && Number(castAudit.detail.orgs) === sent.orgs, JSON.stringify(castAudit?.detail));
+
   // ==================== Recurring billing (0040): token, auto-renew, dunning ====================
   // org1 is basic/active with a future period (from the payment tests above), no card yet.
   let noCard = "";

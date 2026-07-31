@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { safeReturnTo } from "@/lib/return-to";
 
@@ -106,6 +107,100 @@ export async function suspendTenant(formData: FormData) {
 export async function reactivateTenant(formData: FormData) {
   await runLever(formData, (org, supabase) =>
     supabase.rpc("operator_set_subscription", { p_org: org, p_status: "active" }));
+}
+
+// ---------------------------------------------------------------------------
+// Broadcast. Two steps on purpose: preview counts the audience and writes nothing, and only then
+// can the send run. Reaching every customer at once is the least reversible action in this console,
+// so the number is shown before it happens rather than after.
+// ---------------------------------------------------------------------------
+
+export type BroadcastResult = { ok: boolean; sent?: boolean; orgs?: number; emails?: number; error?: string };
+
+function readBroadcast(formData: FormData) {
+  const audience: Record<string, string> = {};
+  const status = String(formData.get("status") ?? "").trim();
+  const plan = String(formData.get("plan") ?? "").trim();
+  if (status) audience.status = status;
+  if (plan) audience.plan = plan;
+  return {
+    p_title: String(formData.get("title") ?? "").trim(),
+    p_body: String(formData.get("body") ?? "").trim() || null,
+    p_audience: audience,
+    p_channel: formData.get("channel") === "in_app_email" ? "in_app_email" : "in_app",
+  };
+}
+
+async function callBroadcast(formData: FormData, dryRun: boolean): Promise<BroadcastResult> {
+  const args = readBroadcast(formData);
+  if (!args.p_title) return { ok: false, error: "العنوان مطلوب" };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("platform_broadcast", { ...args, p_dry_run: dryRun });
+  if (error) {
+    return { ok: false, error: /FORBIDDEN/.test(error.message) ? "غير مصرّح" : error.message };
+  }
+  const result = data as { orgs: number; emails: number };
+  return { ok: true, sent: !dryRun, orgs: result.orgs, emails: result.emails };
+}
+
+export async function previewBroadcast(_prev: BroadcastResult, formData: FormData) {
+  return callBroadcast(formData, true);
+}
+
+export async function sendBroadcast(_prev: BroadcastResult, formData: FormData) {
+  const result = await callBroadcast(formData, false);
+  if (result.ok) revalidatePath("/platform/broadcast");
+  return result;
+}
+
+// Feature flags and platform settings.
+export async function saveFlag(formData: FormData) {
+  const text = (k: string) => String(formData.get(k) ?? "").trim();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("operator_set_flag", {
+    p_key: text("key"),
+    p_label_ar: text("label_ar"),
+    p_description: text("description") || null,
+    p_is_enabled: formData.get("is_enabled") === "on",
+    p_rollout_percent: Number(text("rollout_percent") || 0),
+    p_required_plan: text("required_plan") || null,
+    p_is_beta: formData.get("is_beta") === "on",
+  });
+  const messages: Record<string, string> = {
+    INVALID_FLAG_KEY: "مفتاح الميزة يجب أن يكون حروفاً إنجليزية صغيرة",
+    INVALID_ROLLOUT: "نسبة الإطلاق بين 0 و 100",
+    PLAN_NOT_FOUND: "الخطة غير موجودة",
+    FORBIDDEN: "غير مصرّح",
+  };
+  if (error) {
+    const key = Object.keys(messages).find((k) => error.message.includes(k));
+    redirect(`/platform/features?error=${encodeURIComponent(key ? messages[key] : error.message)}`);
+  }
+  redirect("/platform/features?ok=1");
+}
+
+export async function saveSetting(formData: FormData) {
+  const key = String(formData.get("key") ?? "").trim();
+  const raw = String(formData.get("value") ?? "").trim();
+  // Every setting is stored as JSON; numbers stay numbers so validation in SQL can check ranges.
+  const value = formData.get("kind") === "number" ? Number(raw) : raw;
+  if (formData.get("kind") === "number" && !Number.isFinite(value as number)) {
+    redirect(`/platform/settings?error=${encodeURIComponent("قيمة رقمية غير صالحة")}`);
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("operator_set_setting", { p_key: key, p_value: value });
+  const messages: Record<string, string> = {
+    UNKNOWN_SETTING: "إعداد غير معروف",
+    INVALID_SETTING: "قيمة غير صالحة",
+    PLAN_NOT_FOUND: "الخطة غير موجودة",
+    FORBIDDEN: "غير مصرّح",
+  };
+  if (error) {
+    const k = Object.keys(messages).find((m) => error.message.includes(m));
+    redirect(`/platform/settings?error=${encodeURIComponent(k ? messages[k] : error.message)}`);
+  }
+  redirect("/platform/settings?ok=1");
 }
 
 // Plan catalog. An empty limit field means UNLIMITED, not "unchanged" — the form always posts the
