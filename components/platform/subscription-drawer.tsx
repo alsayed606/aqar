@@ -4,9 +4,9 @@ import { useState } from "react";
 import { setSubscription } from "@/app/platform/actions";
 import { fmtDate } from "@/lib/subscription";
 import { SUBSCRIPTION_STATUS_AR } from "@/lib/labels";
+import type { PlanOption } from "@/lib/platform";
 import { Button, Drawer } from "@/components/ui";
 
-const PLANS = ["basic", "pro", "enterprise"];
 const STATUSES = ["trialing", "active", "comped", "past_due", "suspended", "canceled"];
 
 type Org = {
@@ -22,7 +22,7 @@ const fieldCls = "mt-1 w-full rounded-lg border border-slate-300 bg-transparent 
 
 // In-line subscription editor for the tenant list: opens a slide-over instead of navigating away.
 // setSubscription redirects back to the list (the `back` field), reloading it with the new values.
-export function SubscriptionDrawer({ org }: { org: Org }) {
+export function SubscriptionDrawer({ org, plans }: { org: Org; plans: PlanOption[] }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -39,7 +39,7 @@ export function SubscriptionDrawer({ org }: { org: Org }) {
             الخطة <span className="text-slate-400">(الحالية: {org.plan_code ?? "—"})</span>
             <select name="plan" defaultValue="" className={fieldCls}>
               <option value="">— بدون تغيير —</option>
-              {PLANS.map((p) => <option key={p} value={p}>{p}</option>)}
+              {plans.map((p) => <option key={p.code} value={p.code}>{p.name_ar}</option>)}
             </select>
           </label>
 

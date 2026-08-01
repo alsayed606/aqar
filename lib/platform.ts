@@ -4,6 +4,11 @@
 // Note what is NOT here: nothing from inside a tenant. The platform sees its own records
 // (subscription, plan, payments) plus COUNTS of the tenant's data — never a tenant row.
 
+// The plan catalog is DATA (0036) and editable from the console since T-3, so every screen that
+// offers a plan reads it from app.plan. A hardcoded list here would silently omit any plan the
+// operator adds.
+export type PlanOption = { code: string; name_ar: string };
+
 export type PlatformOrgRow = {
   org_id: string;
   org_name: string;

@@ -9,7 +9,7 @@ import { Pagination } from "@/components/pagination";
 import { UsageMeter } from "@/components/usage-meter";
 import { SubscriptionDrawer } from "@/components/platform/subscription-drawer";
 import { TenantActions } from "@/components/platform/tenant-actions";
-import type { PlatformOrgRow } from "@/lib/platform";
+import type { PlatformOrgRow, PlanOption } from "@/lib/platform";
 
 export const dynamic = "force-dynamic";
 
@@ -26,13 +26,19 @@ export default async function PlatformTenants({
   const status = STATUS_FILTERS.includes((sp.status ?? "") as (typeof STATUS_FILTERS)[number]) ? sp.status ?? "" : "";
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("platform_list_orgs", {
-    p_search: q || null,
-    p_status: status || null,
-    p_limit: PAGE_SIZE,
-    p_offset: from,
-  });
+  // The plan catalog is editable from the console, so the move-plan controls read it rather than
+  // carrying a list that would silently omit whatever the operator adds next.
+  const [{ data, error }, { data: planData }] = await Promise.all([
+    supabase.rpc("platform_list_orgs", {
+      p_search: q || null,
+      p_status: status || null,
+      p_limit: PAGE_SIZE,
+      p_offset: from,
+    }),
+    supabase.from("plan").select("code, name_ar").order("sort"),
+  ]);
   const orgs = (data ?? []) as PlatformOrgRow[];
+  const plans = (planData ?? []) as PlanOption[];
   const total = orgs[0]?.total_count ?? 0;
   const notMigrated = error?.message?.includes("platform_list_orgs");
 
@@ -143,7 +149,7 @@ export default async function PlatformTenants({
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-1">
-                        <SubscriptionDrawer org={o} />
+                        <SubscriptionDrawer org={o} plans={plans} />
                         <Link href={`/platform/tenants/${o.org_id}`} className="text-xs text-slate-500 hover:text-brand hover:underline">
                           التفاصيل ←
                         </Link>
@@ -151,6 +157,7 @@ export default async function PlatformTenants({
                           orgId={o.org_id}
                           status={o.status}
                           planCode={o.plan_code}
+                          plans={plans}
                           back="/platform/tenants"
                         />
                       </div>

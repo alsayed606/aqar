@@ -745,6 +745,8 @@ try {
     ["an unknown key", "select app.operator_set_setting('nope','1'::jsonb)"],
     ["a trial length that is not a number", "select app.operator_set_setting('trial_days','\"many\"'::jsonb)"],
     ["a trial length beyond a year", "select app.operator_set_setting('trial_days','400'::jsonb)"],
+    // Zero would provision an office that is locked out the moment it is created (0055).
+    ["a zero-day trial", "select app.operator_set_setting('trial_days','0'::jsonb)"],
     ["a starting plan that does not exist", "select app.operator_set_setting('default_plan','\"ghost\"'::jsonb)"],
   ]) {
     let err = "";
@@ -817,6 +819,13 @@ try {
   const targeted = (await callAs(idOwner, org1, "select app.platform_broadcast('للمتأخرين',null,$1::jsonb,'in_app',true) v", [JSON.stringify({ status: "past_due" })]))[0].v;
   const everyone = (await callAs(idOwner, org1, "select app.platform_broadcast('للجميع',null,'{}'::jsonb,'in_app',true) v"))[0].v;
   ok("an audience filter narrows the send", targeted.orgs < everyone.orgs, JSON.stringify({ targeted: targeted.orgs, all: everyone.orgs }));
+
+  // An EXPLICITLY EMPTY org list means nobody. array_agg over zero rows returns NULL, the same NULL
+  // that once meant "no restriction", so {"orgs": []} used to reach every office (0055).
+  const noOne = (await callAs(idOwner, org1, "select app.platform_broadcast('لأحد',null,'{\"orgs\":[]}'::jsonb,'in_app',true) v"))[0].v;
+  ok("an explicitly empty audience reaches nobody, not everybody", noOne.orgs === 0, JSON.stringify(noOne));
+  const justOne = (await callAs(idOwner, org1, "select app.platform_broadcast('لواحد',null,$1::jsonb,'in_app',true) v", [JSON.stringify({ orgs: [org2] })]))[0].v;
+  ok("an explicit org list reaches exactly that list", justOne.orgs === 1, JSON.stringify(justOne));
 
   let castErr = "";
   try { await callAs(idOwner, org1, "select app.platform_broadcast('  ',null,'{}'::jsonb,'in_app',false)"); } catch (e) { castErr = e.message; }

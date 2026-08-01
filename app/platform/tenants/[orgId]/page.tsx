@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui";
 import { UsageMeter } from "@/components/usage-meter";
 import { StatCard } from "@/components/platform/stat-card";
 import { TenantActions } from "@/components/platform/tenant-actions";
-import type { SubscriptionEventRow, Tenant360 } from "@/lib/platform";
+import type { PlanOption, SubscriptionEventRow, Tenant360 } from "@/lib/platform";
 import { setSubscription } from "../../actions";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,6 @@ type PaymentRow = {
   paid_at: string | null;
 };
 
-const PLANS = ["basic", "pro", "enterprise"];
 const STATUSES = ["trialing", "active", "comped", "past_due", "suspended", "canceled"];
 const fieldCls = "mt-1 w-full rounded-lg border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700";
 const cardCls = "rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900";
@@ -39,11 +38,14 @@ export default async function Tenant360Page({
   const { ok, error: flashError } = await searchParams;
 
   const supabase = await createClient();
-  const [{ data: t360Data, error }, { data: paymentsData }, { data: historyData }] = await Promise.all([
-    supabase.rpc("platform_tenant_360", { p_org: orgId }),
-    supabase.rpc("operator_list_payments", { p_org: orgId }),
-    supabase.rpc("platform_subscription_history", { p_org: orgId }),
-  ]);
+  const [{ data: t360Data, error }, { data: paymentsData }, { data: historyData }, { data: planData }] =
+    await Promise.all([
+      supabase.rpc("platform_tenant_360", { p_org: orgId }),
+      supabase.rpc("operator_list_payments", { p_org: orgId }),
+      supabase.rpc("platform_subscription_history", { p_org: orgId }),
+      // Read the catalog rather than listing plans here: it is editable from the console.
+      supabase.from("plan").select("code, name_ar").order("sort"),
+    ]);
 
   if (error?.message?.includes("platform_tenant_360")) {
     return (
@@ -57,6 +59,7 @@ export default async function Tenant360Page({
 
   const payments = (paymentsData ?? []) as PaymentRow[];
   const history = (historyData ?? []) as SubscriptionEventRow[];
+  const plans = (planData ?? []) as PlanOption[];
   const sub = t.subscription;
   const occupancy = t.portfolio.units > 0 ? Math.round((t.portfolio.units_rented / t.portfolio.units) * 100) : 0;
 
@@ -77,6 +80,7 @@ export default async function Tenant360Page({
             orgId={orgId}
             status={sub?.status ?? null}
             planCode={sub?.plan_code ?? null}
+            plans={plans}
             back={`/platform/tenants/${orgId}`}
           />
           <Link href="/platform/tenants" className="text-sm text-brand hover:underline">→ كل المكاتب</Link>
@@ -182,7 +186,7 @@ export default async function Tenant360Page({
             الخطة <span className="text-slate-400">(الحالية: {sub?.plan_code ?? "—"})</span>
             <select name="plan" defaultValue="" className={fieldCls}>
               <option value="">— بدون تغيير —</option>
-              {PLANS.map((p) => <option key={p} value={p}>{p}</option>)}
+              {plans.map((p) => <option key={p.code} value={p.code}>{p.name_ar}</option>)}
             </select>
           </label>
           <label className="block text-sm">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { extendTrial, changePlan, suspendTenant, reactivateTenant } from "@/app/platform/actions";
+import type { PlanOption } from "@/lib/platform";
 
 // The operator levers for one office, behind a (⋮) menu so a table row stays readable.
 //
@@ -12,18 +13,19 @@ import { extendTrial, changePlan, suspendTenant, reactivateTenant } from "@/app/
 // Suspension asks for a reason inline and will not submit without one: it cuts a paying customer
 // off, and the reason is what a future operator reads in the audit log to understand why.
 
-const PLAN_LABEL: Record<string, string> = { basic: "الأساسية", pro: "الاحترافية", enterprise: "المؤسسية" };
 const itemCls = "block w-full rounded-lg px-3 py-2 text-right text-sm hover:bg-slate-100 dark:hover:bg-slate-800";
 
 export function TenantActions({
   orgId,
   status,
   planCode,
+  plans,
   back,
 }: {
   orgId: string;
   status: string | null;
   planCode: string | null;
+  plans: PlanOption[];
   back: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -31,7 +33,7 @@ export function TenantActions({
 
   const isTrialing = status === "trialing";
   const canReactivate = status === "suspended" || status === "canceled" || status === "past_due";
-  const otherPlans = ["basic", "pro", "enterprise"].filter((p) => p !== planCode);
+  const otherPlans = plans.filter((p) => p.code !== planCode);
 
   const hidden = (
     <>
@@ -72,10 +74,10 @@ export function TenantActions({
             )}
 
             {otherPlans.map((plan) => (
-              <form key={plan} action={changePlan}>
+              <form key={plan.code} action={changePlan}>
                 {hidden}
-                <input type="hidden" name="plan" value={plan} />
-                <button className={itemCls}>نقل إلى الخطة {PLAN_LABEL[plan]}</button>
+                <input type="hidden" name="plan" value={plan.code} />
+                <button className={itemCls}>نقل إلى الخطة {plan.name_ar}</button>
               </form>
             ))}
 

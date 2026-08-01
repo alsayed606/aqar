@@ -182,9 +182,15 @@ export async function saveFlag(formData: FormData) {
 export async function saveSetting(formData: FormData) {
   const key = String(formData.get("key") ?? "").trim();
   const raw = String(formData.get("value") ?? "").trim();
+  const numeric = formData.get("kind") === "number";
+  // An empty box is not zero. Number("") is 0, and a trial_days of 0 would provision an office that
+  // is locked out the moment it is created — so a blank numeric field is refused, not coerced.
+  if (numeric && raw === "") {
+    redirect(`/platform/settings?error=${encodeURIComponent("القيمة مطلوبة")}`);
+  }
   // Every setting is stored as JSON; numbers stay numbers so validation in SQL can check ranges.
-  const value = formData.get("kind") === "number" ? Number(raw) : raw;
-  if (formData.get("kind") === "number" && !Number.isFinite(value as number)) {
+  const value = numeric ? Number(raw) : raw;
+  if (numeric && !Number.isFinite(value as number)) {
     redirect(`/platform/settings?error=${encodeURIComponent("قيمة رقمية غير صالحة")}`);
   }
 
