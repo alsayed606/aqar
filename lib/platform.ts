@@ -9,6 +9,35 @@
 // operator adds.
 export type PlanOption = { code: string; name_ar: string };
 
+// Every error code the platform functions raise, in one place. PostgREST hands back the raw
+// message with the code embedded, so matching on the code is what turns NOT_TRIALING into a
+// sentence an operator can act on. Scattered copies of this map meant a new code was translated
+// in one action and shown raw in the other three.
+export const PLATFORM_ERRORS_AR: Record<string, string> = {
+  FORBIDDEN: "غير مصرّح",
+  SUBSCRIPTION_NOT_FOUND: "لا يوجد اشتراك لهذا المكتب",
+  NOT_TRIALING: "التمديد يخصّ الحسابات التجريبية فقط",
+  INVALID_DAYS: "عدد أيام غير صالح",
+  PLAN_NOT_FOUND: "الخطة غير موجودة",
+  INVALID_PLAN_CODE: "رمز الخطة يجب أن يكون حروفاً إنجليزية صغيرة",
+  NAME_REQUIRED: "الاسم مطلوب",
+  INVALID_PRICE: "سعر غير صالح",
+  INVALID_LIMIT: "حد غير صالح",
+  INVALID_FLAG_KEY: "مفتاح الميزة يجب أن يكون حروفاً إنجليزية صغيرة",
+  INVALID_ROLLOUT: "نسبة الإطلاق بين 0 و 100",
+  UNKNOWN_SETTING: "إعداد غير معروف",
+  INVALID_SETTING: "قيمة غير صالحة",
+  TITLE_REQUIRED: "العنوان مطلوب",
+  INVALID_CHANNEL: "قناة غير معروفة",
+};
+
+// Falls back to the raw message rather than a generic apology: an untranslated code is a gap in
+// the map above, and hiding it behind "حدث خطأ" would hide the gap too.
+export function platformErrorAr(message: string): string {
+  const code = Object.keys(PLATFORM_ERRORS_AR).find((c) => message.includes(c));
+  return code ? PLATFORM_ERRORS_AR[code] : message;
+}
+
 export type PlatformOrgRow = {
   org_id: string;
   org_name: string;

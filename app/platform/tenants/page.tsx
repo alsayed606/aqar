@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
 import { UsageMeter } from "@/components/usage-meter";
+import { FilterChips } from "@/components/platform/filter-chips";
 import { SubscriptionDrawer } from "@/components/platform/subscription-drawer";
 import { TenantActions } from "@/components/platform/tenant-actions";
 import type { PlatformOrgRow, PlanOption } from "@/lib/platform";
@@ -42,14 +43,6 @@ export default async function PlatformTenants({
   const total = orgs[0]?.total_count ?? 0;
   const notMigrated = error?.message?.includes("platform_list_orgs");
 
-  const filterHref = (value: string) => {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (value) params.set("status", value);
-    const query = params.toString();
-    return query ? `/platform/tenants?${query}` : "/platform/tenants";
-  };
-
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -66,22 +59,16 @@ export default async function PlatformTenants({
 
       <div className="space-y-3">
         <ListToolbar q={q} placeholder="بحث باسم المكتب…" keep={{ status }} />
-        <div className="flex flex-wrap gap-2">
-          {STATUS_FILTERS.map((value) => (
-            <Link
-              key={value || "all"}
-              href={filterHref(value)}
-              className={
-                "rounded-full border px-3 py-1 text-xs transition-colors " +
-                (status === value
-                  ? "border-brand bg-brand text-white"
-                  : "border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800")
-              }
-            >
-              {value ? SUBSCRIPTION_STATUS_AR[value] : "الكل"}
-            </Link>
-          ))}
-        </div>
+        <FilterChips
+          basePath="/platform/tenants"
+          param="status"
+          active={status}
+          keep={{ q }}
+          options={STATUS_FILTERS.map((value) => ({
+            value,
+            label: value ? SUBSCRIPTION_STATUS_AR[value] : "الكل",
+          }))}
+        />
       </div>
 
       {notMigrated ? (

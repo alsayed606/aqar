@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
 import { StatCard } from "@/components/platform/stat-card";
+import { FilterChips } from "@/components/platform/filter-chips";
 
 export const dynamic = "force-dynamic";
 
@@ -65,14 +66,6 @@ export default async function BillingCentre({
   const payments = (paymentsData ?? []) as PaymentRow[];
   const total = payments[0]?.total_count ?? 0;
 
-  const filterHref = (value: string) => {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (value) params.set("status", value);
-    const query = params.toString();
-    return query ? `/platform/billing?${query}` : "/platform/billing";
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -116,22 +109,13 @@ export default async function BillingCentre({
 
       <div className="space-y-3">
         <ListToolbar q={q} placeholder="بحث باسم المكتب أو مرجع البوابة…" keep={{ status }} />
-        <div className="flex flex-wrap gap-2">
-          {FILTERS.map((value) => (
-            <Link
-              key={value || "all"}
-              href={filterHref(value)}
-              className={
-                "rounded-full border px-3 py-1 text-xs transition-colors " +
-                (status === value
-                  ? "border-brand bg-brand text-white"
-                  : "border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800")
-              }
-            >
-              {value ? STATUS_AR[value] : "الكل"}
-            </Link>
-          ))}
-        </div>
+        <FilterChips
+          basePath="/platform/billing"
+          param="status"
+          active={status}
+          keep={{ q }}
+          options={FILTERS.map((value) => ({ value, label: value ? STATUS_AR[value] : "الكل" }))}
+        />
       </div>
 
       {payments.length === 0 ? (

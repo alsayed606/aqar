@@ -190,7 +190,7 @@ Party (داخل المنظمة: من هو في سجلاتنا؟  identity_id ق�
 
 **pgTAP (لِـ `supabase test db`):** [`supabase/tests/01_isolation_rls.sql`](supabase/tests/01_isolation_rls.sql) · [`02_auth.sql`](supabase/tests/02_auth.sql) · [`03_modeling.sql`](supabase/tests/03_modeling.sql).
 **Runner محلي مُثبت (Node + PG17، بلا Supabase):** [`supabase/tests/local/`](supabase/tests/local/) — لا يوجد سكربت `npm run verify`؛ تُشغَّل الملفات مباشرة:
-`node supabase/tests/local/verify.mjs` → **41 passed** (طبقة البيانات) · `node supabase/tests/local/phase3.mjs` → **122 passed** (السلوك والعزل).
+`node supabase/tests/local/verify.mjs` → **41 passed** (طبقة البيانات) · `node supabase/tests/local/phase3.mjs` → **103 passed** (سلوك المكتب وعزله) · `node supabase/tests/local/platform.mjs` → **127 passed** (لوحة الإدارة العليا — يُقلع بقاعدته الخاصة ويبذر ما يفحصه فقط).
 
 يغطيان الاختبارات الإلزامية ١–١٣ حرفياً، زائد: جولة استيراد كاملة (تحقّق/اعتماد/تراجع)، منع تعديل/حذف سجل التدقيق، وحماية آخر مالك.
 

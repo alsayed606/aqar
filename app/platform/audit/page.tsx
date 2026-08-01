@@ -5,6 +5,7 @@ import { parseListParams, PAGE_SIZE } from "@/lib/list-params";
 import { Badge } from "@/components/ui";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
+import { FilterChips } from "@/components/platform/filter-chips";
 
 export const dynamic = "force-dynamic";
 
@@ -57,14 +58,6 @@ export default async function AuditCentre({
   const total = rows[0]?.total_count ?? 0;
   const actions = (actionData ?? []) as ActionRow[];
 
-  const href = (params: Record<string, string | undefined>) => {
-    const s = new URLSearchParams();
-    if (q) s.set("q", q);
-    for (const [k, v] of Object.entries(params)) if (v) s.set(k, v);
-    const query = s.toString();
-    return query ? `/platform/audit?${query}` : "/platform/audit";
-  };
-
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -80,43 +73,28 @@ export default async function AuditCentre({
 
       <div className="space-y-3">
         <ListToolbar q={q} placeholder="بحث بالعملية أو المكتب أو المنفِّذ…" keep={{ action, scope: sp.scope }} />
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href={href({ action })}
-            className={
-              "rounded-full border px-3 py-1 text-xs " +
-              (!platformOnly ? "border-brand bg-brand text-white" : "border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-300")
-            }
-          >
-            كل العمليات
-          </Link>
-          <Link
-            href={href({ action, scope: "platform" })}
-            className={
-              "rounded-full border px-3 py-1 text-xs " +
-              (platformOnly ? "border-brand bg-brand text-white" : "border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-300")
-            }
-          >
-            عمليات المنصة فقط
-          </Link>
-          <span className="mx-1 h-4 w-px bg-slate-300 dark:bg-slate-700" />
-          {action && (
-            <Link href={href({ scope: sp.scope })} className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-500 dark:border-slate-700">
-              × {action}
-            </Link>
-          )}
-          {!action &&
-            actions.slice(0, 8).map((a) => (
-              <Link
-                key={a.action}
-                href={href({ action: a.action, scope: sp.scope })}
-                className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                dir="ltr"
-              >
-                {a.action} <span className="text-slate-400">{a.count}</span>
-              </Link>
-            ))}
-        </div>
+        <FilterChips
+          basePath="/platform/audit"
+          param="scope"
+          active={platformOnly ? "platform" : ""}
+          keep={{ q, action }}
+          options={[
+            { value: "", label: "كل العمليات" },
+            { value: "platform", label: "عمليات المنصة فقط" },
+          ]}
+        />
+        {/* Built from what the log actually contains, so a filter never offers an action that has
+            never happened — and never omits one that has. */}
+        <FilterChips
+          basePath="/platform/audit"
+          param="action"
+          active={action}
+          keep={{ q, scope: sp.scope }}
+          options={[
+            { value: "", label: "كل الأنواع" },
+            ...actions.slice(0, 8).map((a) => ({ value: a.action, label: a.action, hint: a.count })),
+          ]}
+        />
       </div>
 
       {rows.length === 0 ? (

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { safeReturnTo } from "@/lib/return-to";
+import { platformErrorAr } from "@/lib/platform";
 
 // The platform console keeps its own sign-out rather than borrowing the office app's, so nothing
 // in this space imports from /app — same separation the portals already keep.
@@ -49,19 +50,6 @@ export async function setSubscription(formData: FormData) {
 // writes to app.org_subscription directly, so every route to a subscription change is logged.
 // ---------------------------------------------------------------------------
 
-const ERRORS_AR: Record<string, string> = {
-  FORBIDDEN: "غير مصرّح",
-  SUBSCRIPTION_NOT_FOUND: "لا يوجد اشتراك لهذا المكتب",
-  NOT_TRIALING: "التمديد يخصّ الحسابات التجريبية فقط",
-  INVALID_DAYS: "عدد أيام غير صالح",
-  PLAN_NOT_FOUND: "الخطة غير موجودة",
-};
-
-function translate(message: string): string {
-  const key = Object.keys(ERRORS_AR).find((k) => message.includes(k));
-  return key ? ERRORS_AR[key] : message;
-}
-
 // Shared tail for every lever: read org + back, run the call, come back with ok or a readable error.
 async function runLever(
   formData: FormData,
@@ -75,7 +63,7 @@ async function runLever(
 
   const supabase = await createClient();
   const { error } = await call(org, supabase);
-  if (error) redirect(withParam(`error=${encodeURIComponent(translate(error.message))}`));
+  if (error) redirect(withParam(`error=${encodeURIComponent(platformErrorAr(error.message))}`));
   redirect(withParam("ok=1"));
 }
 
@@ -136,9 +124,7 @@ async function callBroadcast(formData: FormData, dryRun: boolean): Promise<Broad
   if (!args.p_title) return { ok: false, error: "العنوان مطلوب" };
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("platform_broadcast", { ...args, p_dry_run: dryRun });
-  if (error) {
-    return { ok: false, error: /FORBIDDEN/.test(error.message) ? "غير مصرّح" : error.message };
-  }
+  if (error) return { ok: false, error: platformErrorAr(error.message) };
   const result = data as { orgs: number; emails: number };
   return { ok: true, sent: !dryRun, orgs: result.orgs, emails: result.emails };
 }
@@ -166,16 +152,7 @@ export async function saveFlag(formData: FormData) {
     p_required_plan: text("required_plan") || null,
     p_is_beta: formData.get("is_beta") === "on",
   });
-  const messages: Record<string, string> = {
-    INVALID_FLAG_KEY: "مفتاح الميزة يجب أن يكون حروفاً إنجليزية صغيرة",
-    INVALID_ROLLOUT: "نسبة الإطلاق بين 0 و 100",
-    PLAN_NOT_FOUND: "الخطة غير موجودة",
-    FORBIDDEN: "غير مصرّح",
-  };
-  if (error) {
-    const key = Object.keys(messages).find((k) => error.message.includes(k));
-    redirect(`/platform/features?error=${encodeURIComponent(key ? messages[key] : error.message)}`);
-  }
+  if (error) redirect(`/platform/features?error=${encodeURIComponent(platformErrorAr(error.message))}`);
   redirect("/platform/features?ok=1");
 }
 
@@ -196,16 +173,7 @@ export async function saveSetting(formData: FormData) {
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("operator_set_setting", { p_key: key, p_value: value });
-  const messages: Record<string, string> = {
-    UNKNOWN_SETTING: "إعداد غير معروف",
-    INVALID_SETTING: "قيمة غير صالحة",
-    PLAN_NOT_FOUND: "الخطة غير موجودة",
-    FORBIDDEN: "غير مصرّح",
-  };
-  if (error) {
-    const k = Object.keys(messages).find((m) => error.message.includes(m));
-    redirect(`/platform/settings?error=${encodeURIComponent(k ? messages[k] : error.message)}`);
-  }
+  if (error) redirect(`/platform/settings?error=${encodeURIComponent(platformErrorAr(error.message))}`);
   redirect("/platform/settings?ok=1");
 }
 
@@ -234,16 +202,6 @@ export async function upsertPlan(formData: FormData) {
     p_is_public: formData.get("is_public") === "on",
     p_sort: Number(text("sort") || 0),
   });
-  if (error) {
-    const messages: Record<string, string> = {
-      INVALID_PLAN_CODE: "رمز الخطة يجب أن يكون حروفاً إنجليزية صغيرة",
-      NAME_REQUIRED: "اسم الخطة مطلوب",
-      INVALID_PRICE: "سعر غير صالح",
-      INVALID_LIMIT: "حد غير صالح",
-      FORBIDDEN: "غير مصرّح",
-    };
-    const key = Object.keys(messages).find((k) => error.message.includes(k));
-    redirect(withParam(`error=${encodeURIComponent(key ? messages[key] : error.message)}`));
-  }
+  if (error) redirect(withParam(`error=${encodeURIComponent(platformErrorAr(error.message))}`));
   redirect(withParam("ok=1"));
 }
