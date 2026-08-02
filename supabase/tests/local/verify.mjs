@@ -77,7 +77,8 @@ try {
 
   // Units, tenant, contract for financial tests (org1/P1)
   const U1 = (await one("insert into app.unit(org_id,property_id,unit_number,current_status) values($1,$2,'101','rented') returning id", [org1, P1])).id;
-  const tParty = (await one("insert into app.party(org_id,display_name,roles) values($1,'Tenant Ahmad',array['tenant']::app.party_role[]) returning id", [org1])).id;
+  // A tenant party needs a primary identifier since 0057.
+  const tParty = (await one("insert into app.party(org_id,display_name,roles,national_id) values($1,'Tenant Ahmad',array['tenant']::app.party_role[],'1000000002') returning id", [org1])).id;
   const T1 = (await one("insert into app.tenant(org_id,party_id) values($1,$2) returning id", [org1, tParty])).id;
   const C1 = (await one(
     `insert into app.contract(org_id,property_id,unit_id,tenant_id,contract_number,start_date,end_date,annual_rent_halalas,status)

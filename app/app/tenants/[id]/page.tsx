@@ -4,7 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { getCapabilities } from "@/lib/capabilities";
-import { updateTenant } from "../actions";
+import { TenantFields } from "@/components/tenant-fields";
+import { isEstablishment } from "@/lib/tenant-identity";
+import { updateTenant, addTradeName, removeTradeName } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +14,11 @@ export const dynamic = "force-dynamic";
 const cls = "w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700";
 
 const TYPE_AR: Record<string, string> = { individual: "فرد", sole_establishment: "مؤسسة فردية", company: "شركة" };
+
+const PARTY_COLUMNS =
+  "id, display_name, entity_type, national_id, iqama_id, passport_no, email, phone_raw, phone_e164, " +
+  "cr_number, vat_number, unified_number, cr_expiry, rep_name, rep_id_number, rep_capacity, rep_phone_raw, " +
+  "id_exempt_reason, identity_complete";
 
 export default async function TenantEditPage({
   params,
@@ -30,12 +37,25 @@ export default async function TenantEditPage({
   const supabase = await createClient();
   const { data: tenant } = await supabase
     .from("tenant")
-    .select("id, tenant_type, party:party_id(id, display_name, legal_kind, national_id, email, phone_e164, cr_number, vat_number, unified_number, cr_expiry)")
+    .select(`id, tenant_type, party:party_id(${PARTY_COLUMNS})`)
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();
   if (!tenant) notFound();
   const p = first((tenant as any).party);
+
+  // Brand names live under the party, and the "also represents" hint groups establishments by the
+  // representative's id — the cheap answer to "one person, several commercial registrations".
+  const [{ data: brands }, { data: siblings }] = await Promise.all([
+    supabase.from("trade_name").select("id, name, municipal_license_no, license_expiry")
+      .eq("party_id", p?.id).is("deleted_at", null).order("name"),
+    p?.rep_id_number
+      ? supabase.from("party").select("id, display_name").eq("rep_id_number", p.rep_id_number)
+          .neq("id", p.id).is("deleted_at", null)
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const establishment = isEstablishment(p?.entity_type ?? (tenant as any).tenant_type ?? "individual");
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -47,6 +67,25 @@ export default async function TenantEditPage({
       {ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">حُفظت التعديلات.</p>}
       {flashError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{flashError}</p>}
 
+      {p?.identity_complete === false && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+          بيانات ناقصة — هذا السجل أُنشئ قبل قاعدة المعرّف الرئيسي. أكمِل{" "}
+          {establishment ? "الرقم الموحّد وبيانات الممثل" : "رقم الهوية أو الإقامة أو الجواز"} متى أمكن.
+        </p>
+      )}
+
+      {siblings && siblings.length > 0 && (
+        <div className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:bg-sky-900/20 dark:text-sky-300">
+          الممثل نفسه مسجّل على {siblings.length} منشأة أخرى:{" "}
+          {siblings.map((s: any, i: number) => (
+            <span key={s.id}>
+              {i > 0 && "، "}
+              <Link href={`/app/tenants?q=${encodeURIComponent(s.display_name)}`} className="underline">{s.display_name}</Link>
+            </span>
+          ))}
+        </div>
+      )}
+
       {!canEdit ? (
         <p className="rounded-2xl border border-neutral-200 bg-white p-6 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
           تعديل المستأجرين متاح لمن يملك صلاحية إدارة البيانات. النوع الحالي: {TYPE_AR[(tenant as any).tenant_type] ?? "—"}.
@@ -57,60 +96,79 @@ export default async function TenantEditPage({
           <input type="hidden" name="party_id" value={p?.id} />
           <h1 className="text-lg font-semibold">تعديل المستأجر</h1>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-sm font-medium">الاسم *</label>
-              <input name="display_name" required defaultValue={p?.display_name ?? ""} className={cls} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">النوع</label>
-              <select name="tenant_type" defaultValue={(tenant as any).tenant_type} className={cls}>
-                <option value="individual">فرد</option>
-                <option value="sole_establishment">مؤسسة فردية</option>
-                <option value="company">شركة</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">الجوال</label>
-              <input name="phone" dir="ltr" defaultValue={p?.phone_e164 ?? ""} className={cls + " text-right"} />
-            </div>
-          </div>
-
-          <details open className="rounded-lg border border-neutral-200 dark:border-neutral-800">
-            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-300">
-              تفاصيل إضافية
-            </summary>
-            <div className="grid gap-3 border-t border-neutral-100 p-3 sm:grid-cols-2 dark:border-neutral-800">
-              <div>
-                <label className="mb-1 block text-sm font-medium">رقم الهوية / الإقامة</label>
-                <input name="national_id" dir="ltr" defaultValue={p?.national_id ?? ""} className={cls + " text-right"} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">البريد الإلكتروني</label>
-                <input name="email" type="email" dir="ltr" defaultValue={p?.email ?? ""} className={cls + " text-right"} />
-              </div>
-              <div className="sm:col-span-2 mt-1 text-xs font-medium text-neutral-500">بيانات المنشأة (للمؤسسة/الشركة)</div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">السجل التجاري</label>
-                <input name="cr_number" dir="ltr" defaultValue={p?.cr_number ?? ""} className={cls + " text-right"} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">الرقم الموحّد</label>
-                <input name="unified_number" dir="ltr" defaultValue={p?.unified_number ?? ""} className={cls + " text-right"} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">الرقم الضريبي</label>
-                <input name="vat_number" dir="ltr" defaultValue={p?.vat_number ?? ""} className={cls + " text-right"} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">تاريخ انتهاء السجل</label>
-                <input name="cr_expiry" type="date" dir="ltr" defaultValue={p?.cr_expiry ?? ""} className={cls} />
-              </div>
-            </div>
-          </details>
+          <TenantFields
+            defaults={{
+              display_name: p?.display_name ?? "",
+              tenant_type: p?.entity_type ?? (tenant as any).tenant_type ?? "individual",
+              phone: p?.phone_raw ?? p?.phone_e164 ?? "",
+              email: p?.email ?? "",
+              national_id: p?.national_id ?? "",
+              iqama_id: p?.iqama_id ?? "",
+              passport_no: p?.passport_no ?? "",
+              unified_number: p?.unified_number ?? "",
+              cr_number: p?.cr_number ?? "",
+              vat_number: p?.vat_number ?? "",
+              cr_expiry: p?.cr_expiry ?? "",
+              rep_name: p?.rep_name ?? "",
+              rep_id_number: p?.rep_id_number ?? "",
+              rep_capacity: p?.rep_capacity ?? "",
+              rep_phone: p?.rep_phone_raw ?? "",
+              id_exempt_reason: p?.id_exempt_reason ?? "",
+            }}
+          />
 
           <button className="rounded-lg bg-brand px-4 py-2.5 font-medium text-white hover:bg-brand-fg">حفظ التعديلات</button>
         </form>
+      )}
+
+      {/* One registration, several brand names — each under its own municipal licence. */}
+      {establishment && (
+        <section className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+          <h2 className="text-lg font-semibold">الأسماء التجارية</h2>
+          <p className="text-sm text-neutral-500">
+            الأسماء التي تعمل تحت هذا السجل. يختار العقد اسماً منها، ويحتفظ بنسخته وقت التوقيع.
+          </p>
+
+          {(brands ?? []).length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-center text-sm text-neutral-500 dark:border-neutral-700">
+              لا توجد أسماء تجارية بعد.
+            </p>
+          ) : (
+            <ul className="divide-y divide-neutral-100 dark:divide-neutral-800">
+              {(brands ?? []).map((b: any) => (
+                <li key={b.id} className="flex items-center justify-between gap-3 py-2">
+                  <div>
+                    <p className="font-medium">{b.name}</p>
+                    <p className="text-xs text-neutral-500">
+                      {b.municipal_license_no ? `رخصة ${b.municipal_license_no}` : "بدون رقم رخصة"}
+                      {b.license_expiry ? ` — تنتهي ${b.license_expiry}` : ""}
+                    </p>
+                  </div>
+                  {canEdit && (
+                    <form action={removeTradeName}>
+                      <input type="hidden" name="tenant_id" value={tenant.id} />
+                      <input type="hidden" name="trade_name_id" value={b.id} />
+                      <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
+                        إزالة
+                      </button>
+                    </form>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {canEdit && (
+            <form action={addTradeName} className="grid gap-3 border-t border-neutral-100 pt-3 sm:grid-cols-3 dark:border-neutral-800">
+              <input type="hidden" name="tenant_id" value={tenant.id} />
+              <input type="hidden" name="party_id" value={p?.id} />
+              <input name="name" required placeholder="الاسم التجاري (مثال: مخابز الريان)" className={cls + " sm:col-span-3"} />
+              <input name="municipal_license_no" dir="ltr" placeholder="رقم رخصة البلدية" className={cls + " text-right"} />
+              <input name="license_expiry" type="date" dir="ltr" className={cls} />
+              <button className="rounded-lg bg-brand px-4 py-2 font-medium text-white hover:bg-brand-fg">إضافة</button>
+            </form>
+          )}
+        </section>
       )}
     </div>
   );

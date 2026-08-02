@@ -26,9 +26,22 @@ export default async function TenantsPage({
   const supabase = await createClient();
   let query = supabase
     .from("tenant")
-    .select("id, tenant_type, party:party_id!inner(display_name, national_id, phone_e164)", { count: "exact" })
+    .select(
+      "id, tenant_type, party:party_id!inner(display_name, primary_id, phone_e164, identity_complete, rep_name)",
+      { count: "exact" },
+    )
     .is("deleted_at", null);
-  if (q) query = query.ilike("party.display_name", likePattern(q));
+  // Search resolves on the primary identifier as well as the name, so "ابحث بالهوية أو بالرقم
+  // الموحّد" works. Digits are stored unformatted, so a typed value is stripped to match.
+  if (q) {
+    const digits = q.replace(/\D/g, "");
+    const terms = [
+      `display_name.ilike.${likePattern(q)}`,
+      `rep_name.ilike.${likePattern(q)}`,
+      ...(digits ? [`primary_id.ilike.${likePattern(digits)}`, `phone_e164.ilike.${likePattern(digits)}`] : []),
+    ];
+    query = query.or(terms.join(","), { referencedTable: "party" });
+  }
   // Active contracts drive the "N عقد نشط" block and the rented unit list on each card.
   const [{ data, error, count }, { data: contractData }] = await Promise.all([
     query.order("created_at", { ascending: false }).range(from, to),
@@ -60,7 +73,8 @@ export default async function TenantsPage({
       id: t.id,
       display_name: p?.display_name ?? "مستأجر",
       tenant_type: t.tenant_type ?? "individual",
-      national_id: p?.national_id ?? null,
+      primary_id: p?.primary_id ?? null,
+      identity_complete: p?.identity_complete !== false,
       phone_e164: p?.phone_e164 ?? null,
       active_contracts: active?.count ?? 0,
       units: active?.units ?? [],
@@ -79,7 +93,7 @@ export default async function TenantsPage({
         </div>
       </div>
 
-      <ListToolbar q={q} placeholder="بحث باسم المستأجر…" />
+      <ListToolbar q={q} placeholder="بحث بالاسم أو الهوية أو الرقم الموحّد أو الجوال…" />
 
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">

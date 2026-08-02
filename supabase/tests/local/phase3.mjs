@@ -75,9 +75,13 @@ try {
   const P1 = (await one("insert into app.property(org_id,owner_id,name) values($1,$2,'P1') returning id", [org1, O1])).id;
   const U1 = (await one("insert into app.unit(org_id,property_id,unit_number,current_status) values($1,$2,'101','vacant') returning id", [org1, P1])).id;
 
+  // Tenant parties need a primary identifier since 0057, so the fixture mints a valid national id.
+  let nidSeq = 0;
+  const nextNid = () => "1" + String(++nidSeq).padStart(9, "0");
+
   // Tenants: T1 (org1) linked to idTenant1; T2 (org2) linked to nobody (foreign).
   const mkTenant = async (org, name, identityId) => {
-    const p = (await one("insert into app.party(org_id,display_name,roles) values($1,$2,array['tenant']::app.party_role[]) returning id", [org, name])).id;
+    const p = (await one("insert into app.party(org_id,display_name,roles,national_id) values($1,$2,array['tenant']::app.party_role[],$3) returning id", [org, name, nextNid()])).id;
     if (identityId) await linkParty(p, identityId);
     return (await one("insert into app.tenant(org_id,party_id) values($1,$2) returning id", [org, p])).id;
   };
@@ -412,7 +416,7 @@ try {
   const rViewer = await mkRoleMember("+966500000304", "viewer");
   const pR = (await one("insert into app.party(org_id,display_name,legal_kind,roles) values($1,'Self','company',array['owner']::app.party_role[]) returning id", [orgR])).id;
   const ownR = (await one("insert into app.owner(org_id,party_id,is_self,owner_kind) values($1,$2,true,'company') returning id", [orgR, pR])).id;
-  const tpR = (await one("insert into app.party(org_id,display_name,roles) values($1,'Tenant',array['tenant']::app.party_role[]) returning id", [orgR])).id;
+  const tpR = (await one("insert into app.party(org_id,display_name,roles,national_id) values($1,'Tenant',array['tenant']::app.party_role[],'1044444440') returning id", [orgR])).id;
 
   const tryIns = (sub, sql, params) => asRole(sub, orgR, () => client.query(sql, params));
 
@@ -450,26 +454,40 @@ try {
   ok("current_capabilities(staff) = {view, manage_data}",
     capsStaff.ok && JSON.stringify([...capsStaff.value.rows[0].c].sort()) === JSON.stringify(["manage_data", "view"]), JSON.stringify(capsStaff.value && capsStaff.value.rows[0].c));
 
-  // ==================== Tenant / establishment model (0042) ====================
+  // ============ Tenant / establishment model (0042, reshaped by 0057) ============
+  // Since 0057 the entity type is a property of the PARTY; tenant.tenant_type/tenant_kind are
+  // mirrors maintained by trigger, so these assertions write the type where it now belongs.
   const pEst = await one(
-    "insert into app.party(org_id,display_name,legal_kind,roles,cr_number,vat_number,unified_number,cr_expiry) values($1,'شركة الراجحي','company',array['tenant']::app.party_role[],'1010','3001','700123','2030-01-01') returning id, cr_number, vat_number, unified_number, (cr_expiry is not null) has_exp",
+    `insert into app.party(org_id,display_name,legal_kind,entity_type,roles,cr_number,vat_number,
+                           unified_number,cr_expiry,rep_name,rep_id_number,rep_phone_raw)
+     values($1,'شركة الراجحي','company','company',array['tenant']::app.party_role[],'1010101010',
+            '300000000000003','7001234567','2030-01-01','خالد','1090909090','0500000401')
+     returning id, cr_number, vat_number, unified_number, primary_id, (cr_expiry is not null) has_exp`,
     [orgR]);
   ok("party stores establishment identifiers (cr/vat/unified/expiry)",
-    pEst.cr_number === "1010" && pEst.vat_number === "3001" && pEst.unified_number === "700123" && pEst.has_exp === true, JSON.stringify(pEst));
+    pEst.cr_number === "1010101010" && pEst.vat_number === "300000000000003" &&
+    pEst.unified_number === "7001234567" && pEst.has_exp === true, JSON.stringify(pEst));
+  ok("primary_id of an establishment is its unified number", pEst.primary_id === "7001234567", pEst.primary_id);
 
-  const tEst = await one("insert into app.tenant(org_id,party_id,tenant_kind,tenant_type) values($1,$2,'company','company') returning id, tenant_type", [orgR, pEst.id]);
-  ok("tenant.tenant_type persists (company)", tEst.tenant_type === "company");
+  const tEst = await one("insert into app.tenant(org_id,party_id) values($1,$2) returning id, tenant_type, tenant_kind", [orgR, pEst.id]);
+  ok("tenant_type/tenant_kind mirror party.entity_type (company)",
+    tEst.tenant_type === "company" && tEst.tenant_kind === "company", JSON.stringify(tEst));
 
-  const pInd = (await one("insert into app.party(org_id,display_name,roles) values($1,'فرد',array['tenant']::app.party_role[]) returning id", [orgR])).id;
+  const pInd = (await one("insert into app.party(org_id,display_name,roles,national_id) values($1,'فرد',array['tenant']::app.party_role[],'1055555550') returning id", [orgR])).id;
   ok("tenant_type defaults to individual", (await one("insert into app.tenant(org_id,party_id) values($1,$2) returning tenant_type", [orgR, pInd])).tenant_type === "individual");
 
-  const pSole = (await one("insert into app.party(org_id,display_name,roles) values($1,'مؤسسة',array['tenant']::app.party_role[]) returning id", [orgR])).id;
-  ok("tenant_type accepts sole_establishment", (await one("insert into app.tenant(org_id,party_id,tenant_type) values($1,$2,'sole_establishment') returning tenant_type", [orgR, pSole])).tenant_type === "sole_establishment");
+  const pSole = (await one(
+    `insert into app.party(org_id,display_name,entity_type,roles,unified_number,rep_name,rep_id_number,rep_phone_raw)
+     values($1,'مؤسسة','sole_establishment',array['tenant']::app.party_role[],'7009999990','سعد','1077777770','0500000402') returning id`,
+    [orgR])).id;
+  ok("tenant_type mirrors sole_establishment",
+    (await one("insert into app.tenant(org_id,party_id) values($1,$2) returning tenant_type", [orgR, pSole])).tenant_type === "sole_establishment");
 
-  const pBad = (await one("insert into app.party(org_id,display_name,roles) values($1,'x',array['tenant']::app.party_role[]) returning id", [orgR])).id;
   let badType = "";
-  try { await q("insert into app.tenant(org_id,party_id,tenant_type) values($1,$2,'foobar')", [orgR, pBad]); } catch (e) { badType = e.message; }
-  ok("tenant_type CHECK rejects an invalid value", /check|tenant_type/i.test(badType), badType);
+  try {
+    await q("insert into app.party(org_id,display_name,entity_type,roles,national_id) values($1,'x','foobar',array['tenant']::app.party_role[],'1066666660')", [orgR]);
+  } catch (e) { badType = e.message; }
+  ok("party.entity_type CHECK rejects an invalid value", /check|entity_type/i.test(badType), badType);
 
   const propR = (await one("insert into app.property(org_id,owner_id,name) values($1,$2,'PR-Est') returning id", [orgR, ownR])).id;
   const uEst = (await one("insert into app.unit(org_id,property_id,unit_number,current_status) values($1,$2,'C1','vacant') returning id", [orgR, propR])).id;

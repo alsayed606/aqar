@@ -43,9 +43,11 @@ export default async function ContractsPage({
         .select("id, unit_number, property:property_id(name)")
         .is("deleted_at", null)
         .order("unit_number"),
+      // entity_type and the brand list drive the commercial block in the contract form: an
+      // individual renting a flat should never be asked for a shop name or a signing representative.
       supabase
         .from("tenant")
-        .select("id, party:party_id(display_name)")
+        .select("id, party:party_id(display_name, entity_type, rep_name, rep_capacity, rep_id_number, rep_phone_raw, trade_name(id, name))")
         .is("deleted_at", null),
       contractQuery.order("created_at", { ascending: false }).range(from, to),
     ]);
@@ -54,10 +56,19 @@ export default async function ContractsPage({
     id: u.id,
     label: `${first(u.property)?.name ?? "عقار"} — وحدة ${u.unit_number}`,
   }));
-  const tenants = (tenantData ?? []).map((t: any) => ({
-    id: t.id,
-    label: first(t.party)?.display_name ?? "مستأجر",
-  }));
+  const tenants = (tenantData ?? []).map((t: any) => {
+    const party = first(t.party);
+    return {
+      id: t.id,
+      label: party?.display_name ?? "مستأجر",
+      entity_type: party?.entity_type ?? "individual",
+      rep_name: party?.rep_name ?? null,
+      rep_capacity: party?.rep_capacity ?? null,
+      rep_id_number: party?.rep_id_number ?? null,
+      rep_phone: party?.rep_phone_raw ?? null,
+      brands: (party?.trade_name ?? []).map((b: any) => ({ id: b.id, name: b.name })),
+    };
+  });
   const total = count ?? 0;
   // Flatten the embedded relations into the plain shape the client grid expects.
   const contracts: ContractCardData[] = (contractData ?? []).map((c: any) => {

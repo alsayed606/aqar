@@ -74,7 +74,8 @@ try {
   const selfOwner = (await one("insert into app.owner(org_id,party_id,is_self) values($1,$2,true) returning id", [org1, selfParty])).id;
   const P1 = (await one("insert into app.property(org_id,owner_id,name) values($1,$2,'P1') returning id", [org1, selfOwner])).id;
   const U1 = (await one("insert into app.unit(org_id,property_id,unit_number,current_status) values($1,$2,'101','vacant') returning id", [org1, P1])).id;
-  const tParty = (await one("insert into app.party(org_id,display_name,roles) values($1,'Tenant One',array['tenant']::app.party_role[]) returning id", [org1])).id;
+  // A tenant party needs a primary identifier since 0057.
+  const tParty = (await one("insert into app.party(org_id,display_name,roles,national_id) values($1,'Tenant One',array['tenant']::app.party_role[],'1000000001') returning id", [org1])).id;
   const T1 = (await one("insert into app.tenant(org_id,party_id) values($1,$2) returning id", [org1, tParty])).id;
   await q(`insert into app.contract(org_id,property_id,unit_id,tenant_id,contract_number,contract_kind,status,start_date,end_date,annual_rent_halalas,payment_frequency)
            values($1,$2,$3,$4,'CT-1','residential','draft','2025-01-01','2025-12-31',1200000,'quarterly')`,

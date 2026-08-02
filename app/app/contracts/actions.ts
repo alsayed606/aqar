@@ -37,8 +37,8 @@ export async function createContract(
   // contract_number is NOT taken from the form: migration 0045 assigns CT-YYYY-NNNNN atomically in
   // the DB, so every contract is numbered by the same gapless per-(org, year) sequence.
 
-  // Optional commercial details (per contract): shop/trade name + signing representative (Sprint J).
-  const trade_name = String(formData.get("trade_name") ?? "").trim() || null;
+  // Commercial details (per contract): the brand the shop trades under + who signed.
+  const trade_name_id = String(formData.get("trade_name_id") ?? "").trim() || null;
   const representative_name = String(formData.get("representative_name") ?? "").trim() || null;
   const representative_capacity = String(formData.get("representative_capacity") ?? "").trim() || null;
   const representative_id = String(formData.get("representative_id") ?? "").trim() || null;
@@ -62,6 +62,14 @@ export async function createContract(
   if (unitErr) return { error: unitErr.message };
   if (!unit) return { error: "الوحدة غير موجودة" };
 
+  // The contract keeps its own copy of the name: the catalogue entry may later be renamed or
+  // retired, and a signed contract must still read the way it was signed.
+  let trade_name: string | null = null;
+  if (trade_name_id) {
+    const { data: brand } = await supabase.from("trade_name").select("name").eq("id", trade_name_id).maybeSingle();
+    trade_name = brand?.name ?? null;
+  }
+
   const { data: created, error } = await supabase
     .from("contract")
     .insert({
@@ -79,6 +87,7 @@ export async function createContract(
       deposit_halalas: deposit,
       service_fees_halalas: service_fees,
       trade_name,
+      trade_name_id,
       representative_name,
       representative_capacity,
       representative_id,

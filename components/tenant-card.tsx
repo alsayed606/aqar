@@ -9,7 +9,9 @@ export type TenantCardData = {
   id: string;
   display_name: string;
   tenant_type: string;
-  national_id: string | null;
+  /** National id / iqama / passport for a person, unified number for an establishment. */
+  primary_id: string | null;
+  identity_complete: boolean;
   phone_e164: string | null;
   active_contracts: number;
   units: string[];
@@ -70,6 +72,8 @@ export function TenantCard({ tenant }: { tenant: TenantCardData }) {
         </h3>
 
         <div className="flex items-center gap-1">
+          {/* Records that predate the identity rule stay editable; the badge is how they surface. */}
+          {!tenant.identity_complete && <Badge tone="warning">بيانات ناقصة</Badge>}
           <Badge tone={BUCKET_TONE[bucket]}>{BUCKET_LABEL[bucket]}</Badge>
           <div className="relative">
             <button
@@ -95,7 +99,7 @@ export function TenantCard({ tenant }: { tenant: TenantCardData }) {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {tenant.national_id && <Chip><span dir="ltr">{tenant.national_id}</span></Chip>}
+        {tenant.primary_id && <Chip><span dir="ltr">{tenant.primary_id}</span></Chip>}
         {tenant.phone_e164 && <Chip><span dir="ltr">{tenant.phone_e164}</span></Chip>}
       </div>
 

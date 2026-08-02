@@ -37,7 +37,7 @@ export function TenantsGrid({ tenants }: { tenants: TenantCardData[] }) {
           placeholder="تصفية المستأجرين… (الاسم أو الهوية أو الجوال)"
           items={shown.map((tenant) => ({
             id: tenant.id,
-            search: [tenant.display_name, tenant.national_id, tenant.phone_e164, ...tenant.units].filter(Boolean).join(" "),
+            search: [tenant.display_name, tenant.primary_id, tenant.phone_e164, ...tenant.units].filter(Boolean).join(" "),
             node: <TenantCard tenant={tenant} />,
           }))}
         />
