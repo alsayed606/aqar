@@ -7,6 +7,7 @@ import { getCapabilities } from "@/lib/capabilities";
 import { TenantFields } from "@/components/tenant-fields";
 import { isEstablishment } from "@/lib/tenant-identity";
 import { updateTenant, addTradeName, removeTradeName } from "../actions";
+import { erasePartyData } from "../../privacy/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ const TYPE_AR: Record<string, string> = { individual: "فرد", sole_establishme
 const PARTY_COLUMNS =
   "id, display_name, entity_type, national_id, iqama_id, passport_no, email, phone_raw, phone_e164, " +
   "cr_number, vat_number, unified_number, cr_expiry, rep_name, rep_id_number, rep_capacity, rep_phone_raw, " +
-  "id_exempt_reason, identity_complete";
+  "id_exempt_reason, identity_complete, erased_at, erased_reason";
 
 export default async function TenantEditPage({
   params,
@@ -64,7 +65,7 @@ export default async function TenantEditPage({
         <span className="text-neutral-700 dark:text-neutral-300">{p?.display_name}</span>
       </nav>
 
-      {ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">حُفظت التعديلات.</p>}
+      {ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{ok === "1" ? "حُفظت التعديلات." : ok}</p>}
       {flashError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{flashError}</p>}
 
       {p?.identity_complete === false && (
@@ -169,6 +170,34 @@ export default async function TenantEditPage({
             </form>
           )}
         </section>
+      )}
+
+      {/* PDPL erasure (0061). The office is the controller for this person's data, so the request
+          is executed here rather than by us. Hidden once already erased — there is nothing left. */}
+      {canEdit && !p?.erased_at && (
+        <section className="space-y-3 rounded-2xl border border-red-300 bg-white p-6 shadow-sm dark:border-red-900 dark:bg-neutral-900">
+          <h2 className="text-lg font-semibold text-red-700 dark:text-red-400">حذف البيانات الشخصية</h2>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400">
+            عند طلب صاحب البيانات: يُحذف الاسم والهوية والجوال والبريد وبيانات الممثل نهائياً، ويبقى العقد بشروطه
+            المالية و<b>الفواتير الضريبية</b> لأن الأنظمة تُلزم بحفظها. لا يمكن التراجع.
+          </p>
+          <form action={erasePartyData} className="grid gap-3 sm:grid-cols-3">
+            <input type="hidden" name="tenant_id" value={tenant.id} />
+            <input type="hidden" name="party_id" value={p?.id} />
+            <input name="reason" placeholder="سبب الطلب (اختياري)" className={cls + " sm:col-span-2"} />
+            <input name="confirm" required autoComplete="off" placeholder="اكتب: حذف" className={cls} />
+            <button className="rounded-lg bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 sm:col-span-3 sm:w-auto sm:justify-self-start">
+              حذف البيانات الشخصية
+            </button>
+          </form>
+        </section>
+      )}
+
+      {p?.erased_at && (
+        <p className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
+          حُذفت البيانات الشخصية لهذا السجل بتاريخ {new Date(p.erased_at).toLocaleDateString("ar-SA")}.
+          {p.erased_reason ? ` السبب: ${p.erased_reason}.` : ""}
+        </p>
       )}
     </div>
   );

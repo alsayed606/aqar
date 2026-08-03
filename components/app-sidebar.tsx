@@ -23,6 +23,7 @@ const I = {
   upload: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M12 3v12M7 8l5-5 5 5" /></>,
   team: <><circle cx="9" cy="7" r="3" /><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" /><path d="M16 3.5a3 3 0 0 1 0 7M21 21v-2a3.5 3.5 0 0 0-3-3.4" /></>,
   bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></>,
+  shield: <><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /></>,
 };
 
 function groups(unread: number): Group[] {
@@ -56,6 +57,7 @@ function groups(unread: number): Group[] {
         { href: "/app/import", label: "الاستيراد", icon: I.upload },
         { href: "/app/team", label: "الفريق", icon: I.team },
         { href: "/app/notifications", label: "الإشعارات", icon: I.bell, badge: unread },
+        { href: "/app/privacy", label: "الخصوصية والبيانات", icon: I.shield },
       ],
     },
   ];
