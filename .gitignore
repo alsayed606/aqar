@@ -35,3 +35,6 @@ CLAUDE.md
 .swarm/
 .mcp.json
 ruvector.db
+
+# Local one-off DB scripts — kept on disk, never committed (owner's decision, 3 Aug 2026)
+supabase/scripts/
