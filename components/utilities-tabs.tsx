@@ -4,12 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cx } from "@/lib/cx";
 
-// Sections of the utilities module. Reports arrive in U-4 and are listed only once they exist — a
-// tab that leads nowhere is worse than no tab.
 const TABS = [
   { href: "/app/utilities", label: "العدادات" },
   { href: "/app/utilities/readings", label: "القراءات" },
   { href: "/app/utilities/bills", label: "الفواتير" },
+  { href: "/app/utilities/reports", label: "التقارير" },
 ];
 
 export function UtilitiesTabs() {

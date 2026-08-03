@@ -261,6 +261,70 @@ try {
   ok("recording utility bills creates no payment",
     Number((await one("select count(*)::int n from app.payment where org_id=$1", [org])).n) === 0);
 
+  // ==================== Report 3: monthly consumption (U-4) ====================
+  // The unit meter was read at 1000 (Jan), 1350 (Feb) and 90 declared-reset (Mar).
+  const months = (await q(
+    `select month::text, consumption, reading_count, unknown_readings
+       from app.utility_monthly_consumption where meter_id=$1 order by month`, [meter])).rows;
+
+  ok("a month whose only reading is a baseline totals NULL, not zero",
+    months[0].month.startsWith("2026-01") && months[0].consumption === null
+      && Number(months[0].unknown_readings) === 1, JSON.stringify(months[0]));
+  ok("a normal month totals its consumption", Number(months[1].consumption) === 350, JSON.stringify(months[1]));
+  ok("a replaced meter's month totals the reading itself", Number(months[2].consumption) === 90, JSON.stringify(months[2]));
+
+  // ==================== Report 4: meters needing attention (U-4) ====================
+  const attention = (kind) => q(
+    "select meter_id, unit_id, meter_number, unit_number, ref_date::text from app.utility_attention where kind=$1",
+    [kind]).then((r) => r.rows);
+
+  // (a) stale readings — this meter was last read in March, well over 60 days ago.
+  const stale = await attention("stale_reading");
+  ok("a meter unread for more than 60 days needs attention",
+    stale.some((r) => r.meter_id === meter), JSON.stringify(stale.map((r) => r.meter_number)));
+  ok("a meter that was never read at all needs attention too",
+    stale.some((r) => r.meter_number === "W-101" && r.ref_date === null), JSON.stringify(stale));
+
+  const freshMeter = unitMeter2.rows[0].id;
+  await q("insert into app.utility_reading(org_id,meter_id,reading_date,value) values($1,$2,current_date,500)", [org, freshMeter]);
+  ok("a meter read today is NOT reported as stale",
+    !(await attention("stale_reading")).some((r) => r.meter_id === freshMeter));
+
+  // A removed meter is not chased for readings — it is gone.
+  ok("a removed meter is never asked for a reading",
+    !stale.some((r) => r.meter_number === "E-MAIN-2"), JSON.stringify(stale.map((r) => r.meter_number)));
+
+  // (b) a bill with nothing behind it.
+  await q(`insert into app.utility_bill(org_id,meter_id,billing_month,amount_halalas)
+           values($1,$2,'2026-07-01',60000)`, [org, mainW.rows[0].id]);
+  const unbacked = await attention("bill_without_reading");
+  ok("a bill with no reading on it and none recorded that month needs attention",
+    unbacked.some((r) => r.meter_id === mainW.rows[0].id), JSON.stringify(unbacked));
+  // The February bill carries its own readings, so it is backed even with no reading row that month.
+  ok("a bill that carries its own readings is NOT flagged",
+    !unbacked.some((r) => r.meter_id === meter), JSON.stringify(unbacked));
+
+  // (c) a rented unit with no meter of its own.
+  await q("update app.unit set current_status='rented' where id in ($1,$2)", [unitA1, unitB1]);
+  const uncovered = await attention("rented_unit_without_meter");
+  ok("a rented unit with no meter needs attention",
+    uncovered.some((r) => r.unit_id === unitB1), JSON.stringify(uncovered));
+  ok("a rented unit that already has a meter is not reported",
+    !uncovered.some((r) => r.unit_id === unitA1), JSON.stringify(uncovered));
+  await q("update app.unit set current_status='vacant' where id in ($1,$2)", [unitA1, unitB1]);
+
+  // (d) the loose end the consumption rule leaves on purpose.
+  const flaggedMeter = unitMeter3.rows[0].id;
+  await q(`insert into app.utility_reading(org_id,meter_id,reading_date,value)
+           values($1,$2,current_date - 1,900), ($1,$2,current_date,10)`, [org, flaggedMeter]);
+  const unresolved = await attention("reading_needs_review");
+  ok("an unresolved lower-than-previous reading needs attention",
+    unresolved.some((r) => r.meter_id === flaggedMeter), JSON.stringify(unresolved));
+
+  await q("update app.utility_reading set is_reset=true where meter_id=$1 and value=10", [flaggedMeter]);
+  ok("once answered, it leaves the report",
+    !(await attention("reading_needs_review")).some((r) => r.meter_id === flaggedMeter));
+
   // ==================== RLS: property scope ====================
   const idFull = (await one("insert into app.identity(phone_e164,phone_raw,full_name) values('+966500000801','+966500000801','كامل') returning id")).id;
   const idScoped = (await one("insert into app.identity(phone_e164,phone_raw,full_name) values('+966500000802','+966500000802','مقيّد') returning id")).id;
@@ -285,6 +349,21 @@ try {
   const scopedReadings = await asRole(idScoped, org, () => client.query("select count(*)::int n from app.utility_consumption"));
   ok("readings of an out-of-scope property are invisible too",
     scopedReadings.ok && scopedReadings.value.rows[0].n === 0, JSON.stringify(scopedReadings.value?.rows));
+
+  // The reports are views over views; each one is a separate chance to leak past the scope.
+  const scopedMonthly = await asRole(idScoped, org, () => client.query("select count(*)::int n from app.utility_monthly_consumption"));
+  ok("the monthly-consumption report respects the property scope",
+    scopedMonthly.ok && scopedMonthly.value.rows[0].n === 0, JSON.stringify(scopedMonthly.value?.rows));
+
+  // Property B has an unread meter of its own, so the scoped member SHOULD see a row here — the
+  // claim is isolation, not emptiness. Asserting a zero would have passed for the wrong reason.
+  const scopedAttention = await asRole(idScoped, org,
+    () => client.query("select distinct property_id from app.utility_attention"));
+  ok("the attention report shows the scoped member their own property and no other",
+    scopedAttention.ok && scopedAttention.value.rows.every((r) => r.property_id === propB),
+    JSON.stringify(scopedAttention.value?.rows));
+  ok("and property A's attention rows exist but are invisible to them",
+    (await q("select count(*)::int n from app.utility_attention where property_id=$1", [propA])).rows[0].n > 0);
 
   const orgOther = (await one("insert into app.organization(name) values('مكتب آخر') returning id")).id;
   const foreign = await asRole(idFull, orgOther, () => client.query("select count(*)::int n from app.utility_meter"));
