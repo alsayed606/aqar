@@ -214,6 +214,47 @@ try {
   ok("a bill for a month AFTER the lease ended goes back to the owner",
     aprilView.bearer_kind === "owner", JSON.stringify(aprilView));
 
+  // ==================== Paid / overdue, derived (U-3) ====================
+  // The screen has no payment_status column to read; it reads these two. Both must follow from
+  // paid_at and due_date alone, so that marking a bill paid cannot leave a stale "overdue" behind.
+  const overdueView = await one("select is_paid, is_overdue from app.utility_bill_view where id=$1", [bill.rows[0].id]);
+  ok("an unpaid bill past its due date reads as overdue",
+    overdueView.is_paid === false && overdueView.is_overdue === true, JSON.stringify(overdueView));
+
+  await q("update app.utility_bill set paid_at = '2026-03-05' where id=$1", [bill.rows[0].id]);
+  const paidView = await one("select is_paid, is_overdue from app.utility_bill_view where id=$1", [bill.rows[0].id]);
+  ok("marking it paid clears overdue in the same step, with nothing else to update",
+    paidView.is_paid === true && paidView.is_overdue === false, JSON.stringify(paidView));
+
+  await q("update app.utility_bill set paid_at = null where id=$1", [bill.rows[0].id]);
+
+  const notDueYet = await addBill(mainE.rows[0].id, "2026-05-01", 500, 700, 30000, "2099-01-01");
+  const notYetDue = await one("select is_paid, is_overdue from app.utility_bill_view where id=$1", [notDueYet.rows[0].id]);
+  ok("an unpaid bill whose due date has not arrived is NOT overdue",
+    notYetDue.is_paid === false && notYetDue.is_overdue === false, JSON.stringify(notYetDue));
+
+  // ==================== Tenant changed mid-month (U-3) ====================
+  // Two leases both alive on the last day of the billed month. The bearer is still resolved (the
+  // most recent lease wins) but the bill is FLAGGED, because splitting it pro-rata is a decision
+  // the system is not allowed to make on its own.
+  const tParty2 = (await one(
+    `insert into app.party(org_id,display_name,roles,national_id) values($1,'مستأجر مارس',array['tenant']::app.party_role[],'1011111111') returning id`, [org])).id;
+  const tenant2 = (await one("insert into app.tenant(org_id,party_id) values($1,$2) returning id", [org, tParty2])).id;
+  await q(`insert into app.contract(org_id,property_id,unit_id,tenant_id,contract_number,contract_kind,status,start_date,end_date,annual_rent_halalas,payment_frequency)
+           values($1,$2,$3,$4,'CT-U2','residential','expired','2026-02-10','2026-06-30',1200000,'quarterly')`,
+    [org, propA, unitA1, tenant2]);
+
+  const ambiguous = await one(
+    "select bearer_kind, bearer_name, bearer_ambiguous from app.utility_bill_view where id=$1", [bill.rows[0].id]);
+  ok("two leases overlapping the billed month flag the bill as ambiguous",
+    ambiguous.bearer_ambiguous === true, JSON.stringify(ambiguous));
+  ok("and it still names a bearer rather than leaving the row blank",
+    ambiguous.bearer_kind === "tenant" && ambiguous.bearer_name !== null, JSON.stringify(ambiguous));
+
+  // The single-lease bills must NOT be flagged — otherwise the warning means nothing.
+  const unambiguous = await one("select bearer_ambiguous from app.utility_bill_view where id=$1", [mainBill.rows[0].id]);
+  ok("a bill with no competing lease carries no warning", unambiguous.bearer_ambiguous === false);
+
   // ==================== No financial effect ====================
   ok("recording utility bills creates no charge",
     Number((await one("select count(*)::int n from app.charge where org_id=$1", [org])).n) === 0);

@@ -158,6 +158,9 @@ export default async function MetersPage({
                         <Link href={`/app/utilities/readings?meter=${m.id}`} className="text-xs text-brand hover:underline">
                           القراءات
                         </Link>
+                        <Link href={`/app/utilities/bills?meter=${m.id}`} className="text-xs text-brand hover:underline">
+                          الفواتير
+                        </Link>
                         {canData && (
                           <>
                             <form action={setMeterStatus} className="flex items-center gap-1">
