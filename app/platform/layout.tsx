@@ -27,6 +27,15 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   const { data: isOperator } = await supabase.rpc("is_platform_operator");
   if (!isOperator) notFound();
 
+  // An operator account can see every office on the platform, so a password alone is not enough to
+  // hold it. Unlike the office app — where two-factor is the user's own choice — it is required
+  // here, and the console stays shut until it is on. The middleware already steps up an operator who
+  // HAS a factor; this covers the one it cannot: an operator who has never enrolled.
+  const { data: factors } = await supabase.auth.mfa.listFactors();
+  if (!(factors?.totp ?? []).some((f) => f.status === "verified")) {
+    redirect("/app/security?error=" + encodeURIComponent("لوحة الإدارة العليا تتطلّب تفعيل التحقّق بخطوتين أولاً."));
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <PlatformSidebar operatorLabel={user.email ?? user.phone ?? null} />

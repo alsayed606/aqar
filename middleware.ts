@@ -63,6 +63,18 @@ export async function middleware(request: NextRequest) {
     return withCookies(response, NextResponse.redirect(loginUrl));
   }
 
+  // Signed in, has a second factor, but has not used it in this session → step up before anything.
+  // Enforced here rather than per page so a route added later is covered by default; forgetting the
+  // check is the normal way this protection ends up missing from exactly one screen.
+  if (isProtected && user && pathname !== "/auth/mfa") {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal?.nextLevel === "aal2" && aal.currentLevel === "aal1") {
+      const mfaUrl = new URL("/auth/mfa", origin);
+      mfaUrl.searchParams.set("returnTo", pathname + search);
+      return withCookies(response, NextResponse.redirect(mfaUrl));
+    }
+  }
+
   // Already signed in but sitting on /login → forward to the intended (validated) destination.
   if (isLogin && user) {
     const dest = safeReturnTo(request.nextUrl.searchParams.get("returnTo")) ?? "/app";
