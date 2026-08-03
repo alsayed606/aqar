@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { parseArabicNumber } from "@/lib/num";
 import { sarToHalalas } from "@/lib/money";
+import { safeReturnTo } from "@/lib/return-to";
 
 export type MeterState = { error?: string; ok?: boolean };
 export type ReadingState = { error?: string; ok?: boolean };
@@ -13,12 +14,18 @@ export type BillState = { error?: string; ok?: boolean };
 
 const UTILITY_TYPES = ["electricity", "water"];
 
-// Where an action returns the user afterwards. It arrives in a hidden field, so it is caller input
-// and gets treated as such: anything that is not a path inside this module is discarded rather than
-// followed, so a crafted form cannot turn a redirect into a trip to another site.
+// Where an action returns the user afterwards. It arrives in a hidden field, so it is caller input:
+// safeReturnTo rejects off-site and control-character values, and the prefix test keeps it inside
+// this module, since no action here has any business returning anywhere else.
 function safeBack(formData: FormData, fallback: string): string {
-  const back = String(formData.get("back") ?? "");
-  return back.startsWith("/app/utilities") && !back.startsWith("//") ? back : fallback;
+  const back = safeReturnTo(String(formData.get("back") ?? ""));
+  return back?.startsWith("/app/utilities") ? back : fallback;
+}
+
+// `back` already carries the filter and page, so it usually has a query string. Appending a bare
+// "?error=" to it would hide the message inside the previous parameter instead of showing it.
+function backWithError(back: string, message: string): string {
+  return `${back}${back.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`;
 }
 
 // The database rejects the two mistakes that matter (a duplicate number, a unit from another
@@ -94,7 +101,7 @@ export async function setMeterStatus(formData: FormData) {
     .from("utility_meter")
     .update({ status, removed_at })
     .eq("id", meter_id);
-  if (error) redirect(`${back}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(backWithError(back, error.message));
 
   revalidateMeter(property_id);
   redirect(back);
@@ -111,7 +118,7 @@ export async function deleteMeter(formData: FormData) {
     .from("utility_meter")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", meter_id);
-  if (error) redirect(`${back}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(backWithError(back, error.message));
 
   revalidateMeter(property_id);
   redirect(back);
@@ -167,7 +174,7 @@ export async function markReadingReset(formData: FormData) {
     .from("utility_reading")
     .update({ is_reset: true })
     .eq("id", reading_id);
-  if (error) redirect(`${back}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(backWithError(back, error.message));
 
   revalidatePath("/app/utilities/readings");
   redirect(back);
@@ -181,7 +188,7 @@ export async function updateReadingValue(formData: FormData) {
   const value = parseArabicNumber(String(formData.get("value") ?? ""));
   if (!reading_id) redirect(back);
   if (value == null || value < 0) {
-    redirect(`${back}?error=${encodeURIComponent("أدخل قراءة صحيحة (رقم غير سالب)")}`);
+    redirect(backWithError(back, "أدخل قراءة صحيحة (رقم غير سالب)"));
   }
 
   const supabase = await createClient();
@@ -189,7 +196,7 @@ export async function updateReadingValue(formData: FormData) {
     .from("utility_reading")
     .update({ value })
     .eq("id", reading_id);
-  if (error) redirect(`${back}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(backWithError(back, error.message));
 
   revalidatePath("/app/utilities/readings");
   redirect(back);
@@ -205,7 +212,7 @@ export async function deleteReading(formData: FormData) {
     .from("utility_reading")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", reading_id);
-  if (error) redirect(`${back}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(backWithError(back, error.message));
 
   revalidatePath("/app/utilities/readings");
   redirect(back);
@@ -270,7 +277,7 @@ async function writePaidAt(formData: FormData, paid_at: string | null) {
 
   const supabase = await createClient();
   const { error } = await supabase.from("utility_bill").update({ paid_at }).eq("id", bill_id);
-  if (error) redirect(`${back}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(backWithError(back, error.message));
 
   revalidatePath("/app/utilities/bills");
   redirect(back);
@@ -294,7 +301,7 @@ export async function deleteBill(formData: FormData) {
     .from("utility_bill")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", bill_id);
-  if (error) redirect(`${back}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(backWithError(back, error.message));
 
   revalidatePath("/app/utilities/bills");
   redirect(back);

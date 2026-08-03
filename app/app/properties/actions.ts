@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { parseArabicNumber, parseArabicInt } from "@/lib/num";
 import { translateSubscriptionError } from "@/lib/subscription-errors";
+import { safeReturnTo } from "@/lib/return-to";
 
 export type PropState = { error?: string; ok?: boolean };
 export type UnitState = { error?: string; ok?: boolean };
@@ -145,7 +146,8 @@ export async function createUnit(
 // Edit a unit's mutable fields (unit numbering, status, size). RLS (manage_data) gates the write.
 export async function updateUnit(formData: FormData) {
   const unit_id = String(formData.get("unit_id") ?? "");
-  const back = String(formData.get("back") ?? "/app/units");
+  // `back` rides in a hidden field, so it is caller input: validated, never followed as given.
+  const back = safeReturnTo(String(formData.get("back") ?? "")) ?? "/app/units";
   if (!unit_id) redirect(back);
 
   const unit_number = String(formData.get("unit_number") ?? "").trim();
