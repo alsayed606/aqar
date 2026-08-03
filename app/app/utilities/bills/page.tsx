@@ -14,7 +14,7 @@ import { meterLabel } from "@/lib/utilities";
 import { halalasToSar } from "@/lib/money";
 import { UTILITY_TYPE_AR } from "@/lib/labels";
 import { PAGE_SIZE } from "@/lib/list-params";
-import { deleteBill, setBillPaid } from "../actions";
+import { clearBillPaid, deleteBill, markBillPaid } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -253,10 +253,9 @@ export default async function BillsPage({
                     <td>
                       {canData && (
                         <div className="flex flex-wrap items-center gap-2">
-                          <form action={setBillPaid}>
+                          <form action={b.is_paid ? clearBillPaid : markBillPaid}>
                             <input type="hidden" name="bill_id" value={b.id} />
                             <input type="hidden" name="back" value={back} />
-                            {b.is_paid && <input type="hidden" name="unpay" value="1" />}
                             <button className="text-xs text-brand hover:underline">
                               {b.is_paid ? "إلغاء السداد" : "تعليم مسدَّدة"}
                             </button>

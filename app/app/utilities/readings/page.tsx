@@ -100,11 +100,13 @@ export default async function ReadingsPage({
     lastValue: lastByMeter.get(m.id) ?? null,
   }));
 
-  const back = `/app/utilities/readings?${new URLSearchParams({
+  // Where the row actions return to, carrying whatever filter and page the user was looking at.
+  const backParams = new URLSearchParams({
     ...(meterFilter ? { meter: meterFilter } : {}),
     ...(reviewOnly ? { review: "1" } : {}),
     ...(page > 1 ? { page: String(page) } : {}),
-  })}`;
+  }).toString();
+  const back = `/app/utilities/readings${backParams ? `?${backParams}` : ""}`;
 
   return (
     <div className="space-y-6">

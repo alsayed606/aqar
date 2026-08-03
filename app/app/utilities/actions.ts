@@ -13,6 +13,14 @@ export type BillState = { error?: string; ok?: boolean };
 
 const UTILITY_TYPES = ["electricity", "water"];
 
+// Where an action returns the user afterwards. It arrives in a hidden field, so it is caller input
+// and gets treated as such: anything that is not a path inside this module is discarded rather than
+// followed, so a crafted form cannot turn a redirect into a trip to another site.
+function safeBack(formData: FormData, fallback: string): string {
+  const back = String(formData.get("back") ?? "");
+  return back.startsWith("/app/utilities") && !back.startsWith("//") ? back : fallback;
+}
+
 // The database rejects the two mistakes that matter (a duplicate number, a unit from another
 // property). Turning those into Arabic is all the UI has to add.
 function translateMeterError(message: string, meterNumber: string): string {
@@ -73,7 +81,7 @@ export async function setMeterStatus(formData: FormData) {
   const meter_id = String(formData.get("meter_id") ?? "");
   const property_id = String(formData.get("property_id") ?? "");
   const status = String(formData.get("status") ?? "");
-  const back = String(formData.get("back") ?? "/app/utilities");
+  const back = safeBack(formData, "/app/utilities");
   if (!meter_id || !["active", "inactive", "removed"].includes(status)) redirect(back);
 
   const removed_at =
@@ -95,7 +103,7 @@ export async function setMeterStatus(formData: FormData) {
 export async function deleteMeter(formData: FormData) {
   const meter_id = String(formData.get("meter_id") ?? "");
   const property_id = String(formData.get("property_id") ?? "");
-  const back = String(formData.get("back") ?? "/app/utilities");
+  const back = safeBack(formData, "/app/utilities");
   if (!meter_id) redirect(back);
 
   const supabase = await createClient();
@@ -151,7 +159,7 @@ export async function createReading(
 // docs/foundation/09-utilities-module.md §3 — the system never infers this on its own.
 export async function markReadingReset(formData: FormData) {
   const reading_id = String(formData.get("reading_id") ?? "");
-  const back = String(formData.get("back") ?? "/app/utilities/readings");
+  const back = safeBack(formData, "/app/utilities/readings");
   if (!reading_id) redirect(back);
 
   const supabase = await createClient();
@@ -169,7 +177,7 @@ export async function markReadingReset(formData: FormData) {
 // because consumption is a view over the readings and is not stored anywhere.
 export async function updateReadingValue(formData: FormData) {
   const reading_id = String(formData.get("reading_id") ?? "");
-  const back = String(formData.get("back") ?? "/app/utilities/readings");
+  const back = safeBack(formData, "/app/utilities/readings");
   const value = parseArabicNumber(String(formData.get("value") ?? ""));
   if (!reading_id) redirect(back);
   if (value == null || value < 0) {
@@ -189,7 +197,7 @@ export async function updateReadingValue(formData: FormData) {
 
 export async function deleteReading(formData: FormData) {
   const reading_id = String(formData.get("reading_id") ?? "");
-  const back = String(formData.get("back") ?? "/app/utilities/readings");
+  const back = safeBack(formData, "/app/utilities/readings");
   if (!reading_id) redirect(back);
 
   const supabase = await createClient();
@@ -203,14 +211,12 @@ export async function deleteReading(formData: FormData) {
   redirect(back);
 }
 
-// A billing month is a month. The form sends "2026-03" (an <input type="month">); the CHECK
-// constraint would reject any day other than the first, so the day is fixed here rather than left
-// to whatever the browser posts.
+// A billing month is a month. <input type="month"> posts "2026-03", and a browser without support
+// for it degrades to a free-text box — so the shape is checked here rather than trusted, and the
+// day the CHECK constraint insists on is supplied.
 function firstOfMonth(input: string): string | null {
-  const m = /^(\d{4})-(\d{2})$/.exec(input.trim());
-  if (m) return `${m[1]}-${m[2]}-01`;
-  const d = /^(\d{4})-(\d{2})-\d{2}$/.exec(input.trim());
-  return d ? `${d[1]}-${d[2]}-01` : null;
+  const month = /^(\d{4})-(\d{2})$/.exec(input.trim());
+  return month ? `${month[1]}-${month[2]}-01` : null;
 }
 
 export async function createBill(
@@ -255,16 +261,12 @@ export async function createBill(
   return { ok: true };
 }
 
-// "Paid" is a date, not a status column (design note §2), so marking and unmarking a bill is the
-// same write with a value or a null — there is no second field that could disagree with it.
-export async function setBillPaid(formData: FormData) {
+// "Paid" is a date, not a status column (design note §2), so both directions are one write to one
+// field — there is no second field that could disagree with it.
+async function writePaidAt(formData: FormData, paid_at: string | null) {
   const bill_id = String(formData.get("bill_id") ?? "");
-  const back = String(formData.get("back") ?? "/app/utilities/bills");
+  const back = safeBack(formData, "/app/utilities/bills");
   if (!bill_id) redirect(back);
-
-  const paid_at = formData.get("unpay") === "1"
-    ? null
-    : String(formData.get("paid_at") ?? "").trim() || new Date().toISOString().slice(0, 10);
 
   const supabase = await createClient();
   const { error } = await supabase.from("utility_bill").update({ paid_at }).eq("id", bill_id);
@@ -274,9 +276,17 @@ export async function setBillPaid(formData: FormData) {
   redirect(back);
 }
 
+export async function markBillPaid(formData: FormData) {
+  return writePaidAt(formData, new Date().toISOString().slice(0, 10));
+}
+
+export async function clearBillPaid(formData: FormData) {
+  return writePaidAt(formData, null);
+}
+
 export async function deleteBill(formData: FormData) {
   const bill_id = String(formData.get("bill_id") ?? "");
-  const back = String(formData.get("back") ?? "/app/utilities/bills");
+  const back = safeBack(formData, "/app/utilities/bills");
   if (!bill_id) redirect(back);
 
   const supabase = await createClient();

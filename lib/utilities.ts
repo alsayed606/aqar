@@ -26,8 +26,3 @@ export function lastMonths(count: number): string[] {
   }
   return months;
 }
-
-/** "2026-08-01" → "2026-08". Column headers stay narrow enough for twelve of them to fit. */
-export function monthLabel(month: string): string {
-  return month.slice(0, 7);
-}

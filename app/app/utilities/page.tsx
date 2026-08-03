@@ -43,7 +43,7 @@ export default async function MetersPage({
   let metersQuery = supabase
     .from("utility_meter")
     .select(
-      "id, utility_type, meter_number, provider, status, meter_level, property_id, unit_id, property:property_id(name), unit:unit_id(unit_number)",
+      "id, utility_type, meter_number, provider, status, property_id, property:property_id(name), unit:unit_id(unit_number)",
       { count: "exact" },
     )
     .is("deleted_at", null);

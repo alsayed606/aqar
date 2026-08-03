@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui";
 import { UtilitiesTabs } from "@/components/utilities-tabs";
 import { halalasToSar } from "@/lib/money";
 import { UTILITY_TYPE_AR } from "@/lib/labels";
-import { lastMonths, monthLabel } from "@/lib/utilities";
+import { lastMonths } from "@/lib/utilities";
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +116,8 @@ export default async function ReportsPage({
       .from("utility_monthly_consumption")
       .select("meter_id, meter_number, utility_type, property_name, unit_number, month, consumption")
       .gte("month", months[0])
-      .order("month", { ascending: true });
+      .order("month", { ascending: true })
+      .limit(2000);
     consumption = data ?? [];
   } else {
     const { data } = await supabase
@@ -185,7 +186,7 @@ export default async function ReportsPage({
                   <tr className={headRow}>
                     <th>العدّاد</th>
                     {months.map((m) => (
-                      <th key={m} dir="ltr" className="whitespace-nowrap">{monthLabel(m)}</th>
+                      <th key={m} dir="ltr" className="whitespace-nowrap">{m.slice(0, 7)}</th>
                     ))}
                   </tr>
                 </thead>
