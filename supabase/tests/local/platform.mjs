@@ -594,6 +594,82 @@ try {
   ok("a broadcast is audited with its audience and reach",
     castAudit && castAudit.org_id === null && Number(castAudit.detail.orgs) === sent.orgs, JSON.stringify(castAudit?.detail));
 
+  // ==================== Offline subscription payment (0062) ====================
+  // The money path that does not go through Moyasar. What matters is that declaring a transfer
+  // grants nothing on its own — only an operator confirming it does.
+  const listForbidden = await asRole(idViewer, org1, () => client.query("select * from app.platform_offline_payments()"));
+  ok("platform_offline_payments FORBIDDEN for a non-operator",
+    listForbidden.ok === false && /FORBIDDEN/i.test(listForbidden.error || ""), listForbidden.error);
+
+  await q("insert into app.plan(code,name_ar,max_properties,max_units,max_members,price_halalas,is_public) values('offline_test','اختبار التحويل',50,50,50,29900,true) on conflict (code) do nothing");
+  await q("update app.org_subscription set plan_code='enterprise', status='trialing', current_period_end=null where org_id=$1", [org1]);
+
+  const req = await callAs(idOwner, org1, "select * from app.request_offline_payment($1,'offline_test','bank_transfer','TRF-9001')", [org1]);
+  ok("an office can declare a bank transfer", Array.isArray(req) && req.length === 1, JSON.stringify(req).slice(0, 160));
+  const payId = req?.[0]?.id;
+
+  const stillTrialing = await one("select status, plan_code from app.org_subscription where org_id=$1", [org1]);
+  ok("declaring a transfer grants nothing on its own",
+    stillTrialing.status === "trialing" && stillTrialing.plan_code !== "offline_test", JSON.stringify(stillTrialing));
+
+  const second = await asRole(idOwner, org1, () => client.query("select app.request_offline_payment($1,'offline_test','cash','X')", [org1]));
+  ok("a second open request is refused while one is pending",
+    second.ok === false && /OFFLINE_REQUEST_PENDING/.test(second.error || ""), second.error);
+
+  const badMethod = await asRole(idOwner, org1, () => client.query("select app.request_offline_payment($1,'offline_test','bitcoin','X')", [org1]));
+  ok("an unknown payment method is refused",
+    badMethod.ok === false && /INVALID_METHOD/.test(badMethod.error || ""), badMethod.error);
+
+  const staffRequest = await asRole(idStaff, org1, () => client.query("select app.request_offline_payment($1,'offline_test','cash','X')", [org1]));
+  ok("a non-admin member cannot declare a payment",
+    staffRequest.ok === false && /FORBIDDEN/i.test(staffRequest.error || ""), staffRequest.error);
+
+  // idOwner is seeded as the platform operator in this fixture, so proving the office cannot
+  // self-confirm needs an office ADMIN who is not an operator — the realistic customer account.
+  const idOfficeAdmin = await mkId("+966500000021");
+  await mkMember(idOfficeAdmin, org1, "admin");
+  const confirmForbidden = await asRole(idOfficeAdmin, org1, () => client.query("select app.operator_confirm_offline_payment($1)", [payId]));
+  ok("an office admin cannot confirm their own transfer",
+    confirmForbidden.ok === false && /FORBIDDEN/i.test(confirmForbidden.error || ""), confirmForbidden.error);
+
+  const queue = await callAs(idOwner, org1, "select * from app.platform_offline_payments()");
+  ok("the operator sees the pending transfer with its office and reference",
+    queue.some((r) => r.id === payId && r.reference === "TRF-9001" && r.org_name === "Org One"),
+    JSON.stringify(queue).slice(0, 200));
+
+  await callAs(idOwner, org1, "select app.operator_confirm_offline_payment($1,'وصل الحوالة')", [payId]);
+  const afterConfirm = await one("select status, plan_code, current_period_end from app.org_subscription where org_id=$1", [org1]);
+  ok("confirming activates the subscription on the paid plan",
+    afterConfirm.status === "active" && afterConfirm.plan_code === "offline_test" && afterConfirm.current_period_end !== null,
+    JSON.stringify(afterConfirm));
+
+  const paidRow = await one("select status, paid_at, confirmed_by, review_note from app.subscription_payment where id=$1", [payId]);
+  ok("the payment row records who confirmed it and when",
+    paidRow.status === "paid" && paidRow.paid_at !== null && paidRow.confirmed_by === idOwner && paidRow.review_note === "وصل الحوالة",
+    JSON.stringify(paidRow));
+
+  // Idempotence matters here more than online: this is a button a human clicks, not a webhook.
+  const periodBefore = afterConfirm.current_period_end;
+  await callAs(idOwner, org1, "select app.operator_confirm_offline_payment($1,'مرة ثانية')", [payId]);
+  const periodAfter = (await one("select current_period_end from app.org_subscription where org_id=$1", [org1])).current_period_end;
+  ok("confirming twice does not extend the period twice",
+    String(periodBefore) === String(periodAfter), `${periodBefore} vs ${periodAfter}`);
+
+  const rejectPaid = await asRole(idOwner, org1, () => client.query("select app.operator_reject_offline_payment($1,'خطأ')", [payId]));
+  ok("a confirmed payment cannot be rejected — that is a refund, not a rejection",
+    rejectPaid.ok === false && /ALREADY_CONFIRMED/.test(rejectPaid.error || ""), rejectPaid.error);
+
+  const req2 = await callAs(idOwner, org1, "select * from app.request_offline_payment($1,'offline_test','cash','CASH-1')", [org1]);
+  await callAs(idOwner, org1, "select app.operator_reject_offline_payment($1,'لم تصل الحوالة')", [req2[0].id]);
+  const rejected = await one("select status, review_note from app.subscription_payment where id=$1", [req2[0].id]);
+  ok("rejecting marks the request failed with the reason",
+    rejected.status === "failed" && rejected.review_note === "لم تصل الحوالة", JSON.stringify(rejected));
+  ok("a rejection frees the office to file a new request",
+    Number((await one("select count(*)::int n from app.subscription_payment where org_id=$1 and gateway='offline' and status='initiated'", [org1])).n) === 0);
+
+  const bank = await asRole(idOwner, org1, () => client.query("select app.subscription_bank_details() d"));
+  ok("an office admin can read where to send the money", bank.ok === true, bank.error);
+
   console.log(`\nPlatform: ${pass} passed, ${fail} failed`);
   process.exitCode = fail === 0 ? 0 : 1;
 } catch (e) {

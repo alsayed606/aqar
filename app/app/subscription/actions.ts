@@ -45,6 +45,45 @@ export async function startSubscriptionCheckout(formData: FormData) {
   redirect(invoice.url); // hand off to Moyasar's hosted payment page
 }
 
+// Declare a transfer or cash payment the office has already made (0062). This records an INTENT
+// only — the plan is granted when an operator confirms the money arrived, never on submission.
+export async function declareOfflinePayment(formData: FormData) {
+  const plan = String(formData.get("plan") ?? "").trim();
+  const method = String(formData.get("method") ?? "");
+  const reference = String(formData.get("reference") ?? "").trim();
+  const activeOrg = await getActiveOrg();
+  if (!activeOrg) redirect("/app");
+  if (!plan) redirect("/app/subscription?error=" + encodeURIComponent("اختر خطة أولاً."));
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("request_offline_payment", {
+    p_org: activeOrg,
+    p_plan: plan,
+    p_method: method === "cash" ? "cash" : "bank_transfer",
+    p_reference: reference || null,
+  });
+  if (error) {
+    const msg = /FORBIDDEN/i.test(error.message)
+      ? "متاح لمدير المنشأة فقط."
+      : /OFFLINE_REQUEST_PENDING/i.test(error.message)
+        ? "لديك طلب تحويل قيد المراجعة. ألغِه أولاً إن أردت تغييره."
+        : /PLAN_NOT_PURCHASABLE/i.test(error.message)
+          ? "هذه الخطة غير متاحة للشراء الذاتي. تواصل معنا."
+          : error.message;
+    redirect("/app/subscription?error=" + encodeURIComponent(msg));
+  }
+  redirect("/app/subscription?ok=" + encodeURIComponent("سجّلنا طلبك. سيُفعّل اشتراكك بعد تأكيد وصول المبلغ."));
+}
+
+export async function cancelOfflinePayment() {
+  const activeOrg = await getActiveOrg();
+  if (!activeOrg) redirect("/app");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("cancel_offline_payment", { p_org: activeOrg });
+  if (error) redirect("/app/subscription?error=" + encodeURIComponent(error.message));
+  redirect("/app/subscription?ok=" + encodeURIComponent("أُلغي طلب التحويل."));
+}
+
 // Toggle auto-renew (requires a saved card to enable). Admin-gated in SQL.
 export async function setAutoRenew(formData: FormData) {
   const activeOrg = await getActiveOrg();

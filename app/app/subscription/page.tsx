@@ -5,6 +5,7 @@ import { getCapabilities } from "@/lib/capabilities";
 import { halalasToSar } from "@/lib/money";
 import { fmtDate, type Summary, type SubscriptionStatus } from "@/lib/subscription";
 import { startSubscriptionCheckout, setAutoRenew, removeCard } from "./actions";
+import { OfflinePaymentPanel } from "@/components/offline-payment-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +28,11 @@ const RESOURCES: Array<{ key: keyof Summary["usage"]; label: string }> = [
 export default async function SubscriptionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; checkout?: string }>;
+  searchParams: Promise<{ error?: string; checkout?: string; ok?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
-  const { error: flashError, checkout } = await searchParams;
+  const { error: flashError, checkout, ok: flashOk } = await searchParams;
   const caps = await getCapabilities(activeOrg);
   const canBill = caps.has("manage_billing");
 
@@ -45,6 +46,15 @@ export default async function SubscriptionPage({
     .order("sort");
   const plans = ((planData ?? []) as PlanRow[]).filter((p) => p.is_public && p.price_halalas > 0);
 
+  // Both degrade to nothing before 0062 is applied, so the page still renders on an older database.
+  const [{ data: bankData }, { data: pendingData }] = await Promise.all([
+    supabase.rpc("subscription_bank_details"),
+    supabase.rpc("pending_offline_payment", { p_org: activeOrg }),
+  ]);
+  const bank = (bankData ?? null) as { bank_name?: string; bank_account_name?: string; bank_iban?: string; note?: string } | null;
+  const pendingRow = (pendingData ?? null) as { id?: string; plan_code?: string; amount_halalas?: number; method?: string; reference?: string; created_at?: string } | null;
+  const pending = pendingRow?.id ? pendingRow : null;
+
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold">الاشتراك والاستخدام</h1>
@@ -57,6 +67,12 @@ export default async function SubscriptionPage({
       {flashError && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
           {flashError}
+        </p>
+      )}
+
+      {flashOk && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+          {flashOk}
         </p>
       )}
 
@@ -226,6 +242,16 @@ export default async function SubscriptionPage({
                 الدفع متاح لمدير المنشأة. تُدار البطاقة على صفحة مزوّد الدفع الآمنة — لا نحفظ بياناتها.
               </p>
             </form>
+          )}
+
+          {/* Bank transfer / cash (0062). Kept beside card payment rather than replacing it: the two
+              produce the same subscription_payment row and differ only in who confirms it. */}
+          {canBill && plans.length > 0 && (
+            <OfflinePaymentPanel
+              plans={plans.map((p) => ({ code: p.code, name_ar: p.name_ar, price_halalas: p.price_halalas }))}
+              bank={bank}
+              pending={pending}
+            />
           )}
         </>
       )}

@@ -8,6 +8,7 @@ import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
 import { StatCard } from "@/components/platform/stat-card";
 import { FilterChips } from "@/components/platform/filter-chips";
+import { confirmOfflinePayment, rejectOfflinePayment } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,16 @@ type PaymentRow = {
   status: string; created_at: string; paid_at: string | null;
   failure_reason: string | null; total_count: number;
 };
+
+type OfflineRow = {
+  id: string; org_id: string; org_name: string; plan_code: string;
+  amount_halalas: number; method: string; reference: string | null; created_at: string;
+};
+
+const METHOD_AR: Record<string, string> = { bank_transfer: "تحويل بنكي", cash: "نقداً" };
+
+const reviewInputCls =
+  "min-w-40 flex-1 rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-neutral-700";
 
 const STATUS_AR: Record<string, string> = {
   initiated: "قيد التنفيذ", paid: "مدفوعة", failed: "فاشلة", refunded: "مُستردّة",
@@ -45,7 +56,7 @@ export default async function BillingCentre({
   const status = FILTERS.includes((sp.status ?? "") as (typeof FILTERS)[number]) ? sp.status ?? "" : "";
 
   const supabase = await createClient();
-  const [{ data: healthData, error }, { data: paymentsData }] = await Promise.all([
+  const [{ data: healthData, error }, { data: paymentsData }, { data: offlineData }] = await Promise.all([
     supabase.rpc("platform_billing_health", { p_days: 30 }),
     supabase.rpc("platform_list_payments", {
       p_search: q || null,
@@ -53,7 +64,10 @@ export default async function BillingCentre({
       p_limit: PAGE_SIZE,
       p_offset: from,
     }),
+    // Degrades to nothing before 0062 is applied.
+    supabase.rpc("platform_offline_payments"),
   ]);
+  const offline = (offlineData ?? []) as OfflineRow[];
 
   if (error?.message?.includes("platform_billing_health")) {
     return (
@@ -72,6 +86,54 @@ export default async function BillingCentre({
         <h1 className="text-xl font-bold text-slate-900 dark:text-white">مركز الفوترة</h1>
         <p className="text-xs text-slate-500">آخر {h.window_days} يوماً</p>
       </div>
+
+      {/* Transfers waiting on a human. Placed above the metrics on purpose: it is the only block on
+          this page that represents work owed to a customer rather than a number to read. */}
+      {offline.length > 0 && (
+        <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5 dark:border-amber-800 dark:bg-amber-900/20">
+          <h2 className="mb-1 font-semibold text-amber-900 dark:text-amber-200">
+            تحويلات بانتظار التأكيد ({offline.length})
+          </h2>
+          <p className="mb-4 text-sm text-amber-800 dark:text-amber-300">
+            طابِق المبلغ والمرجع مع كشف الحساب البنكي قبل التأكيد. التأكيد يفعّل الاشتراك فوراً.
+          </p>
+          <ul className="space-y-3">
+            {offline.map((row) => (
+              <li key={row.id} className="rounded-xl border border-amber-200 bg-white p-4 dark:border-amber-900 dark:bg-neutral-900">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <Link href={`/platform/tenants/${row.org_id}`} className="font-medium text-brand hover:underline">
+                    {row.org_name}
+                  </Link>
+                  <span className="text-sm">
+                    <span dir="ltr" className="font-semibold">{halalasToSar(row.amount_halalas)}</span> ر.س · خطة {row.plan_code}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  {METHOD_AR[row.method] ?? row.method}
+                  {row.reference ? ` · المرجع: ${row.reference}` : " · بلا مرجع"} · {fmtDate(row.created_at)}
+                </p>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <form action={confirmOfflinePayment} className="flex flex-1 flex-wrap gap-2">
+                    <input type="hidden" name="payment_id" value={row.id} />
+                    <input name="note" placeholder="ملاحظة (اختياري)" className={reviewInputCls} />
+                    <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                      تأكيد الاستلام
+                    </button>
+                  </form>
+                  <form action={rejectOfflinePayment} className="flex flex-1 flex-wrap gap-2">
+                    <input type="hidden" name="payment_id" value={row.id} />
+                    <input name="reason" required placeholder="سبب الرفض" className={reviewInputCls} />
+                    <button className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/20">
+                      رفض
+                    </button>
+                  </form>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Gateway health as our own records show it. A live probe of Moyasar would need their API and
           is not claimed here — nothing on this page reports a status we did not observe. */}

@@ -156,6 +156,36 @@ export async function saveFlag(formData: FormData) {
   redirect("/platform/features?ok=1");
 }
 
+// Offline payment review (0062). Confirming is the moment the plan is actually granted, so it is an
+// operator act and it is audited — the money arrived on a bank statement nobody else can see.
+export async function confirmOfflinePayment(formData: FormData) {
+  const id = String(formData.get("payment_id") ?? "");
+  if (!id) redirect("/platform/billing");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("operator_confirm_offline_payment", {
+    p_payment: id,
+    p_note: String(formData.get("note") ?? "").trim() || null,
+  });
+  if (error) redirect(`/platform/billing?error=${encodeURIComponent(platformErrorAr(error.message))}`);
+  revalidatePath("/platform/billing");
+  redirect("/platform/billing?ok=1");
+}
+
+export async function rejectOfflinePayment(formData: FormData) {
+  const id = String(formData.get("payment_id") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!id) redirect("/platform/billing");
+  // A rejection without a reason leaves the office with no idea what to fix, and leaves the audit
+  // log with no idea why the money was refused.
+  if (!reason) redirect(`/platform/billing?error=${encodeURIComponent("اكتب سبب الرفض")}`);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("operator_reject_offline_payment", { p_payment: id, p_reason: reason });
+  if (error) redirect(`/platform/billing?error=${encodeURIComponent(platformErrorAr(error.message))}`);
+  revalidatePath("/platform/billing");
+  redirect("/platform/billing?ok=1");
+}
+
 export async function saveSetting(formData: FormData) {
   const key = String(formData.get("key") ?? "").trim();
   const raw = String(formData.get("value") ?? "").trim();
