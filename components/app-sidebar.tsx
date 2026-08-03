@@ -20,6 +20,8 @@ const I = {
   receipt: <><rect x="4" y="3" width="16" height="18" rx="1" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
   card: <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></>,
   wrench: <><path d="M14 7a4 4 0 0 1-5 5L4 17l3 3 5-5a4 4 0 0 1 5-5l-3-3z" /></>,
+  gauge: <><path d="M3 17a9 9 0 1 1 18 0" /><path d="M12 17l4-5" /><circle cx="12" cy="17" r="1.5" /></>,
+  list: <><path d="M8 6h13M8 12h13M8 18h13" /><path d="M3 6h.01M3 12h.01M3 18h.01" /></>,
   upload: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M12 3v12M7 8l5-5 5 5" /></>,
   team: <><circle cx="9" cy="7" r="3" /><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" /><path d="M16 3.5a3 3 0 0 1 0 7M21 21v-2a3.5 3.5 0 0 0-3-3.4" /></>,
   bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></>,
@@ -49,6 +51,14 @@ function groups(unread: number): Group[] {
       ],
     },
     {
+      // Meters are utilities, not faults — a section of their own, not a corner of maintenance.
+      title: "المرافق",
+      items: [
+        { href: "/app/utilities", label: "العدادات", icon: I.gauge, add: "/app/utilities?add=1" },
+        { href: "/app/utilities/readings", label: "القراءات", icon: I.list },
+      ],
+    },
+    {
       title: "الصيانة والطلبات",
       items: [{ href: "#", label: "طلبات الصيانة", icon: I.wrench, soon: true }],
     },
@@ -65,8 +75,18 @@ function groups(unread: number): Group[] {
   ];
 }
 
-function isActive(pathname: string, href: string) {
-  return href === "/app" ? pathname === "/app" : pathname.startsWith(href);
+// Only the most specific match lights up. With /app/utilities and /app/utilities/readings both in
+// the nav, a plain startsWith would highlight the parent on the child's page as well.
+function activeHref(pathname: string, unread: number): string | null {
+  let best: string | null = null;
+  for (const g of groups(unread)) {
+    for (const it of g.items) {
+      if (it.soon) continue;
+      const matches = it.href === "/app" ? pathname === "/app" : pathname.startsWith(it.href);
+      if (matches && (best === null || it.href.length > best.length)) best = it.href;
+    }
+  }
+  return best;
 }
 
 function Sv({ children }: { children: ReactNode }) {
@@ -79,6 +99,7 @@ function Sv({ children }: { children: ReactNode }) {
 
 function NavContent({ unread, onNavigate }: { unread: number; onNavigate?: () => void }) {
   const pathname = usePathname();
+  const current = activeHref(pathname, unread);
   return (
     <nav className="space-y-5">
       {groups(unread).map((g, gi) => (
@@ -86,7 +107,7 @@ function NavContent({ unread, onNavigate }: { unread: number; onNavigate?: () =>
           {g.title && <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{g.title}</p>}
           <ul className="space-y-0.5">
             {g.items.map((it) => {
-              const active = !it.soon && isActive(pathname, it.href);
+              const active = !it.soon && it.href === current;
               if (it.soon) {
                 return (
                   <li key={it.label}>

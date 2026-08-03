@@ -7,7 +7,8 @@ import { UnitForm } from "@/components/unit-form";
 import { ConfirmButton } from "@/components/confirm-button";
 import { FormDrawer } from "@/components/form-drawer";
 import { changePropertyOwner } from "../actions";
-import { PROPERTY_KIND_AR, UNIT_STATUS_AR, CONTRACT_STATUS_AR } from "@/lib/labels";
+import { MeterForm } from "@/components/meter-form";
+import { PROPERTY_KIND_AR, UNIT_STATUS_AR, CONTRACT_STATUS_AR, UTILITY_TYPE_AR, METER_STATUS_AR } from "@/lib/labels";
 import { halalasToSar } from "@/lib/money";
 import { Card, CardBody, Badge, Tabs } from "@/components/ui";
 
@@ -68,7 +69,7 @@ export default async function PropertyDetail({
 
   if (!property) notFound();
 
-  const [{ data: unitData }, { data: ownerData }, { data: contractData }] = await Promise.all([
+  const [{ data: unitData }, { data: ownerData }, { data: contractData }, { data: meterData }] = await Promise.all([
     supabase
       .from("unit")
       .select("id, unit_number, floor, area_sqm, bedrooms, bathrooms, current_status")
@@ -88,11 +89,23 @@ export default async function PropertyDetail({
       .eq("property_id", id)
       .is("deleted_at", null)
       .order("created_at", { ascending: false }),
+    // Meters are optional: a property with none renders exactly as it did before this module.
+    supabase
+      .from("utility_meter")
+      .select("id, utility_type, meter_number, status, unit_id, provider, unit:unit_id(unit_number)")
+      .eq("property_id", id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false }),
   ]);
 
   const units = (unitData ?? []) as UnitRow[];
   const owners = ownerData ?? [];
   const contracts = (contractData ?? []) as any[];
+  const meters = (meterData ?? []) as any[];
+  const mainMeters = meters.filter((m) => m.unit_id === null);
+  const unitMeters = meters.filter((m) => m.unit_id !== null);
+  const metersByUnit = new Map<string, number>();
+  for (const m of unitMeters) metersByUnit.set(m.unit_id, (metersByUnit.get(m.unit_id) ?? 0) + 1);
   const rented = units.filter((u) => u.current_status === "rented").length;
   const vacant = units.filter((u) => u.current_status === "vacant").length;
   const activeContracts = contracts.filter((c) => c.status === "active").length;
@@ -121,6 +134,7 @@ export default async function PropertyDetail({
                 <th>المساحة</th>
                 <th>غرف</th>
                 <th>دورات مياه</th>
+                <th>عدّادات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -136,12 +150,83 @@ export default async function PropertyDetail({
                   <td className="text-slate-600 dark:text-slate-300">{u.area_sqm != null ? `${u.area_sqm} م²` : "—"}</td>
                   <td className="text-slate-600 dark:text-slate-300">{u.bedrooms ?? "—"}</td>
                   <td className="text-slate-600 dark:text-slate-300">{u.bathrooms ?? "—"}</td>
+                  <td className="text-slate-600 dark:text-slate-300">{metersByUnit.get(u.id) ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+    </div>
+  );
+
+  // Main meters and unit meters are listed apart because they answer different questions: what the
+  // property consumes as a whole, and what each unit does. Both may exist on the same property.
+  const meterTable = (rows: any[], emptyText: string) =>
+    rows.length === 0 ? (
+      <p className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500 dark:border-slate-700">{emptyText}</p>
+    ) : (
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900/60">
+            <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+              <th>النوع</th>
+              <th>رقم العدّاد</th>
+              <th>يخدم</th>
+              <th>المزوّد</th>
+              <th>الحالة</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {rows.map((m) => (
+              <tr key={m.id} className="[&>td]:px-4 [&>td]:py-2">
+                <td>{UTILITY_TYPE_AR[m.utility_type] ?? m.utility_type}</td>
+                <td dir="ltr" className="text-right font-medium">{m.meter_number}</td>
+                <td className="text-slate-600 dark:text-slate-300">
+                  {m.unit_id ? `وحدة ${first(m.unit)?.unit_number ?? "—"}` : "العقار كاملاً"}
+                </td>
+                <td className="text-slate-600 dark:text-slate-300">{m.provider ?? "—"}</td>
+                <td>
+                  <Badge tone={m.status === "active" ? "success" : "neutral"}>
+                    {METER_STATUS_AR[m.status] ?? m.status}
+                  </Badge>
+                </td>
+                <td>
+                  <Link href={`/app/utilities/readings?meter=${m.id}`} className="text-xs text-brand hover:underline">
+                    القراءات ←
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+
+  const metersTab = (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-sm text-slate-500">
+          {mainMeters.length} عدّاد رئيسي · {unitMeters.length} عدّاد وحدات
+        </span>
+        <FormDrawer label="إضافة عدّاد" title={`إضافة عدّاد — ${property.name}`}>
+          <MeterForm
+            properties={[{ id: property.id, label: property.name, units: units.map((u) => ({ id: u.id, label: u.unit_number })) }]}
+            fixedPropertyId={property.id}
+          />
+        </FormDrawer>
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-sm font-medium text-slate-600 dark:text-slate-300">العدادات الرئيسية</h2>
+        {meterTable(mainMeters, "لا يوجد عدّاد رئيسي لهذا العقار. العدادات اختيارية.")}
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-sm font-medium text-slate-600 dark:text-slate-300">عدادات الوحدات</h2>
+        {meterTable(unitMeters, "لا توجد عدادات على مستوى الوحدات.")}
+      </div>
     </div>
   );
 
@@ -259,6 +344,7 @@ export default async function PropertyDetail({
         items={[
           { id: "units", label: `الوحدات (${units.length})`, content: unitsTab },
           { id: "contracts", label: `العقود (${contracts.length})`, content: contractsTab },
+          { id: "meters", label: `العدادات (${meters.length})`, content: metersTab },
         ]}
       />
     </div>

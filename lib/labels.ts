@@ -126,3 +126,20 @@ export const SUBSCRIPTION_EVENT_AR: Record<string, string> = {
   trial_extended: "تمديد التجربة",
   period_extended: "تمديد الفترة",
 };
+
+// Utilities module (migration 0063). meter_level is derived in the DB, never chosen by a user.
+export const UTILITY_TYPE_AR: Record<string, string> = {
+  electricity: "كهرباء",
+  water: "ماء",
+};
+
+export const METER_STATUS_AR: Record<string, string> = {
+  active: "نشط",
+  inactive: "مؤرشف",
+  removed: "مفكوك",
+};
+
+export const METER_LEVEL_AR: Record<string, string> = {
+  main: "رئيسي",
+  unit: "وحدة",
+};

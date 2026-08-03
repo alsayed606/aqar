@@ -142,6 +142,24 @@ try {
     Number(rows[2].consumption) === 90, JSON.stringify(rows[2]));
   ok("and the review flag clears", rows[2].needs_review === false);
 
+  // The OTHER answer the UI offers for a lower reading (U-2): it was a typo. Correcting the number
+  // is enough on its own — consumption is a view over the readings, never a stored column, so
+  // nothing has to be recomputed or kept in step by the application.
+  await q("update app.utility_reading set is_reset = false, value = 1390 where meter_id=$1 and reading_date='2026-03-31'", [meter]);
+  rows = await readings();
+  ok("correcting a mistyped reading restores its consumption with no recompute step",
+    Number(rows[2].consumption) === 40 && rows[2].needs_review === false, JSON.stringify(rows[2]));
+
+  // And the correction propagates forward: the NEXT reading measures from the corrected value.
+  await addReading("2026-04-30", 1500);
+  rows = await readings();
+  ok("a later reading measures from the corrected value, not the wrong one",
+    Number(rows[3].consumption) === 110, JSON.stringify(rows[3]));
+
+  // Restore the replaced-meter state the later assertions were written against.
+  await q("delete from app.utility_reading where meter_id=$1 and reading_date='2026-04-30'", [meter]);
+  await q("update app.utility_reading set is_reset = true, value = 90 where meter_id=$1 and reading_date='2026-03-31'", [meter]);
+
   // ==================== Bills ====================
   const addBill = (m, month, prev, cur, amount, due, paid = null) =>
     attempt(`insert into app.utility_bill(org_id,meter_id,billing_month,previous_reading,current_reading,
