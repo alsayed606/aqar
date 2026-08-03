@@ -183,7 +183,7 @@ export default async function BillsPage({
           <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900/60">
-                <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+                <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-start [&>th]:font-medium">
                   <th>الشهر</th>
                   <th>العدّاد</th>
                   <th>الاستهلاك</th>

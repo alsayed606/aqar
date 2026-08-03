@@ -113,7 +113,7 @@ export default async function MetersPage({
           <FilterableTable
             placeholder="تصفية سريعة في هذه الصفحة…"
             headers={
-              <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+              <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-start [&>th]:font-medium">
                 <th>رقم العدّاد</th>
                 <th>النوع</th>
                 <th>العقار</th>

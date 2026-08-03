@@ -269,7 +269,7 @@ export default async function ReportsPage({
                                   ? `/app/utilities/bills?meter=${a.meter_id}`
                                   : `/app/utilities/readings?meter=${a.meter_id}${a.kind === "reading_needs_review" ? "&review=1" : ""}`
                               }
-                              className="mr-2 text-xs text-brand hover:underline"
+                              className="ms-2 text-xs text-brand hover:underline"
                             >
                               افتح ←
                             </Link>

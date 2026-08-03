@@ -435,7 +435,18 @@ The original draft assumed Aqar would import the visual layer wholesale. The aud
 
 Nothing in this document outranks the launch sprint (PDPL, e-mail confirmation, MFA, re-enabling Vercel Deployment Protection). Those are legal and security obligations; this is presentation. The single exception is §7.0, which ships with the launch sprint.
 
-### 🟢 Green — adopt (high value, no visual risk)
+### 🟢 Green — ✅ **ADOPTED 2026-08-03. In force.**
+
+§1, §2, §7, §8 and §11 are now binding on new work in Aqar. They are not aspirations in an imported document any more; a screen that ignores them is wrong, not merely unfashionable.
+
+Two of the six were already shipped and two are now mechanical:
+
+- **§7.0 + §7.1** shipped with the launch sprint (`lib/use-focus-trap.ts`).
+- **§8 logical properties** — `npm run check:rtl` reports every physical-direction utility, distinguishing deliberate ones (an element carrying `dir=`, where right-alignment belongs to an LTR run) from drift. Still applied **as files are touched**, per the sequencing below; the script is a worklist, never a build gate.
+- **§7.2 contrast floor** — checked in review. `text-slate-400` is for decorative glyphs only; anything that carries meaning is `slate-500` or darker.
+- **§11 checklist** — run before any new screen ships.
+
+
 
 | Item | Why it is cheap |
 |---|---|
