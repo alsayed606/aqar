@@ -200,6 +200,42 @@ try {
   ok("a canceled office is skipped by the sweep",
     Number(afterCancel.orgs) === Number(sweepRun.orgs), `${afterCancel.orgs} vs ${sweepRun.orgs}`);
 
+  // ==================== Rate limiting (0060) ====================
+  // The limiter only works if it is closed to the public: a caller who can invoke it directly can
+  // burn somebody else's allowance, turning the defence into a denial of service.
+  const rlForbidden = await asRole(idOwner, org1, () => client.query("select * from app.rate_limit_hit('x',5,60)"));
+  ok("rate_limit_hit is closed to a signed-in user",
+    rlForbidden.ok === false && /permission denied/i.test(rlForbidden.error || ""), rlForbidden.error);
+  const rlTable = await asRole(idOwner, org1, () => client.query("select count(*) from app.rate_limit"));
+  ok("rate_limit table is unreadable through RLS", rlTable.ok === false || Number(rlTable.value.rows[0].count) === 0);
+
+  const hit = (bucket, limit, win) => one("select * from app.rate_limit_hit($1,$2,$3)", [bucket, limit, win]);
+  let last;
+  for (let i = 0; i < 3; i++) last = await hit("t:allow", 3, 60);
+  ok("attempts up to the limit are allowed", last.allowed === true && Number(last.remaining) === 0, JSON.stringify(last));
+
+  const over = await hit("t:allow", 3, 60);
+  ok("the attempt past the limit is refused", over.allowed === false, JSON.stringify(over));
+  ok("a refusal reports when to retry", Number(over.retry_after) > 0 && Number(over.retry_after) <= 60, JSON.stringify(over));
+
+  // Buckets must not bleed into each other, or one busy customer would lock out everyone else.
+  const other = await hit("t:separate", 3, 60);
+  ok("each bucket counts independently", other.allowed === true, JSON.stringify(other));
+
+  // A window that has already elapsed restarts rather than staying blocked forever.
+  await hit("t:expire", 1, 60);
+  const blocked = await hit("t:expire", 1, 60);
+  ok("second attempt in a 1-per-window bucket is refused", blocked.allowed === false);
+  await q("update app.rate_limit set window_start = now() - interval '2 minutes' where bucket = 't:expire'");
+  const reopened = await hit("t:expire", 1, 60);
+  ok("an elapsed window reopens the bucket", reopened.allowed === true, JSON.stringify(reopened));
+
+  await q("update app.rate_limit set updated_at = now() - interval '2 days' where bucket = 't:allow'");
+  const swept = await one("select app.rate_limit_sweep() n");
+  ok("the sweep drops stale buckets and keeps live ones", Number(swept.n) >= 1, JSON.stringify(swept));
+  ok("a live bucket survives the sweep",
+    Number((await one("select count(*)::int n from app.rate_limit where bucket='t:separate'")).n) === 1);
+
   // ==================== Subscription (0036): lock, limits, comp, provisioning ====================
   // A tight throwaway plan makes the ceiling deterministic without seeding 25 properties.
   await q("insert into app.plan(code,name_ar,max_properties,max_units,max_members,price_halalas,is_public) values('test_tight','اختبار',1,1,1,0,false) on conflict (code) do nothing");

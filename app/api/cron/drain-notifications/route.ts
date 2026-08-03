@@ -46,6 +46,10 @@ export async function GET(request: Request) {
   if (sweepErr) await record(false, { stage: "sweep" }, sweepErr.message);
   const sweep = (Array.isArray(swept) ? swept[0] : swept) ?? null;
 
+  // 0b. Drop rate-limit buckets older than a day (0060). Cheap, and it keeps a table that only ever
+  // grows under attack from growing forever.
+  await admin.rpc("rate_limit_sweep");
+
   // 1. Claim a batch of eligible email deliveries (attempts incremented, next_attempt_at leased).
   const { data: claimed, error: claimErr } = await admin.rpc("claim_email_deliveries", { p_max: 50 });
   if (claimErr) {

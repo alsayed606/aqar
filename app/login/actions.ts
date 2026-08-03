@@ -6,6 +6,17 @@ import { createClient } from "@/lib/supabase/server";
 import { normalizeSaudiPhone } from "@/lib/phone";
 import { safeReturnTo } from "@/lib/return-to";
 import { translateAuthError } from "@/lib/auth-errors";
+import { guardAuthAttempt } from "@/lib/rate-limit";
+
+// Attempts allowed per [count, seconds]. Sign-in is the brute-force target, so it is the tightest;
+// the mail-sending actions are capped harder per account than per address because the cost of
+// exceeding them lands on someone else's inbox.
+const LIMITS = {
+  signin: { perIp: [10, 900] as [number, number], perTarget: [5, 900] as [number, number] },
+  signup: { perIp: [5, 3600] as [number, number], perTarget: [3, 3600] as [number, number] },
+  otp:    { perIp: [5, 900] as [number, number],  perTarget: [3, 900] as [number, number] },
+  mail:   { perIp: [5, 3600] as [number, number], perTarget: [3, 3600] as [number, number] },
+};
 
 // Absolute site origin for auth redirect links (email confirmation / recovery land back here).
 async function siteOrigin(): Promise<string> {
@@ -40,6 +51,10 @@ export async function emailAuth(
 
   if (!EMAIL_RE.test(email)) return { mode, error: "أدخل بريداً إلكترونياً صالحاً." };
   if (password.length < 8) return { mode, error: "كلمة المرور يجب أن تكون ٨ أحرف على الأقل." };
+
+  // Throttled after validation, so a malformed address never burns the allowance.
+  const throttled = await guardAuthAttempt(mode === "signup" ? "signup" : "signin", email, LIMITS[mode === "signup" ? "signup" : "signin"]);
+  if (throttled) return { mode, error: throttled };
 
   const supabase = await createClient();
 
@@ -78,6 +93,11 @@ export async function sendOtp(
   if (!phone) {
     return { step: "phone", error: "رقم جوال غير صالح. مثال: 05XXXXXXXX" };
   }
+
+  // Every send costs real money and lands on somebody's handset, so this is throttled harder than
+  // a password attempt: an unthrottled OTP endpoint is an SMS-pumping bill waiting to happen.
+  const throttled = await guardAuthAttempt("otp", phone, LIMITS.otp);
+  if (throttled) return { step: "phone", phone, error: throttled };
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({ phone });
@@ -121,6 +141,11 @@ export async function requestPasswordReset(
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return { error: "أدخل بريداً إلكترونياً صالحاً." };
 
+  // Reported as sent either way — the refusal must not become an account-existence oracle, which is
+  // the very disclosure this action is written to avoid.
+  const throttled = await guardAuthAttempt("reset", email, LIMITS.mail);
+  if (throttled) return { sent: true };
+
   const supabase = await createClient();
   await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${await siteOrigin()}/auth/callback?next=/auth/reset`,
@@ -150,11 +175,16 @@ export async function resendConfirmation(formData: FormData): Promise<void> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!EMAIL_RE.test(email)) redirect("/login?error=" + encodeURIComponent("أدخل بريداً إلكترونياً صالحاً أولاً."));
 
+  // Same reasoning as the reset link: the outcome never reveals whether the account exists.
+  const notice = "أرسلنا رسالة تأكيد جديدة إن كان الحساب بحاجة لتفعيل.";
+  const throttled = await guardAuthAttempt("resend", email, LIMITS.mail);
+  if (throttled) redirect("/login?notice=" + encodeURIComponent(notice));
+
   const supabase = await createClient();
   await supabase.auth.resend({
     type: "signup",
     email,
     options: { emailRedirectTo: `${await siteOrigin()}/auth/callback?next=/app` },
   });
-  redirect("/login?notice=" + encodeURIComponent("أرسلنا رسالة تأكيد جديدة إن كان الحساب بحاجة لتفعيل."));
+  redirect("/login?notice=" + encodeURIComponent(notice));
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useFocusTrap } from "@/lib/use-focus-trap";
 
 // Right-anchored sliding panel (natural start-side in RTL) for quick add/edit without a page change.
 // Enter animation only (conditional mount); overlay-click and Esc close it.
@@ -21,32 +22,30 @@ export function Drawer({
   footer?: ReactNode;
   zClass?: string;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const prevFocus = useRef<HTMLElement | null>(null);
+  // Focus containment, Escape and focus restoration all come from the shared trap. It replaces a
+  // hand-rolled version that moved focus in and back out but never trapped Tab — so a keyboard user
+  // could tab straight out of an open drawer into the page behind it. The trap also arbitrates
+  // between nested drawers, which the old per-drawer Escape listener could not.
+  const panelRef = useFocusTrap<HTMLDivElement>(open, onClose);
+  const titleId = useId();
 
   useEffect(() => {
     if (!open) return;
-    prevFocus.current = document.activeElement as HTMLElement;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    panelRef.current?.focus();
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
-      prevFocus.current?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open || typeof document === "undefined") return null;
 
   // Portal to <body>: a `fixed` panel would otherwise be positioned against an ancestor that has a
   // transform (e.g. another drawer mid-slide), which matters for nested drawers.
   return createPortal(
-    <div className={"fixed inset-0 " + zClass} role="dialog" aria-modal="true" aria-label={title}>
+    // aria-labelledby rather than aria-label: the heading is already on screen, and pointing at it
+    // keeps the two from drifting apart when one is edited.
+    <div className={"fixed inset-0 " + zClass} role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="absolute inset-0 animate-fade-in-plain bg-slate-900/50" onClick={onClose} />
       <div
         ref={panelRef}
@@ -54,7 +53,7 @@ export function Drawer({
         className="absolute inset-y-0 right-0 flex w-full max-w-md animate-slide-in-right flex-col bg-white shadow-xl outline-none dark:bg-slate-900"
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-white">{title}</h2>
+          <h2 id={titleId} className="text-base font-semibold text-slate-900 dark:text-white">{title}</h2>
           <button
             type="button"
             onClick={onClose}
