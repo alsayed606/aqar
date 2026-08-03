@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { chargeToken } from "@/lib/payments/moyasar";
+import { verifyBearer } from "@/lib/secure-compare";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +11,7 @@ const JOB = "renew-subscriptions";
 // subscription and opens an 'auto' payment intent (so overlapping runs never double-charge); we then
 // charge the saved token off-session and apply / dunning. service_role is used ONLY here.
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  const auth = request.headers.get("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!verifyBearer(request.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

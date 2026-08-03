@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
-import { markAllRead } from "./actions";
+import { markAllRead, refreshNotifications } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -29,11 +29,9 @@ export default async function NotificationsPage() {
   if (!activeOrg) redirect("/app");
 
   const supabase = await createClient();
-  // Refresh, then list (both no-op/empty before migration 0034 is applied).
-  await supabase.rpc("generate_notifications", { p_org: activeOrg });
-  // Queue email deliveries for any unread notifications (idempotent; no-op before 0038). The Vercel
-  // Cron drainer sends them. Degrades silently if the function isn't there yet.
-  await supabase.rpc("enqueue_email_deliveries", { p_org: activeOrg });
+  // Read only. Generation moved to the Cron sweep in 0059: doing it here meant every page view
+  // performed write work, and an office nobody opened never got a reminder at all. The refresh
+  // button below is the explicit, user-initiated equivalent.
   const { data, error } = await supabase
     .from("notification")
     .select("id, kind, entity_type, entity_id, title, body, due_date, read_at, created_at")
@@ -48,13 +46,20 @@ export default async function NotificationsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">الإشعارات</h1>
-        {hasUnread && (
-          <form action={markAllRead}>
+        <div className="flex items-center gap-2">
+          <form action={refreshNotifications}>
             <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
-              تعليم الكل كمقروء
+              تحديث الآن
             </button>
           </form>
-        )}
+          {hasUnread && (
+            <form action={markAllRead}>
+              <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
+                تعليم الكل كمقروء
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
       <p className="text-sm text-neutral-600 dark:text-neutral-400">

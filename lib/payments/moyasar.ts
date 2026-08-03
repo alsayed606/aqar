@@ -1,3 +1,5 @@
+import { secureEquals } from "@/lib/secure-compare";
+
 // The single payment-gateway boundary. Moyasar hosted checkout via the Invoices API — the office
 // pays on Moyasar's page, so card data NEVER touches our servers (PCI-safe). Swapping to Tap/another
 // gateway later is confined to THIS file; nothing else knows the transport.
@@ -49,8 +51,7 @@ export async function createInvoice(input: CreateInvoiceInput): Promise<CreateIn
 
 // Webhook authenticity: Moyasar includes the `secret_token` you configured on the webhook endpoint.
 export function verifyWebhookSecret(secretToken: string | undefined | null): boolean {
-  const expected = process.env.MOYASAR_WEBHOOK_SECRET;
-  return !!expected && secretToken === expected;
+  return secureEquals(secretToken, process.env.MOYASAR_WEBHOOK_SECRET);
 }
 
 // Off-session recurring charge against a saved card token (Payments API). status 'paid' = success.

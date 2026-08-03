@@ -172,6 +172,34 @@ try {
   const genOk = await asRole(idOwner, org1, () => client.query("select app.generate_notifications($1) c", [org1]));
   ok("generate_notifications OK for a member", genOk.ok === true, genOk.error);
 
+  // ---- Cron sweep (0059) ----
+  // 0059 split the WORK away from the AUTHORISATION so Cron could reach it. That split is only safe
+  // if the ungated halves are closed to signed-in users — and 0001's default privileges grant
+  // execute to authenticated, so `revoke from public` alone would leave all three wide open.
+  const sweepForbidden = await asRole(idOwner, org1, () => client.query("select * from app.sweep_notifications()"));
+  ok("sweep_notifications is closed to a signed-in user",
+    sweepForbidden.ok === false && /permission denied/i.test(sweepForbidden.error || ""), sweepForbidden.error);
+
+  const genForAny = await asRole(idOwner, org1, () => client.query("select app.generate_notifications_for($1)", [org2]));
+  ok("generate_notifications_for cannot be used to reach another org",
+    genForAny.ok === false && /permission denied/i.test(genForAny.error || ""), genForAny.error);
+
+  const enqForAny = await asRole(idOwner, org1, () => client.query("select app.enqueue_email_deliveries_for($1)", [org2]));
+  ok("enqueue_email_deliveries_for is closed to a signed-in user",
+    enqForAny.ok === false && /permission denied/i.test(enqForAny.error || ""), enqForAny.error);
+
+  const sweepRun = await one("select * from app.sweep_notifications()");
+  ok("sweep_notifications runs for every live office without an active session",
+    Number(sweepRun.orgs) >= 2, JSON.stringify(sweepRun));
+
+  // A cancelled office must stop being swept — it should not keep receiving reminder email.
+  const orgDead = (await one("insert into app.organization(name) values('مكتب ملغى') returning id")).id;
+  const anyPlan = (await one("select code from app.plan order by code limit 1")).code;
+  await q("insert into app.org_subscription(org_id,plan_code,status) values($1,$2,'canceled')", [orgDead, anyPlan]);
+  const afterCancel = await one("select * from app.sweep_notifications()");
+  ok("a canceled office is skipped by the sweep",
+    Number(afterCancel.orgs) === Number(sweepRun.orgs), `${afterCancel.orgs} vs ${sweepRun.orgs}`);
+
   // ==================== Subscription (0036): lock, limits, comp, provisioning ====================
   // A tight throwaway plan makes the ceiling deterministic without seeding 25 properties.
   await q("insert into app.plan(code,name_ar,max_properties,max_units,max_members,price_halalas,is_public) values('test_tight','اختبار',1,1,1,0,false) on conflict (code) do nothing");

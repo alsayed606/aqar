@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/provider";
 import { renderNotificationEmail } from "@/lib/email/templates";
+import { verifyBearer } from "@/lib/secure-compare";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +14,7 @@ const JOB = "drain-notifications";
 //
 // Vercel Cron issues a GET with `Authorization: Bearer <CRON_SECRET>`.
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  const auth = request.headers.get("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!verifyBearer(request.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -39,6 +38,14 @@ export async function GET(request: Request) {
       p_job: JOB, p_ok: ok, p_started_at: startedAt, p_detail: detail, p_error: error ?? null,
     });
 
+  // 0. Generate notifications and queue their e-mail for EVERY live office (0059). This used to run
+  // during a page render, which meant an office nobody opened got no reminders at all — the overdue
+  // notice depended on somebody already looking. A sweep failure is recorded but does not abort the
+  // drain: the outbox may still hold deliveries queued by an earlier run.
+  const { data: swept, error: sweepErr } = await admin.rpc("sweep_notifications");
+  if (sweepErr) await record(false, { stage: "sweep" }, sweepErr.message);
+  const sweep = (Array.isArray(swept) ? swept[0] : swept) ?? null;
+
   // 1. Claim a batch of eligible email deliveries (attempts incremented, next_attempt_at leased).
   const { data: claimed, error: claimErr } = await admin.rpc("claim_email_deliveries", { p_max: 50 });
   if (claimErr) {
@@ -52,8 +59,8 @@ export async function GET(request: Request) {
     target: string;
   }>;
   if (rows.length === 0) {
-    await record(true, { claimed: 0, sent: 0, failed: 0 });
-    return NextResponse.json({ claimed: 0, sent: 0, failed: 0 });
+    await record(true, { sweep, claimed: 0, sent: 0, failed: 0 });
+    return NextResponse.json({ sweep, claimed: 0, sent: 0, failed: 0 });
   }
 
   // 2. Fetch the content (notification title/body) and org names for the claimed set.
@@ -102,6 +109,6 @@ export async function GET(request: Request) {
   }
 
   // The run itself succeeded even when individual messages did not — those are counted, not raised.
-  await record(true, { claimed: rows.length, sent, failed });
-  return NextResponse.json({ claimed: rows.length, sent, failed });
+  await record(true, { sweep, claimed: rows.length, sent, failed });
+  return NextResponse.json({ sweep, claimed: rows.length, sent, failed });
 }
