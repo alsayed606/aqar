@@ -184,7 +184,16 @@ export default async function TenantEditPage({
           </div>
 
           {canEdit && !p?.erased_at && (
-            <FormDrawer label="تعديل البيانات" title={`تعديل — ${p?.display_name ?? "المستأجر"}`}>
+            <FormDrawer
+              label="تعديل البيانات"
+              title={`تعديل — ${p?.display_name ?? "المستأجر"}`}
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+                </svg>
+              }
+            >
               <form action={updateTenant} className="space-y-4">
                 <input type="hidden" name="tenant_id" value={tenant.id} />
                 <input type="hidden" name="party_id" value={p?.id} />

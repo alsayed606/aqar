@@ -16,10 +16,14 @@ export function FormDrawer({
   label,
   title,
   children,
+  icon,
 }: {
   label: string;
   title: string;
   children: ReactNode;
+  /** Defaults to a plus. Pass a different glyph when the drawer edits rather than adds — a plus on
+   *  an "تعديل" button tells the user they are about to create something. */
+  icon?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const searchParams = useSearchParams();
@@ -39,9 +43,11 @@ export function FormDrawer({
   return (
     <>
       <Button onClick={() => setOpen(true)}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
+        {icon ?? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        )}
         {label}
       </Button>
       <Drawer open={open} onClose={close} title={title}>
