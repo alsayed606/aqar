@@ -38,6 +38,9 @@ export type ListSpec = {
   applySearch: (query: any, q: string) => any;
   sorts: SortOption[];
   columns: CsvColumn<any>[];
+  /** URL param → column, for deep links from a 360 page. The export honours these too, so the
+   *  downloaded file is the same filtered set the screen is showing. */
+  filters?: Record<string, string>;
   /** Base of the download filename; the date is appended. ASCII, so no header encoding guesswork. */
   filename: string;
   /** Arabic label used in the export button's title. */
@@ -160,6 +163,7 @@ export const LIST_SPECS: Record<string, ListSpec> = {
       { header: "إلى", value: (r) => r.end_date },
       { header: "الإيجار السنوي (ر.س)", value: (r) => halalasToPlainSar(r.annual_rent_halalas) },
     ],
+    filters: { tenant: "tenant_id", property: "property_id" },
     filename: "contracts",
     label: "العقود",
   },
@@ -205,6 +209,7 @@ export const LIST_SPECS: Record<string, ListSpec> = {
       { header: "المبلغ (ر.س)", value: (r) => halalasToPlainSar(r.amount_halalas) },
       { header: "ملاحظة", value: (r) => r.notes },
     ],
+    filters: { party: "party_id" },
     filename: "receipts",
     label: "السندات",
   },

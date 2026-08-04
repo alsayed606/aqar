@@ -465,7 +465,13 @@ Two of the six were already shipped and two are now mechanical:
 
 - ✅ **Brand-tinted shadows (§3.3), retinted to teal** — shipped 2026-08-03 as `shadow-card` / `shadow-card-hover` / `shadow-nav`. Suppressed in dark mode (`dark:shadow-none`): a tinted shadow on a near-black surface reads as a glow, and the border already does the separating there. Applied to the surfaces that are genuinely cards; the remaining `shadow-sm` panels convert as they are touched.
 
-Remaining: one global "+ New" in the layout (§5.3) · the persistent banner slot (§5.4) · **brand-tinted shadows — retinted to teal, not navy** · radius consistency (§3.5) · mobile bottom navigation (§5.1) · the 360 archetype (§6.1), which `app/app/tenants/[id]` is already converging on.
+- ✅ **The 360 archetype (§6.1)** — shipped 2026-08-03 for tenant, owner and property (migration `0065`). Summary cards link out to the owning module filtered to the entity, which is why `?tenant=`, `?party=` and `?property=` filters were added; notes are append-only via `app.entity_note` and reachable by PDPL erasure; the timeline is derived from existing timestamps with no event table. Contracts, invoices and receipts are documents, not persistent entities, and were left alone.
+
+Remaining, and why each is still open:
+
+- **Radius consistency (§3.5)** — mislabelled as cheap. It is ~300 `rounded-lg` sites: a day of purely visual churn with visual risk on every screen and no user-visible gain. Treated like §8 instead — the rule binds new code and each file converts as it is touched.
+- **One global "+ New" (§5.3)** — questioned rather than scheduled. That rule solves a system that had three entry points; Aqar has two deliberate ones (sidebar quick-add, in-context list button), and the in-context button is the discoverable one. Consolidating would move the action away from where it is used.
+- **The persistent banner slot (§5.4)** — effectively already built: the subscription banner renders once in `app/app/layout.tsx`. Generalising it for messages that do not exist yet is the speculative structure §14/YAGNI rules out. It generalises when a second message arrives.
 
 ### 🔴 Red — not adopted
 

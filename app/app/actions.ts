@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 export type OrgState = { error?: string };
@@ -49,4 +50,38 @@ export async function signOut() {
   await supabase.auth.signOut();
   (await cookies()).delete("active-org");
   redirect("/login");
+}
+
+// Internal notes on a persistent entity (§6.1, migration 0065). One action for tenant, owner and
+// property — the design system is explicit that this is implemented once and reused, never per
+// module. The author and the timestamp come from the database, so nothing here is trusted from the
+// form beyond the text itself.
+export type NoteState = { error?: string; ok?: boolean };
+
+const NOTE_TARGETS = { tenant: "tenant_id", owner: "owner_id", property: "property_id" } as const;
+export type NoteTarget = keyof typeof NOTE_TARGETS;
+
+export async function addEntityNote(
+  _prev: NoteState,
+  formData: FormData,
+): Promise<NoteState> {
+  const activeOrg = (await cookies()).get("active-org")?.value;
+  if (!activeOrg) return { error: "اختر منشأة نشطة أولاً" };
+
+  const target = String(formData.get("target") ?? "") as NoteTarget;
+  const entityId = String(formData.get("entity_id") ?? "");
+  const body = String(formData.get("body") ?? "").trim();
+  if (!(target in NOTE_TARGETS)) return { error: "نوع السجل غير معروف" };
+  if (!entityId) return { error: "السجل غير محدّد" };
+  if (!body) return { error: "اكتب نص الملاحظة" };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("entity_note")
+    .insert({ org_id: activeOrg, [NOTE_TARGETS[target]]: entityId, body });
+  if (error) return { error: error.message };
+
+  // The note appears on the entity's own page; nothing else displays it.
+  revalidatePath(`/app/${target === "property" ? "properties" : target === "owner" ? "owners" : "tenants"}/${entityId}`);
+  return { ok: true };
 }

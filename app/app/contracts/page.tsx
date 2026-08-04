@@ -19,13 +19,13 @@ export const dynamic = "force-dynamic";
 export default async function ContractsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string; sort?: string; unit?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; sort?: string; unit?: string; tenant?: string; property?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
   const { q, page, from, to, sort } = parseListParams(await searchParams);
   const sortOption = resolveSort(LIST_SPECS.contracts, sort);
-  const { unit: presetUnitId } = await searchParams;
+  const { unit: presetUnitId, tenant: tenantFilter, property: propertyFilter } = await searchParams;
 
   const supabase = await createClient();
 
@@ -37,6 +37,9 @@ export default async function ContractsPage({
     )
     .is("deleted_at", null);
   if (q) contractQuery = contractQuery.ilike("contract_number", likePattern(q));
+  // Deep link from a tenant 360 page: show only that tenant's contracts (§6.1).
+  if (tenantFilter) contractQuery = contractQuery.eq("tenant_id", tenantFilter);
+  if (propertyFilter) contractQuery = contractQuery.eq("property_id", propertyFilter);
 
   const [{ data: unitData }, { data: tenantData }, { data: contractData, error, count }] =
     await Promise.all([
@@ -113,7 +116,7 @@ export default async function ContractsPage({
         </div>
       </div>
 
-      <ListToolbar q={q} placeholder="بحث برقم العقد…" keep={{ unit: presetUnitId }} resource="contracts" sort={sortOption.key} />
+      <ListToolbar q={q} placeholder="بحث برقم العقد…" keep={{ unit: presetUnitId, tenant: tenantFilter, property: propertyFilter }} resource="contracts" sort={sortOption.key} />
 
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
@@ -126,7 +129,7 @@ export default async function ContractsPage({
       ) : (
         <>
           <ContractsGrid contracts={contracts} />
-          <Pagination page={page} total={total} q={q} basePath="/app/contracts" params={{ sort: sortOption.key }} />
+          <Pagination page={page} total={total} q={q} basePath="/app/contracts" params={{ sort: sortOption.key, tenant: tenantFilter, property: propertyFilter }} />
         </>
       )}
     </div>

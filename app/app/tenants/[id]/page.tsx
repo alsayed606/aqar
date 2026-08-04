@@ -8,6 +8,11 @@ import { TenantFields } from "@/components/tenant-fields";
 import { isEstablishment } from "@/lib/tenant-identity";
 import { updateTenant, addTradeName, removeTradeName } from "../actions";
 import { erasePartyData } from "../../privacy/actions";
+import { EntitySummary } from "@/components/entity-summary";
+import { EntityNotes } from "@/components/entity-notes";
+import { EntityTimeline, type TimelineEvent } from "@/components/entity-timeline";
+import { halalasToSar } from "@/lib/money";
+import { CONTRACT_STATUS_AR } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -56,10 +61,60 @@ export default async function TenantEditPage({
       : Promise.resolve({ data: null }),
   ]);
 
+  // The 360 layer (§6.1): counts for the summary cards, and the rows the timeline is derived from.
+  // Nothing here is stored — every date below is a timestamp the system already keeps.
+  const [{ data: contractRows }, { data: paymentRows }, { data: noteRows }] = await Promise.all([
+    supabase
+      .from("contract")
+      .select("id, contract_number, status, start_date, end_date, annual_rent_halalas")
+      .eq("tenant_id", id)
+      .is("deleted_at", null)
+      .order("start_date", { ascending: false }),
+    supabase
+      .from("payment")
+      .select("id, receipt_no, amount_halalas, received_at")
+      .eq("party_id", p?.id)
+      .is("deleted_at", null)
+      .order("received_at", { ascending: false }),
+    supabase
+      .from("entity_note")
+      .select("id, body, created_at, redacted_at, author:created_by(full_name)")
+      .eq("tenant_id", id)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const contracts = (contractRows ?? []) as any[];
+  const payments = (paymentRows ?? []) as any[];
+  const activeContracts = contracts.filter((c) => c.status === "active");
+  const paidTotal = payments.reduce((sum, x) => sum + Number(x.amount_halalas ?? 0), 0);
+
+  const notes = (noteRows ?? []).map((n: any) => ({
+    id: n.id,
+    body: n.body,
+    created_at: n.created_at,
+    redacted_at: n.redacted_at,
+    author: first(n.author)?.full_name ?? null,
+  }));
+
+  // Derived, not recorded. A stored event log would be a second copy of these same facts.
+  const timeline: TimelineEvent[] = [
+    ...contracts.flatMap((c) => [
+      { at: c.start_date, label: `بدأ العقد ${c.contract_number}`, detail: CONTRACT_STATUS_AR[c.status] ?? c.status, href: `/app/contracts/${c.id}` },
+      { at: c.end_date, label: `ينتهي العقد ${c.contract_number}`, href: `/app/contracts/${c.id}` },
+    ]),
+    ...payments.map((x) => ({
+      at: String(x.received_at ?? "").slice(0, 10),
+      label: `سند قبض ${x.receipt_no ?? ""}`.trim(),
+      detail: `${halalasToSar(x.amount_halalas)} ر.س`,
+      href: `/app/receipts/${x.id}`,
+    })),
+    ...notes.map((n) => ({ at: String(n.created_at).slice(0, 10), label: "ملاحظة داخلية", detail: n.author })),
+  ];
+
   const establishment = isEstablishment(p?.entity_type ?? (tenant as any).tenant_type ?? "individual");
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <nav className="text-sm text-neutral-500">
         <Link href="/app/tenants" className="hover:text-brand">المستأجرون</Link> /{" "}
         <span className="text-neutral-700 dark:text-neutral-300">{p?.display_name}</span>
@@ -86,6 +141,16 @@ export default async function TenantEditPage({
           ))}
         </div>
       )}
+
+      {/* Every card hands off to the module that owns the number, filtered to this tenant. */}
+      <EntitySummary
+        stats={[
+          { label: "العقود", value: contracts.length, href: `/app/contracts?tenant=${tenant.id}` },
+          { label: "عقود نشطة", value: activeContracts.length, href: `/app/contracts?tenant=${tenant.id}` },
+          { label: "سندات القبض", value: payments.length, href: `/app/receipts?party=${p?.id}` },
+          { label: "إجمالي المقبوض", value: `${halalasToSar(paidTotal)} ر.س`, href: `/app/receipts?party=${p?.id}` },
+        ]}
+      />
 
       {!canEdit ? (
         <p className="rounded-2xl border border-neutral-200 bg-white p-6 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
@@ -192,6 +257,15 @@ export default async function TenantEditPage({
           </form>
         </section>
       )}
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+        <EntityNotes target="tenant" entityId={tenant.id} notes={notes} canWrite={canEdit} />
+      </section>
+
+      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">الخط الزمني</h2>
+        <EntityTimeline events={timeline} />
+      </section>
 
       {p?.erased_at && (
         <p className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">

@@ -33,6 +33,7 @@ export function ListToolbar({
   const exportParams = new URLSearchParams();
   if (q) exportParams.set("q", q);
   if (sort) exportParams.set("sort", sort);
+  for (const [name, value] of Object.entries(keep ?? {})) if (value) exportParams.set(name, value);
   const exportHref = `/api/export/${resource}${exportParams.toString() ? `?${exportParams}` : ""}`;
 
   return (

@@ -6,6 +6,8 @@ import { setOwnerFee, setOwnerTaxInfo, recordRemittance } from "../actions";
 import { halalasToSar } from "@/lib/money";
 import { PAYMENT_METHOD_AR } from "@/lib/labels";
 import { first } from "@/lib/rows";
+import { EntityNotes } from "@/components/entity-notes";
+import { EntityTimeline, type TimelineEvent } from "@/components/entity-timeline";
 import { isoDaysAgo } from "@/lib/dates";
 import { OwnerPortalInvite } from "@/components/owner-portal-invite";
 
@@ -69,6 +71,16 @@ export default async function OwnerDetail({
         .limit(100),
     ]);
 
+  const { data: noteRows } = await supabase
+    .from("entity_note")
+    .select("id, body, created_at, redacted_at, author:created_by(full_name)")
+    .eq("owner_id", id)
+    .order("created_at", { ascending: false });
+  const notes = (noteRows ?? []).map((n: any) => ({
+    id: n.id, body: n.body, created_at: n.created_at, redacted_at: n.redacted_at,
+    author: first(n.author)?.full_name ?? null,
+  }));
+
   const party = first((owner as any).party);
   const ownerName = owner.is_self ? "المنشأة (مالك ذاتي)" : party?.display_name;
   const currentPct = feeAgr?.fee_percentage != null ? Number(feeAgr.fee_percentage) * 100 : 0;
@@ -102,6 +114,17 @@ export default async function OwnerDetail({
     })
     .reduce((s, r) => s + Number(r.amount_halalas), 0);
   const dueToOwner = tot.net - periodRemitted;
+
+  // Derived from timestamps already stored on the remittances and the notes — no event table.
+  const timeline: TimelineEvent[] = [
+    ...remittances.map((r) => ({
+      at: String(r.remitted_at).slice(0, 10),
+      label: `توريد ${r.remittance_no ?? ""}`.trim(),
+      detail: `${halalasToSar(r.amount_halalas)} ر.س`,
+      href: `/app/owners/${id}/remittance/${r.id}`,
+    })),
+    ...notes.map((n) => ({ at: String(n.created_at).slice(0, 10), label: "ملاحظة داخلية", detail: n.author })),
+  ];
 
   return (
     <div className="space-y-6">
@@ -402,6 +425,15 @@ export default async function OwnerDetail({
           </ul>
         )}
       </section>
+    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+        <EntityNotes target="owner" entityId={owner.id} notes={notes} canWrite={true} />
+      </section>
+
+      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">الخط الزمني</h2>
+        <EntityTimeline events={timeline} />
+      </section>
+
     </div>
   );
 }

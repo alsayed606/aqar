@@ -27,11 +27,12 @@ type PaymentRow = {
 export default async function ReceiptsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string; sort?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; sort?: string; party?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
   const { q, page, from, to, sort } = parseListParams(await searchParams);
+  const { party: partyFilter } = await searchParams;
   const sortOption = resolveSort(LIST_SPECS.receipts, sort);
 
   const supabase = await createClient();
@@ -42,6 +43,8 @@ export default async function ReceiptsPage({
     })
     .is("deleted_at", null);
   if (q) query = query.ilike("receipt_no", likePattern(q));
+  // Deep link from a tenant or owner 360 page: only what this party paid (§6.1).
+  if (partyFilter) query = query.eq("party_id", partyFilter);
   const { data, count } = await applySort(query, sortOption).range(from, to);
 
   const rows = (data ?? []) as PaymentRow[];
@@ -58,7 +61,7 @@ export default async function ReceiptsPage({
         لكل دفعة مستلمة سند قبض مرقّم — إثبات للتحصيل (نقداً أو تحويلاً). سجّل الدفعات من صفحة العقد، وتظهر هنا.
       </p>
 
-      <ListToolbar q={q} placeholder="بحث برقم السند…" resource="receipts" sort={sortOption.key} />
+      <ListToolbar q={q} placeholder="بحث برقم السند…" keep={{ party: partyFilter }} resource="receipts" sort={sortOption.key} />
 
       {rows.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-neutral-500 dark:border-neutral-700">
@@ -100,7 +103,7 @@ export default async function ReceiptsPage({
               };
             })}
           />
-          <Pagination page={page} total={total} q={q} basePath="/app/receipts" params={{ sort: sortOption.key }} />
+          <Pagination page={page} total={total} q={q} basePath="/app/receipts" params={{ sort: sortOption.key, party: partyFilter }} />
         </>
       )}
     </div>

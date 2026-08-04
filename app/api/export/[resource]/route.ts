@@ -33,6 +33,11 @@ export async function GET(
   const supabase = await createClient();
   let query = supabase.from(spec.table).select(spec.select).is("deleted_at", null);
   if (q) query = spec.applySearch(query, q);
+  // The same deep-link filters the screen applied, so the file matches what was on it.
+  for (const [param, column] of Object.entries(spec.filters ?? {})) {
+    const value = searchParams.get(param);
+    if (value) query = query.eq(column, value);
+  }
 
   const { data, error } = await applySort(query, sort).limit(MAX_ROWS);
   if (error) return new Response(`Export failed: ${error.message}`, { status: 500 });

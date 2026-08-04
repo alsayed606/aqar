@@ -8,6 +8,8 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { FormDrawer } from "@/components/form-drawer";
 import { changePropertyOwner } from "../actions";
 import { MeterForm } from "@/components/meter-form";
+import { EntityNotes } from "@/components/entity-notes";
+import { EntityTimeline, type TimelineEvent } from "@/components/entity-timeline";
 import { PROPERTY_KIND_AR, UNIT_STATUS_AR, CONTRACT_STATUS_AR, UTILITY_TYPE_AR, METER_STATUS_AR } from "@/lib/labels";
 import { halalasToSar } from "@/lib/money";
 import { Card, CardBody, Badge, Tabs } from "@/components/ui";
@@ -101,6 +103,16 @@ export default async function PropertyDetail({
   const units = (unitData ?? []) as UnitRow[];
   const owners = ownerData ?? [];
   const contracts = (contractData ?? []) as any[];
+  const { data: noteRows } = await supabase
+    .from("entity_note")
+    .select("id, body, created_at, redacted_at, author:created_by(full_name)")
+    .eq("property_id", id)
+    .order("created_at", { ascending: false });
+  const notes = (noteRows ?? []).map((n: any) => ({
+    id: n.id, body: n.body, created_at: n.created_at, redacted_at: n.redacted_at,
+    author: first(n.author)?.full_name ?? null,
+  }));
+
   const meters = (meterData ?? []) as any[];
   const mainMeters = meters.filter((m) => m.unit_id === null);
   const unitMeters = meters.filter((m) => m.unit_id !== null);
@@ -109,6 +121,16 @@ export default async function PropertyDetail({
   const rented = units.filter((u) => u.current_status === "rented").length;
   const vacant = units.filter((u) => u.current_status === "vacant").length;
   const activeContracts = contracts.filter((c) => c.status === "active").length;
+
+  const timeline: TimelineEvent[] = [
+    ...contracts.map((c: any) => ({
+      at: c.start_date,
+      label: `بدأ العقد ${c.contract_number}`,
+      detail: first(first(c.tenant)?.party)?.display_name ?? null,
+      href: `/app/contracts/${c.id}`,
+    })),
+    ...notes.map((n) => ({ at: String(n.created_at).slice(0, 10), label: "ملاحظة داخلية", detail: n.author })),
+  ];
 
   const unitsTab = (
     <div className="space-y-3">
@@ -337,8 +359,19 @@ export default async function PropertyDetail({
         <Kpi label="إجمالي الوحدات" value={units.length} />
         <Kpi label="مؤجرة" value={rented} />
         <Kpi label="شاغرة" value={vacant} />
-        <Kpi label="عقود نشطة" value={activeContracts} />
+        <Link href={`/app/contracts?property=${property.id}`} className="block transition-all hover:opacity-80">
+          <Kpi label="عقود نشطة" value={activeContracts} />
+        </Link>
       </div>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+        <EntityNotes target="property" entityId={property.id} notes={notes} canWrite={true} />
+      </section>
+
+      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">الخط الزمني</h2>
+        <EntityTimeline events={timeline} />
+      </section>
 
       <Tabs
         items={[
