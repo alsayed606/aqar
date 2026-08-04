@@ -5,6 +5,7 @@ import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { ContractForm } from "@/components/contract-form";
 import { parseListParams, likePattern } from "@/lib/list-params";
+import { LIST_SPECS, resolveSort, applySort } from "@/lib/list-specs";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
 import { FormDrawer } from "@/components/form-drawer";
@@ -18,11 +19,12 @@ export const dynamic = "force-dynamic";
 export default async function ContractsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string; unit?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; sort?: string; unit?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
-  const { q, page, from, to } = parseListParams(await searchParams);
+  const { q, page, from, to, sort } = parseListParams(await searchParams);
+  const sortOption = resolveSort(LIST_SPECS.contracts, sort);
   const { unit: presetUnitId } = await searchParams;
 
   const supabase = await createClient();
@@ -49,7 +51,7 @@ export default async function ContractsPage({
         .from("tenant")
         .select("id, party:party_id(display_name, entity_type, rep_name, rep_capacity, rep_id_number, rep_phone_raw, trade_name(id, name))")
         .is("deleted_at", null),
-      contractQuery.order("created_at", { ascending: false }).range(from, to),
+      applySort(contractQuery, sortOption).range(from, to),
     ]);
 
   const units = (unitData ?? []).map((u: any) => ({
@@ -111,7 +113,7 @@ export default async function ContractsPage({
         </div>
       </div>
 
-      <ListToolbar q={q} placeholder="بحث برقم العقد…" />
+      <ListToolbar q={q} placeholder="بحث برقم العقد…" keep={{ unit: presetUnitId }} resource="contracts" sort={sortOption.key} />
 
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
@@ -124,7 +126,7 @@ export default async function ContractsPage({
       ) : (
         <>
           <ContractsGrid contracts={contracts} />
-          <Pagination page={page} total={total} q={q} basePath="/app/contracts" />
+          <Pagination page={page} total={total} q={q} basePath="/app/contracts" params={{ sort: sortOption.key }} />
         </>
       )}
     </div>

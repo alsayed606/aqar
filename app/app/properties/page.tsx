@@ -8,6 +8,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { deleteProperty } from "./actions";
 import { PROPERTY_KIND_AR } from "@/lib/labels";
 import { parseListParams, likePattern } from "@/lib/list-params";
+import { LIST_SPECS, resolveSort, applySort } from "@/lib/list-specs";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
 import { FilterableTable } from "@/components/filterable-list";
@@ -38,11 +39,12 @@ function Kpi({ label, value }: { label: string; value: number }) {
 export default async function PropertiesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string; error?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; sort?: string; error?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
-  const { q, page, from, to } = parseListParams(await searchParams);
+  const { q, page, from, to, sort } = parseListParams(await searchParams);
+  const sortOption = resolveSort(LIST_SPECS.properties, sort);
   const { error: flashError } = await searchParams;
   const caps = await getCapabilities(activeOrg);
   const canData = caps.has("manage_data");
@@ -56,7 +58,7 @@ export default async function PropertiesPage({
 
   const count0 = () => supabase.from("unit").select("id", { count: "exact", head: true }).is("deleted_at", null);
   const [{ data, error, count }, { data: ownerData }, totalU, vacantU, rentedU, incompleteU] = await Promise.all([
-    propQuery.order("created_at", { ascending: false }).range(from, to),
+    applySort(propQuery, sortOption).range(from, to),
     supabase.from("owner").select("id, is_self, party:party_id(display_name, national_id)").is("deleted_at", null).order("is_self", { ascending: false }),
     count0(),
     count0().eq("current_status", "vacant"),
@@ -107,7 +109,7 @@ export default async function PropertiesPage({
 
       {flashError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{flashError}</p>}
 
-      <ListToolbar q={q} placeholder="بحث باسم العقار…" />
+      <ListToolbar q={q} placeholder="بحث باسم العقار…" resource="properties" sort={sortOption.key} />
 
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">تعذّر تحميل العقارات: {error.message}</p>
@@ -166,7 +168,7 @@ export default async function PropertiesPage({
               };
             })}
           />
-          <Pagination page={page} total={total} q={q} basePath="/app/properties" />
+          <Pagination page={page} total={total} q={q} basePath="/app/properties" params={{ sort: sortOption.key }} />
         </>
       )}
     </div>

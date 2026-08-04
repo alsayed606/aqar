@@ -5,6 +5,7 @@ import { getActiveOrg } from "@/lib/supabase/active-org";
 import { OwnerForm } from "@/components/owner-form";
 import { first } from "@/lib/rows";
 import { parseListParams, likePattern } from "@/lib/list-params";
+import { LIST_SPECS, resolveSort, applySort } from "@/lib/list-specs";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
 import { FormDrawer } from "@/components/form-drawer";
@@ -18,11 +19,12 @@ export const dynamic = "force-dynamic";
 export default async function OwnersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; sort?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
-  const { q, page, from, to } = parseListParams(await searchParams);
+  const { q, page, from, to, sort } = parseListParams(await searchParams);
+  const sortOption = resolveSort(LIST_SPECS.owners, sort);
 
   const supabase = await createClient();
   let query = supabase
@@ -33,7 +35,7 @@ export default async function OwnersPage({
     .is("deleted_at", null);
   if (q) query = query.ilike("party.display_name", likePattern(q));
   const [{ data, error, count }, { data: propertyData }] = await Promise.all([
-    query.order("is_self", { ascending: false }).range(from, to),
+    applySort(query, sortOption).range(from, to),
     supabase.from("property").select("owner_id").is("deleted_at", null),
   ]);
 
@@ -70,7 +72,7 @@ export default async function OwnersPage({
         </div>
       </div>
 
-      <ListToolbar q={q} placeholder="بحث باسم المالك…" />
+      <ListToolbar q={q} placeholder="بحث باسم المالك…" resource="owners" sort={sortOption.key} />
 
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
@@ -83,7 +85,7 @@ export default async function OwnersPage({
       ) : (
         <>
           <OwnersGrid owners={owners} />
-          <Pagination page={page} total={total} q={q} basePath="/app/owners" />
+          <Pagination page={page} total={total} q={q} basePath="/app/owners" params={{ sort: sortOption.key }} />
         </>
       )}
     </div>

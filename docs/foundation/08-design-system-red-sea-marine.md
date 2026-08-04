@@ -459,7 +459,9 @@ Two of the six were already shipped and two are now mechanical:
 
 ### 🟡 Yellow — after launch
 
-CSV export with a UTF-8 BOM · a named sort control · one global "+ New" in the layout (§5.3) · the persistent banner slot (§5.4) · **brand-tinted shadows — retinted to teal, not navy** · radius consistency (§3.5) · mobile bottom navigation (§5.1) · the 360 archetype (§6.1), which `app/app/tenants/[id]` is already converging on.
+- ✅ **CSV export with a UTF-8 BOM · named sort control** — shipped 2026-08-03 for the six specced lists (`lib/list-specs.ts`). Amounts export ungrouped so Excel treats them as numbers, and every cell is guarded against formula injection.
+
+Remaining: one global "+ New" in the layout (§5.3) · the persistent banner slot (§5.4) · **brand-tinted shadows — retinted to teal, not navy** · radius consistency (§3.5) · mobile bottom navigation (§5.1) · the 360 archetype (§6.1), which `app/app/tenants/[id]` is already converging on.
 
 ### 🔴 Red — not adopted
 

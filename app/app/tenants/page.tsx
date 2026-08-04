@@ -4,6 +4,7 @@ import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { TenantForm } from "@/components/tenant-form";
 import { parseListParams, likePattern } from "@/lib/list-params";
+import { LIST_SPECS, resolveSort, applySort } from "@/lib/list-specs";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
 import { FormDrawer } from "@/components/form-drawer";
@@ -17,11 +18,12 @@ export const dynamic = "force-dynamic";
 export default async function TenantsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; sort?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
-  const { q, page, from, to } = parseListParams(await searchParams);
+  const { q, page, from, to, sort } = parseListParams(await searchParams);
+  const sortOption = resolveSort(LIST_SPECS.tenants, sort);
 
   const supabase = await createClient();
   let query = supabase
@@ -44,7 +46,7 @@ export default async function TenantsPage({
   }
   // Active contracts drive the "N عقد نشط" block and the rented unit list on each card.
   const [{ data, error, count }, { data: contractData }] = await Promise.all([
-    query.order("created_at", { ascending: false }).range(from, to),
+    applySort(query, sortOption).range(from, to),
     supabase
       .from("contract")
       .select("tenant_id, unit:unit_id(unit_number, property:property_id(name))")
@@ -93,7 +95,7 @@ export default async function TenantsPage({
         </div>
       </div>
 
-      <ListToolbar q={q} placeholder="بحث بالاسم أو الهوية أو الرقم الموحّد أو الجوال…" />
+      <ListToolbar q={q} placeholder="بحث بالاسم أو الهوية أو الرقم الموحّد أو الجوال…" resource="tenants" sort={sortOption.key} />
 
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
@@ -106,7 +108,7 @@ export default async function TenantsPage({
       ) : (
         <>
           <TenantsGrid tenants={tenants} />
-          <Pagination page={page} total={total} q={q} basePath="/app/tenants" />
+          <Pagination page={page} total={total} q={q} basePath="/app/tenants" params={{ sort: sortOption.key }} />
         </>
       )}
     </div>

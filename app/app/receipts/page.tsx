@@ -6,6 +6,7 @@ import { halalasToSar } from "@/lib/money";
 import { PAYMENT_METHOD_AR } from "@/lib/labels";
 import { first } from "@/lib/rows";
 import { parseListParams, likePattern } from "@/lib/list-params";
+import { LIST_SPECS, resolveSort, applySort } from "@/lib/list-specs";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
 import { FilterableTable } from "@/components/filterable-list";
@@ -26,11 +27,12 @@ type PaymentRow = {
 export default async function ReceiptsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; sort?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
-  const { q, page, from, to } = parseListParams(await searchParams);
+  const { q, page, from, to, sort } = parseListParams(await searchParams);
+  const sortOption = resolveSort(LIST_SPECS.receipts, sort);
 
   const supabase = await createClient();
   let query = supabase
@@ -40,7 +42,7 @@ export default async function ReceiptsPage({
     })
     .is("deleted_at", null);
   if (q) query = query.ilike("receipt_no", likePattern(q));
-  const { data, count } = await query.order("received_at", { ascending: false }).range(from, to);
+  const { data, count } = await applySort(query, sortOption).range(from, to);
 
   const rows = (data ?? []) as PaymentRow[];
   const total = count ?? 0;
@@ -56,7 +58,7 @@ export default async function ReceiptsPage({
         لكل دفعة مستلمة سند قبض مرقّم — إثبات للتحصيل (نقداً أو تحويلاً). سجّل الدفعات من صفحة العقد، وتظهر هنا.
       </p>
 
-      <ListToolbar q={q} placeholder="بحث برقم السند…" />
+      <ListToolbar q={q} placeholder="بحث برقم السند…" resource="receipts" sort={sortOption.key} />
 
       {rows.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-neutral-500 dark:border-neutral-700">
@@ -98,7 +100,7 @@ export default async function ReceiptsPage({
               };
             })}
           />
-          <Pagination page={page} total={total} q={q} basePath="/app/receipts" />
+          <Pagination page={page} total={total} q={q} basePath="/app/receipts" params={{ sort: sortOption.key }} />
         </>
       )}
     </div>

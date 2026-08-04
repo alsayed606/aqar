@@ -5,6 +5,7 @@ import { getActiveOrg } from "@/lib/supabase/active-org";
 import { halalasToSar } from "@/lib/money";
 import { DOC_KIND_AR } from "@/lib/labels";
 import { parseListParams, likePattern } from "@/lib/list-params";
+import { LIST_SPECS, resolveSort, applySort } from "@/lib/list-specs";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
 import { FilterableTable } from "@/components/filterable-list";
@@ -26,11 +27,12 @@ type InvoiceRow = {
 export default async function InvoicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; sort?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
-  const { q, page, from, to } = parseListParams(await searchParams);
+  const { q, page, from, to, sort } = parseListParams(await searchParams);
+  const sortOption = resolveSort(LIST_SPECS.invoices, sort);
 
   const supabase = await createClient();
   let query = supabase
@@ -41,7 +43,7 @@ export default async function InvoicesPage({
     )
     .is("deleted_at", null);
   if (q) query = query.ilike("invoice_no", likePattern(q));
-  const { data, count } = await query.order("issue_at", { ascending: false }).range(from, to);
+  const { data, count } = await applySort(query, sortOption).range(from, to);
 
   const rows = (data ?? []) as InvoiceRow[];
   const total = count ?? 0;
@@ -57,7 +59,7 @@ export default async function InvoicesPage({
         تُصدَر الفاتورة من صفحة العقد لكل استحقاق. الفاتورة توثّق التوريد وضريبته — مستقلّة عن السداد (يُثبت السداد بسند القبض).
       </p>
 
-      <ListToolbar q={q} placeholder="بحث برقم الفاتورة…" />
+      <ListToolbar q={q} placeholder="بحث برقم الفاتورة…" resource="invoices" sort={sortOption.key} />
 
       {rows.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-neutral-500 dark:border-neutral-700">
@@ -104,7 +106,7 @@ export default async function InvoicesPage({
               };
             })}
           />
-          <Pagination page={page} total={total} q={q} basePath="/app/invoices" />
+          <Pagination page={page} total={total} q={q} basePath="/app/invoices" params={{ sort: sortOption.key }} />
         </>
       )}
     </div>
