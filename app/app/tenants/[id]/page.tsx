@@ -13,6 +13,9 @@ import { EntityNotes } from "@/components/entity-notes";
 import { EntityTimeline, type TimelineEvent } from "@/components/entity-timeline";
 import { halalasToSar } from "@/lib/money";
 import { CONTRACT_STATUS_AR } from "@/lib/labels";
+import { FormDrawer } from "@/components/form-drawer";
+import { Badge } from "@/components/ui";
+import { cx } from "@/lib/cx";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +26,22 @@ const TYPE_AR: Record<string, string> = { individual: "فرد", sole_establishme
 
 const PARTY_COLUMNS =
   "id, display_name, entity_type, national_id, iqama_id, passport_no, email, phone_raw, phone_e164, " +
-  "cr_number, vat_number, unified_number, cr_expiry, rep_name, rep_id_number, rep_capacity, rep_phone_raw, " +
+  "cr_number, vat_number, unified_number, cr_expiry, rep_name, rep_id_number, rep_capacity, rep_phone_raw, primary_id, " +
   "id_exempt_reason, identity_complete, erased_at, erased_reason";
+
+function Fact({ label, value, ltr }: { label: string; value?: string | null; ltr?: boolean }) {
+  return (
+    <div>
+      <dt className="text-xs text-slate-500">{label}</dt>
+      <dd
+        dir={ltr && value ? "ltr" : undefined}
+        className={cx("text-sm", ltr && value && "text-start", value ? "text-slate-800 dark:text-slate-200" : "text-slate-400")}
+      >
+        {value || "—"}
+      </dd>
+    </div>
+  );
+}
 
 export default async function TenantEditPage({
   params,
@@ -152,40 +169,70 @@ export default async function TenantEditPage({
         ]}
       />
 
-      {!canEdit ? (
-        <p className="rounded-2xl border border-neutral-200 bg-white p-6 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
-          تعديل المستأجرين متاح لمن يملك صلاحية إدارة البيانات. النوع الحالي: {TYPE_AR[(tenant as any).tenant_type] ?? "—"}.
-        </p>
-      ) : (
-        <form action={updateTenant} className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-          <input type="hidden" name="tenant_id" value={tenant.id} />
-          <input type="hidden" name="party_id" value={p?.id} />
-          <h1 className="text-lg font-semibold">تعديل المستأجر</h1>
+      {/* §6.1 header: the record stated as facts, with editing behind a control. An always-open
+          form put 730px of inputs between the summary and the notes, so the page read as a form
+          that happened to have a summary on top rather than as a record of this tenant. */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">{p?.display_name}</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Badge tone="brand">{TYPE_AR[p?.entity_type ?? (tenant as any).tenant_type] ?? "—"}</Badge>
+              {p?.identity_complete === false && <Badge tone="warning">بيانات ناقصة</Badge>}
+              {p?.erased_at && <Badge tone="neutral">بيانات محذوفة</Badge>}
+            </div>
+          </div>
 
-          <TenantFields
-            defaults={{
-              display_name: p?.display_name ?? "",
-              tenant_type: p?.entity_type ?? (tenant as any).tenant_type ?? "individual",
-              phone: p?.phone_raw ?? p?.phone_e164 ?? "",
-              email: p?.email ?? "",
-              national_id: p?.national_id ?? "",
-              iqama_id: p?.iqama_id ?? "",
-              passport_no: p?.passport_no ?? "",
-              unified_number: p?.unified_number ?? "",
-              cr_number: p?.cr_number ?? "",
-              vat_number: p?.vat_number ?? "",
-              cr_expiry: p?.cr_expiry ?? "",
-              rep_name: p?.rep_name ?? "",
-              rep_id_number: p?.rep_id_number ?? "",
-              rep_capacity: p?.rep_capacity ?? "",
-              rep_phone: p?.rep_phone_raw ?? "",
-              id_exempt_reason: p?.id_exempt_reason ?? "",
-            }}
-          />
+          {canEdit && !p?.erased_at && (
+            <FormDrawer label="تعديل البيانات" title={`تعديل — ${p?.display_name ?? "المستأجر"}`}>
+              <form action={updateTenant} className="space-y-4">
+                <input type="hidden" name="tenant_id" value={tenant.id} />
+                <input type="hidden" name="party_id" value={p?.id} />
+                <TenantFields
+                  defaults={{
+                    display_name: p?.display_name ?? "",
+                    tenant_type: p?.entity_type ?? (tenant as any).tenant_type ?? "individual",
+                    phone: p?.phone_raw ?? p?.phone_e164 ?? "",
+                    email: p?.email ?? "",
+                    national_id: p?.national_id ?? "",
+                    iqama_id: p?.iqama_id ?? "",
+                    passport_no: p?.passport_no ?? "",
+                    unified_number: p?.unified_number ?? "",
+                    cr_number: p?.cr_number ?? "",
+                    vat_number: p?.vat_number ?? "",
+                    cr_expiry: p?.cr_expiry ?? "",
+                    rep_name: p?.rep_name ?? "",
+                    rep_id_number: p?.rep_id_number ?? "",
+                    rep_capacity: p?.rep_capacity ?? "",
+                    rep_phone: p?.rep_phone_raw ?? "",
+                    id_exempt_reason: p?.id_exempt_reason ?? "",
+                  }}
+                />
+                <button className="rounded-lg bg-brand px-4 py-2.5 font-medium text-white hover:bg-brand-fg">
+                  حفظ التعديلات
+                </button>
+              </form>
+            </FormDrawer>
+          )}
+        </div>
 
-          <button className="rounded-lg bg-brand px-4 py-2.5 font-medium text-white hover:bg-brand-fg">حفظ التعديلات</button>
-        </form>
-      )}
+        <dl className="mt-4 grid gap-x-6 gap-y-3 border-t border-slate-100 pt-4 sm:grid-cols-2 dark:border-slate-800">
+          <Fact label={establishment ? "الرقم الموحّد" : "المعرّف الرئيسي"} value={p?.primary_id} ltr />
+          <Fact label="الجوال" value={p?.phone_raw ?? p?.phone_e164} ltr />
+          <Fact label="البريد الإلكتروني" value={p?.email} ltr />
+          {establishment && <Fact label="السجل التجاري" value={p?.cr_number} ltr />}
+          {establishment && <Fact label="الرقم الضريبي" value={p?.vat_number} ltr />}
+          {establishment && <Fact label="ممثل المنشأة" value={p?.rep_name} />}
+          {establishment && <Fact label="هوية الممثل" value={p?.rep_id_number} ltr />}
+          {establishment && <Fact label="جوال الممثل" value={p?.rep_phone_raw} ltr />}
+        </dl>
+
+        {!canEdit && (
+          <p className="mt-3 text-xs text-slate-500">
+            التعديل متاح لمن يملك صلاحية إدارة البيانات.
+          </p>
+        )}
+      </section>
 
       {/* One registration, several brand names — each under its own municipal licence. */}
       {establishment && (
