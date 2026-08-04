@@ -148,7 +148,7 @@ export default async function TenantEditPage({
           { label: "العقود", value: contracts.length, href: `/app/contracts?tenant=${tenant.id}` },
           { label: "عقود نشطة", value: activeContracts.length, href: `/app/contracts?tenant=${tenant.id}` },
           { label: "سندات القبض", value: payments.length, href: `/app/receipts?party=${p?.id}` },
-          { label: "إجمالي المقبوض", value: `${halalasToSar(paidTotal)} ر.س`, href: `/app/receipts?party=${p?.id}` },
+          { label: "إجمالي المقبوض (ر.س)", value: halalasToSar(paidTotal), href: `/app/receipts?party=${p?.id}` },
         ]}
       />
 

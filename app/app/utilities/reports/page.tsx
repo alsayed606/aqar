@@ -222,7 +222,7 @@ export default async function ReportsPage({
         ) : (
           <>
             <p className="text-xs text-slate-500">
-              {attention.length} بنداً. هذا التقرير يقود إلى فعل: كل سطر فيه شيء ناقص أو معلَّق، لا وضع سليم.
+              {attention.length} بند. هذا التقرير يقود إلى فعل: كل سطر فيه شيء ناقص أو معلَّق، لا وضع سليم.
             </p>
             <div className={box}>
               <table className="w-full text-sm">

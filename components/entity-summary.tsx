@@ -22,7 +22,12 @@ export function EntitySummary({ stats }: { stats: SummaryStat[] }) {
       {stats.map((stat) => {
         const inner = (
           <>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">{stat.value}</div>
+            {/* A money figure is long enough to wrap inside a quarter-width card, which pushed the
+                label and the link out of line with the neighbouring cards. Currency belongs in the
+                label — the convention the dashboard cards already use ("المتأخرات (ر.س)"). */}
+            <div className="truncate text-2xl font-bold text-slate-900 dark:text-white" title={String(stat.value)}>
+              {stat.value}
+            </div>
             <div className="text-xs text-slate-500">{stat.label}</div>
             {stat.hint && <div className="mt-0.5 text-[11px] text-slate-500">{stat.hint}</div>}
           </>
