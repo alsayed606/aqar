@@ -34,7 +34,8 @@ export function parseOrgProfile(formData: FormData): OrgProfileResult {
   const cr_number = digits("cr_number");
   const vat_number = digits("vat_number");
   const fal_license_no = digits("fal_license_no");
-  const contact_phone = text("contact_phone") && foldDigits(String(formData.get("contact_phone"))).trim();
+  const rawPhone = text("contact_phone");
+  const contact_phone = rawPhone === null ? null : foldDigits(rawPhone).trim();
   const contact_email = text("contact_email")?.toLowerCase() ?? null;
   const address_building_no = digits("address_building_no");
   const address_postal_code = digits("address_postal_code");
