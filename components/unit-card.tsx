@@ -64,7 +64,7 @@ export function UnitCard({ unit, canData }: { unit: UnitCardData; canData: boole
   const isVacant = bucket === "vacant";
 
   return (
-    <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-brand hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
+    <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-card transition-all hover:border-brand hover:shadow-card-hover dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
       {/* Header: unit number · status + actions */}
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-base font-bold text-slate-900 dark:text-white">وحدة {unit.unit_number}</h3>

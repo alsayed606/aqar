@@ -81,7 +81,7 @@ export function ContractCard({ contract }: { contract: ContractCardData }) {
   }
 
   return (
-    <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-brand hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
+    <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-card transition-all hover:border-brand hover:shadow-card-hover dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
       {/* Header: number + copy · status + actions */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5">

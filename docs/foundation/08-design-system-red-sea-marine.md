@@ -463,6 +463,8 @@ Two of the six were already shipped and two are now mechanical:
 
 - ✅ **Mobile bottom navigation (§5.1)** — shipped 2026-08-03. Promoted ahead of the rest once the owner confirmed office staff work primarily from phones. Three destinations by frequency (dashboard, contracts, receipts) plus "المزيد", which opens the existing drawer rather than a second menu; the top-bar hamburger was removed as the duplicate opener §5.3 objects to.
 
+- ✅ **Brand-tinted shadows (§3.3), retinted to teal** — shipped 2026-08-03 as `shadow-card` / `shadow-card-hover` / `shadow-nav`. Suppressed in dark mode (`dark:shadow-none`): a tinted shadow on a near-black surface reads as a glow, and the border already does the separating there. Applied to the surfaces that are genuinely cards; the remaining `shadow-sm` panels convert as they are touched.
+
 Remaining: one global "+ New" in the layout (§5.3) · the persistent banner slot (§5.4) · **brand-tinted shadows — retinted to teal, not navy** · radius consistency (§3.5) · mobile bottom navigation (§5.1) · the 360 archetype (§6.1), which `app/app/tenants/[id]` is already converging on.
 
 ### 🔴 Red — not adopted

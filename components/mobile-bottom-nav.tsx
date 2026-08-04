@@ -57,7 +57,7 @@ export function MobileBottomNav({ unread, onMore }: { unread: number; onMore: ()
       aria-label="التنقّل السريع"
       // The upward shadow is tinted with the brand teal rather than plain black, which reads as
       // grime against the surface colours. paddingBottom clears the iPhone home indicator.
-      className="no-print fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_24px_rgba(15,118,110,0.10)] md:hidden dark:border-slate-800 dark:bg-slate-900"
+      className="no-print fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-nav md:hidden dark:border-slate-800 dark:bg-slate-900"
     >
       {TABS.map((tab) => {
         const active = isActive(tab.href);

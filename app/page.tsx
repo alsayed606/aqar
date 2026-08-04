@@ -95,7 +95,7 @@ export default function LandingPage() {
         </div>
         <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f) => (
-            <div key={f.title} className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-brand hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
+            <div key={f.title} className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-card transition hover:border-brand hover:shadow-card-hover dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand/10 text-brand">
                 <Icon path={f.icon} />
               </div>

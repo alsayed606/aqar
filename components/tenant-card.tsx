@@ -57,7 +57,7 @@ export function TenantCard({ tenant }: { tenant: TenantCardData }) {
   const isEstablishment = bucket !== "individual";
 
   return (
-    <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-brand hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
+    <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-card transition-all hover:border-brand hover:shadow-card-hover dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
       <div className="flex items-start justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-base font-bold text-slate-900 dark:text-white">
           <Icon
