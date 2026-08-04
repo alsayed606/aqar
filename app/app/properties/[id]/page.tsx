@@ -10,6 +10,7 @@ import { changePropertyOwner } from "../actions";
 import { MeterForm } from "@/components/meter-form";
 import { EntityNotes } from "@/components/entity-notes";
 import { Fact, FactGrid } from "@/components/entity-facts";
+import { EntitySummary } from "@/components/entity-summary";
 import { EntityTimeline, type TimelineEvent } from "@/components/entity-timeline";
 import { PROPERTY_KIND_AR, UNIT_STATUS_AR, CONTRACT_STATUS_AR, UTILITY_TYPE_AR, METER_STATUS_AR } from "@/lib/labels";
 import { halalasToSar } from "@/lib/money";
@@ -36,16 +37,6 @@ type UnitRow = {
   current_status: string;
 };
 
-function Kpi({ label, value }: { label: string; value: number }) {
-  return (
-    <Card>
-      <CardBody className="p-4 text-center">
-        <div className="text-2xl font-bold text-slate-900 dark:text-white">{value}</div>
-        <div className="text-xs text-slate-500">{label}</div>
-      </CardBody>
-    </Card>
-  );
-}
 
 export default async function PropertyDetail({
   params,
@@ -362,14 +353,14 @@ export default async function PropertyDetail({
         </CardBody>
       </Card>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Kpi label="إجمالي الوحدات" value={units.length} />
-        <Kpi label="مؤجرة" value={rented} />
-        <Kpi label="شاغرة" value={vacant} />
-        <Link href={`/app/contracts?property=${property.id}`} className="block transition-all hover:opacity-80">
-          <Kpi label="عقود نشطة" value={activeContracts} />
-        </Link>
-      </div>
+      <EntitySummary
+        stats={[
+          { label: "إجمالي الوحدات", value: units.length, href: `/app/units?property=${property.id}` },
+          { label: "مؤجرة", value: rented, href: `/app/units?property=${property.id}&status=rented` },
+          { label: "شاغرة", value: vacant, href: `/app/units?property=${property.id}&status=vacant` },
+          { label: "عقود نشطة", value: activeContracts, href: `/app/contracts?property=${property.id}` },
+        ]}
+      />
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
         <EntityNotes target="property" entityId={property.id} notes={notes} canWrite={true} />

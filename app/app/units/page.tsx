@@ -7,6 +7,7 @@ import { getCapabilities } from "@/lib/capabilities";
 import { UnitForm } from "@/components/unit-form";
 import { FormDrawer } from "@/components/form-drawer";
 import { UnitsGrid } from "@/components/units-grid";
+import { UNIT_STATUS_AR } from "@/lib/labels";
 import type { UnitCardData } from "@/components/unit-card";
 
 export const dynamic = "force-dynamic";
@@ -16,11 +17,11 @@ export const dynamic = "force-dynamic";
 export default async function UnitsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; property?: string; status?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
-  const { error: flashError } = await searchParams;
+  const { error: flashError, property: propertyFilter, status: statusFilter } = await searchParams;
   const caps = await getCapabilities(activeOrg);
   const canData = caps.has("manage_data");
 
@@ -28,11 +29,17 @@ export default async function UnitsPage({
   // Active contracts supply the occupancy block (tenant + rent) for rented units.
   const [{ data: propData }, { data: unitData }, { data: contractData }] = await Promise.all([
     supabase.from("property").select("id, name").is("deleted_at", null).order("name"),
-    supabase
-      .from("unit")
-      .select("id, unit_number, floor, area_sqm, bedrooms, bathrooms, current_status, property:property_id(id, name, property_kind)")
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false }),
+    // Deep links from a property 360 page narrow this list (§6.1); an unknown status is ignored
+    // rather than trusted, so the param cannot reach the query as free text.
+    (() => {
+      let q = supabase
+        .from("unit")
+        .select("id, unit_number, floor, area_sqm, bedrooms, bathrooms, current_status, property:property_id(id, name, property_kind)")
+        .is("deleted_at", null);
+      if (propertyFilter) q = q.eq("property_id", propertyFilter);
+      if (statusFilter && UNIT_STATUS_AR[statusFilter]) q = q.eq("current_status", statusFilter);
+      return q.order("created_at", { ascending: false });
+    })(),
     supabase
       .from("contract")
       .select("id, unit_id, annual_rent_halalas, tenant:tenant_id(party:party_id(display_name))")
