@@ -72,9 +72,9 @@ export default async function AppLayout({
       <ToastProvider>
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
           <AppSidebar orgName={orgName} unread={unread} />
-          <div className="md:pr-64 print:pr-0">
+          <div className="md:ps-64 print:ps-0">
             {banner}
-            <main className="mx-auto max-w-4xl px-4 py-6">{children}</main>
+            <main className="mx-auto max-w-4xl px-4 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6">{children}</main>
           </div>
         </div>
       </ToastProvider>

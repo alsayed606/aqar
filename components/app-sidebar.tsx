@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { signOut } from "@/app/app/actions";
 import { Drawer } from "@/components/ui";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 
 type Item = { href: string; label: string; icon: ReactNode; badge?: number; add?: string; soon?: boolean };
 type Group = { title?: string; items: Item[] };
@@ -174,7 +175,7 @@ export function AppSidebar({ orgName, unread }: { orgName: string | null; unread
   return (
     <>
       {/* Desktop sidebar (RTL start = right) */}
-      <aside className="no-print fixed inset-y-0 right-0 z-30 hidden w-64 flex-col border-l border-slate-200 bg-white md:flex dark:border-slate-800 dark:bg-slate-900">
+      <aside className="no-print fixed inset-y-0 start-0 z-30 hidden w-64 flex-col border-e border-slate-200 bg-white md:flex dark:border-slate-800 dark:bg-slate-900">
         <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
           <Link href="/app" className="text-xl font-extrabold text-slate-900 dark:text-white">عقار</Link>
           {orgName && <p className="mt-0.5 truncate text-xs text-slate-500">{orgName}</p>}
@@ -187,22 +188,16 @@ export function AppSidebar({ orgName, unread }: { orgName: string | null; unread
         </div>
       </aside>
 
-      {/* Mobile top bar */}
-      <div className="no-print sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden dark:border-slate-800 dark:bg-slate-900">
+      {/* Mobile top bar — identity only. The menu opener moved to the bottom bar, within reach of a
+          thumb; two openers for the same drawer is the duplication §5.3 argues against. */}
+      <div className="no-print sticky top-0 z-20 flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-3 md:hidden dark:border-slate-800 dark:bg-slate-900">
         <Link href="/app" className="text-lg font-extrabold text-slate-900 dark:text-white">عقار</Link>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label="فتح القائمة"
-          className="rounded-lg border border-slate-300 p-2 text-slate-700 dark:border-slate-700 dark:text-slate-200"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
+        {orgName && <span className="truncate text-xs text-slate-500">{orgName}</span>}
       </div>
 
-      {/* Mobile drawer */}
+      <MobileBottomNav unread={unread} onMore={() => setOpen(true)} />
+
+      {/* Mobile drawer — shared by the bottom bar's "المزيد" tab */}
       <Drawer open={open} onClose={() => setOpen(false)} title={orgName ?? "القائمة"} footer={<SignOut full />}>
         <NavContent unread={unread} onNavigate={() => setOpen(false)} />
       </Drawer>

@@ -16,9 +16,12 @@ export const metadata: Metadata = {
     "منصة سحابية سعودية لإدارة الأملاك: العقارات والوحدات والعقود وسندات القبض وفواتير ZATCA وبوابات الملّاك والمستأجرين — متعددة المستأجرين وآمنة.",
 };
 
+// viewportFit "cover" is required for env(safe-area-inset-bottom) to report a real value; without
+// it the bottom navigation would sit under the iPhone home indicator.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

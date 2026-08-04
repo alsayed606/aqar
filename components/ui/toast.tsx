@@ -34,7 +34,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{ toast }}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-4">
+      {/* On phones the toast has to clear the fixed bottom navigation; at z-60 it would otherwise
+          sit on top of it and hide the tabs while it is showing. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[60] flex flex-col items-center gap-2 px-4 md:bottom-4">
         {items.map((t) => (
           <div
             key={t.id}
