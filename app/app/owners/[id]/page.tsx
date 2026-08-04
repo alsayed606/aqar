@@ -7,6 +7,9 @@ import { halalasToSar } from "@/lib/money";
 import { PAYMENT_METHOD_AR } from "@/lib/labels";
 import { first } from "@/lib/rows";
 import { EntityNotes } from "@/components/entity-notes";
+import { Fact, FactGrid } from "@/components/entity-facts";
+import { FormDrawer } from "@/components/form-drawer";
+import { Badge } from "@/components/ui";
 import { EntityTimeline, type TimelineEvent } from "@/components/entity-timeline";
 import { isoDaysAgo } from "@/lib/dates";
 import { OwnerPortalInvite } from "@/components/owner-portal-invite";
@@ -139,15 +142,31 @@ export default async function OwnerDetail({
         </p>
       )}
 
-      <header className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-        <h1 className="text-xl font-bold">{ownerName}</h1>
-        <div className="mt-2 flex flex-wrap gap-6 text-sm text-neutral-500">
-          {party?.phone_e164 && <span dir="ltr">{party.phone_e164}</span>}
-          {party?.national_id && <span dir="ltr">هوية/سجل: {party.national_id}</span>}
-          {owner.iban && <span dir="ltr">IBAN: {owner.iban}</span>}
-          {owner.bank_name && <span>{owner.bank_name}</span>}
-        </div>
+      {/* §6.1 header: what this owner IS, with the settings that change behaviour behind a
+          control. Two always-open forms in the header made the page open on configuration rather
+          than on the owner. */}
+      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">{ownerName}</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Badge tone={owner.is_self ? "brand" : "neutral"}>{owner.is_self ? "مالك ذاتي" : "مالك خارجي"}</Badge>
+              {!owner.is_self && !(owner as any).vat_number && <Badge tone="warning">بلا رقم ضريبي</Badge>}
+            </div>
+          </div>
 
+          {!owner.is_self && (
+            <FormDrawer
+              label="تعديل البيانات"
+              title={`تعديل — ${ownerName}`}
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+                </svg>
+              }
+            >
+              <div className="space-y-6">
         {!owner.is_self && (
           <form action={setOwnerFee} className="mt-4 flex flex-wrap items-end gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-800">
             <input type="hidden" name="owner_id" value={owner.id} />
@@ -172,7 +191,6 @@ export default async function OwnerDetail({
             </span>
           </form>
         )}
-
         {!owner.is_self && (
           <form action={setOwnerTaxInfo} className="mt-4 flex flex-wrap items-end gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-800">
             <input type="hidden" name="owner_id" value={owner.id} />
@@ -216,6 +234,20 @@ export default async function OwnerDetail({
             <OwnerPortalInvite ownerId={owner.id} />
           </div>
         )}
+              </div>
+            </FormDrawer>
+          )}
+        </div>
+
+        <FactGrid>
+          <Fact label="الجوال" value={party?.phone_e164} ltr />
+          <Fact label="الهوية / السجل" value={party?.national_id} ltr />
+          <Fact label="الآيبان" value={owner.iban} ltr />
+          <Fact label="البنك" value={owner.bank_name} />
+          {!owner.is_self && <Fact label="نسبة أتعاب الإدارة" value={currentPct ? `${currentPct}%` : null} />}
+          {!owner.is_self && <Fact label="الرقم الضريبي" value={(owner as any).vat_number} ltr />}
+          {!owner.is_self && <Fact label="السجل التجاري" value={(owner as any).cr_number} ltr />}
+        </FactGrid>
       </header>
 
       {/* Statement */}
@@ -256,11 +288,11 @@ export default async function OwnerDetail({
             <table className="w-full text-sm">
               <thead className="bg-neutral-50 text-neutral-500 dark:bg-neutral-900">
                 <tr>
-                  <th className="px-4 py-2 text-right font-medium">العقار</th>
-                  <th className="px-4 py-2 text-right font-medium">المُحصَّل (ر.س)</th>
-                  <th className="px-4 py-2 text-right font-medium">الأتعاب</th>
-                  <th className="px-4 py-2 text-right font-medium">الصافي للمالك</th>
-                  <th className="px-4 py-2 text-right font-medium">المتبقّي على المستأجرين</th>
+                  <th className="px-4 py-2 text-start font-medium">العقار</th>
+                  <th className="px-4 py-2 text-start font-medium">المُحصَّل (ر.س)</th>
+                  <th className="px-4 py-2 text-start font-medium">الأتعاب</th>
+                  <th className="px-4 py-2 text-start font-medium">الصافي للمالك</th>
+                  <th className="px-4 py-2 text-start font-medium">المتبقّي على المستأجرين</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
@@ -377,11 +409,11 @@ export default async function OwnerDetail({
               <table className="w-full text-sm">
                 <thead className="bg-neutral-50 text-neutral-500 dark:bg-neutral-900">
                   <tr>
-                    <th className="px-4 py-2 text-right font-medium">رقم السند</th>
-                    <th className="px-4 py-2 text-right font-medium">التاريخ</th>
-                    <th className="px-4 py-2 text-right font-medium">المبلغ (ر.س)</th>
-                    <th className="px-4 py-2 text-right font-medium">الطريقة</th>
-                    <th className="px-4 py-2 text-right font-medium"></th>
+                    <th className="px-4 py-2 text-start font-medium">رقم السند</th>
+                    <th className="px-4 py-2 text-start font-medium">التاريخ</th>
+                    <th className="px-4 py-2 text-start font-medium">المبلغ (ر.س)</th>
+                    <th className="px-4 py-2 text-start font-medium">الطريقة</th>
+                    <th className="px-4 py-2 text-start font-medium"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
@@ -418,7 +450,7 @@ export default async function OwnerDetail({
               <li key={p.id}>
                 <Link href={`/app/properties/${p.id}`} className="block rounded-xl border border-neutral-200 px-4 py-3 hover:border-brand dark:border-neutral-800">
                   <span className="font-medium">{p.name}</span>
-                  {p.city && <span className="mr-2 text-sm text-neutral-500">· {p.city}</span>}
+                  {p.city && <span className="ms-2 text-sm text-neutral-500">· {p.city}</span>}
                 </Link>
               </li>
             ))}

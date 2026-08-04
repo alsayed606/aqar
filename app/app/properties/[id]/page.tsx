@@ -9,6 +9,7 @@ import { FormDrawer } from "@/components/form-drawer";
 import { changePropertyOwner } from "../actions";
 import { MeterForm } from "@/components/meter-form";
 import { EntityNotes } from "@/components/entity-notes";
+import { Fact, FactGrid } from "@/components/entity-facts";
 import { EntityTimeline, type TimelineEvent } from "@/components/entity-timeline";
 import { PROPERTY_KIND_AR, UNIT_STATUS_AR, CONTRACT_STATUS_AR, UTILITY_TYPE_AR, METER_STATUS_AR } from "@/lib/labels";
 import { halalasToSar } from "@/lib/money";
@@ -149,7 +150,7 @@ export default async function PropertyDetail({
         <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900/60">
-              <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+              <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-start [&>th]:font-medium">
                 <th>رقم الوحدة</th>
                 <th>الحالة</th>
                 <th>الدور</th>
@@ -191,7 +192,7 @@ export default async function PropertyDetail({
       <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900/60">
-            <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+            <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-start [&>th]:font-medium">
               <th>النوع</th>
               <th>رقم العدّاد</th>
               <th>يخدم</th>
@@ -261,7 +262,7 @@ export default async function PropertyDetail({
       <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900/60">
-            <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+            <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-start [&>th]:font-medium">
               <th>رقم العقد</th>
               <th>الوحدة</th>
               <th>المستأجر</th>
@@ -309,22 +310,18 @@ export default async function PropertyDetail({
         <CardBody>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h1 className="text-xl font-bold text-slate-900 dark:text-white">{property.name}</h1>
-            <div className="flex items-center gap-2">
-              {property.property_code && <Badge tone="neutral">{property.property_code}</Badge>}
+            <div className="flex flex-wrap items-center gap-2">
               <Badge tone="brand">{PROPERTY_KIND_AR[property.property_kind] ?? property.property_kind}</Badge>
-            </div>
-          </div>
-          <p className="mt-1 text-sm text-slate-500">
-            {[property.city, property.district].filter(Boolean).join(" · ") || "—"}
-          </p>
-          {property.deed_number && (
-            <p className="mt-1 text-xs text-slate-400" dir="ltr">صك: {property.deed_number}</p>
-          )}
-
-          <details className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
-            <summary className="cursor-pointer select-none text-sm font-medium text-slate-600 dark:text-slate-300">
-              تغيير مالك العقار
-            </summary>
+              <FormDrawer
+                label="تغيير المالك"
+                title={`تغيير مالك — ${property.name}`}
+                icon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+                </svg>
+                }
+              >
             <form action={changePropertyOwner} className="mt-3 flex flex-wrap items-end gap-2">
               <input type="hidden" name="property_id" value={property.id} />
               <div>
@@ -351,7 +348,17 @@ export default async function PropertyDetail({
                 ⚠️ تغيير المالك قد يؤثّر على العقود والالتزامات المالية المرتبطة بالعقار.
               </p>
             </form>
-          </details>
+              </FormDrawer>
+            </div>
+          </div>
+          <FactGrid>
+            <Fact label="المالك" value={ownerLabel((property as any).owner)} />
+            <Fact label="التصنيف" value={PROPERTY_KIND_AR[property.property_kind] ?? property.property_kind} />
+            <Fact label="المدينة" value={property.city} />
+            <Fact label="الحي" value={property.district} />
+            <Fact label="رقم الصك" value={property.deed_number} ltr />
+            <Fact label="كود العقار" value={property.property_code} ltr />
+          </FactGrid>
         </CardBody>
       </Card>
 

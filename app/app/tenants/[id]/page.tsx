@@ -15,7 +15,7 @@ import { halalasToSar } from "@/lib/money";
 import { CONTRACT_STATUS_AR } from "@/lib/labels";
 import { FormDrawer } from "@/components/form-drawer";
 import { Badge } from "@/components/ui";
-import { cx } from "@/lib/cx";
+import { Fact, FactGrid } from "@/components/entity-facts";
 
 export const dynamic = "force-dynamic";
 
@@ -28,20 +28,6 @@ const PARTY_COLUMNS =
   "id, display_name, entity_type, national_id, iqama_id, passport_no, email, phone_raw, phone_e164, " +
   "cr_number, vat_number, unified_number, cr_expiry, rep_name, rep_id_number, rep_capacity, rep_phone_raw, primary_id, " +
   "id_exempt_reason, identity_complete, erased_at, erased_reason";
-
-function Fact({ label, value, ltr }: { label: string; value?: string | null; ltr?: boolean }) {
-  return (
-    <div>
-      <dt className="text-xs text-slate-500">{label}</dt>
-      <dd
-        dir={ltr && value ? "ltr" : undefined}
-        className={cx("text-sm", ltr && value && "text-start", value ? "text-slate-800 dark:text-slate-200" : "text-slate-400")}
-      >
-        {value || "—"}
-      </dd>
-    </div>
-  );
-}
 
 export default async function TenantEditPage({
   params,
@@ -225,7 +211,7 @@ export default async function TenantEditPage({
           )}
         </div>
 
-        <dl className="mt-4 grid gap-x-6 gap-y-3 border-t border-slate-100 pt-4 sm:grid-cols-2 dark:border-slate-800">
+        <FactGrid>
           <Fact label={establishment ? "الرقم الموحّد" : "المعرّف الرئيسي"} value={p?.primary_id} ltr />
           <Fact label="الجوال" value={p?.phone_raw ?? p?.phone_e164} ltr />
           <Fact label="البريد الإلكتروني" value={p?.email} ltr />
@@ -234,7 +220,7 @@ export default async function TenantEditPage({
           {establishment && <Fact label="ممثل المنشأة" value={p?.rep_name} />}
           {establishment && <Fact label="هوية الممثل" value={p?.rep_id_number} ltr />}
           {establishment && <Fact label="جوال الممثل" value={p?.rep_phone_raw} ltr />}
-        </dl>
+        </FactGrid>
 
         {!canEdit && (
           <p className="mt-3 text-xs text-slate-500">
