@@ -49,6 +49,15 @@ export default async function UnitsPage({
 
   const properties = (propData ?? []).map((p: any) => ({ id: p.id, label: p.name }));
 
+  // Names the active deep-link filter for the chip and the empty state. Built from the loaded
+  // property list rather than a second query, and from the same whitelist the query used.
+  const filterLabel = [
+    propertyFilter ? properties.find((x) => x.id === propertyFilter)?.label ?? "عقار محدَّد" : null,
+    statusFilter && UNIT_STATUS_AR[statusFilter] ? UNIT_STATUS_AR[statusFilter] : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   const activeByUnit = new Map<string, any>();
   for (const contract of contractData ?? []) activeByUnit.set(contract.unit_id, contract);
 
@@ -98,9 +107,19 @@ export default async function UnitsPage({
         </p>
       )}
 
+      {/* A filtered view that finds nothing must say the filter is why, and offer a way out. Saying
+          "no units yet" when the office has units and simply none match is a dead end that reads
+          like data loss (§6.2). */}
+      {filterLabel && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded-lg border border-brand bg-brand/10 px-3 py-1.5 text-brand">{filterLabel}</span>
+          <Link href="/app/units" className="text-brand hover:underline">إزالة التصفية</Link>
+        </div>
+      )}
+
       {units.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-neutral-300 p-8 text-center text-neutral-500 dark:border-neutral-700">
-          لا توجد وحدات بعد.
+          {filterLabel ? "لا توجد وحدات مطابقة لهذه التصفية." : "لا توجد وحدات بعد."}
         </p>
       ) : (
         <UnitsGrid units={units} canData={canData} />
