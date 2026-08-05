@@ -8,6 +8,7 @@ import { getActiveOrg } from "@/lib/supabase/active-org";
 import { normalizeSaudiPhone } from "@/lib/phone";
 import { isEstablishment, tenantErrorAr, type EntityType, type PersonIdKind } from "@/lib/tenant-identity";
 import { archiveRecord } from "@/lib/archive";
+import { rpcErrorAr } from "@/lib/rpc-errors";
 
 export type TenantState = { error?: string; ok?: boolean };
 
@@ -111,7 +112,7 @@ export async function createTenantInvite(
   if (error) {
     if (/TENANT_NO_CONTACT/i.test(error.message)) return { error: "أضِف جوالاً أو بريداً للمستأجر أولاً" };
     if (/FORBIDDEN/i.test(error.message)) return { error: "متاح للمدراء فقط" };
-    return { error: error.message };
+    return { error: rpcErrorAr(error.message) ?? error.message };
   }
 
   const h = await headers();

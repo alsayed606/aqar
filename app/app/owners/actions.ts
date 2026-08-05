@@ -9,6 +9,7 @@ import { normalizeSaudiPhone } from "@/lib/phone";
 import { parseArabicNumber } from "@/lib/num";
 import { sarToHalalas } from "@/lib/money";
 import { archiveRecord } from "@/lib/archive";
+import { rpcErrorAr } from "@/lib/rpc-errors";
 
 export type OwnerState = { error?: string; ok?: boolean };
 export type OwnerInviteState = { error?: string; link?: string };
@@ -37,7 +38,7 @@ export async function createOwnerInvite(
   if (error) {
     if (/OWNER_NO_CONTACT/i.test(error.message)) return { error: "أضِف جوالاً أو بريداً للمالك أولاً" };
     if (/FORBIDDEN/i.test(error.message)) return { error: "متاح للمدراء فقط" };
-    return { error: error.message };
+    return { error: rpcErrorAr(error.message) ?? error.message };
   }
 
   const h = await headers();
