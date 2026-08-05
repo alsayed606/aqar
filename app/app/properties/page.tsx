@@ -153,13 +153,21 @@ export default async function PropertiesPage({
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         <Link href={`/app/properties/${p.id}`} className="text-xs text-brand hover:underline">عرض/تعديل</Link>
-                        {canData && (
+                        {/* Offered only while the property is empty. The 0067 guard refuses the
+                            rest anyway, and a delete link that always fails is not a safeguard —
+                            it is a promise the row cannot keep. */}
+                        {canData && u.total === 0 && (
                           <form action={deleteProperty}>
                             <input type="hidden" name="property_id" value={p.id} />
-                            <ConfirmButton message={`حذف العقار «${p.name}»؟ يمكن الرجوع إليه من السجلّات.`} className="text-xs text-red-600 hover:underline">
+                            <ConfirmButton message={`حذف العقار «${p.name}»؟ يبقى سجلّه محفوظاً.`} className="text-xs text-red-600 hover:underline">
                               حذف
                             </ConfirmButton>
                           </form>
+                        )}
+                        {canData && u.total > 0 && (
+                          <span className="text-xs text-slate-400" title="احذف وحداته أوّلاً">
+                            لا يُحذف
+                          </span>
                         )}
                       </div>
                     </td>

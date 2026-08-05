@@ -7,8 +7,20 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { normalizeSaudiPhone } from "@/lib/phone";
 import { isEstablishment, tenantErrorAr, type EntityType, type PersonIdKind } from "@/lib/tenant-identity";
+import { archiveRecord } from "@/lib/archive";
 
 export type TenantState = { error?: string; ok?: boolean };
+
+// Soft-delete a tenant. Refused by 0067 while any contract still points at them — the office should
+// let the contract end (or terminate it) rather than lose the party a signed document names.
+export async function deleteTenant(formData: FormData) {
+  const tenant_id = String(formData.get("tenant_id") ?? "");
+  if (!tenant_id) redirect("/app/tenants");
+
+  await archiveRecord("tenant", tenant_id, `/app/tenants/${tenant_id}`);
+  revalidatePath("/app/tenants");
+  redirect("/app/tenants");
+}
 
 const ENTITY_TYPES: EntityType[] = ["individual", "sole_establishment", "company"];
 const PERSON_ID_KINDS: PersonIdKind[] = ["national_id", "iqama_id", "passport_no"];

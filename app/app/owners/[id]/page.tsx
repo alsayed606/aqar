@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
-import { setOwnerFee, setOwnerTaxInfo, recordRemittance } from "../actions";
+import { setOwnerFee, setOwnerTaxInfo, recordRemittance, deleteOwner } from "../actions";
+import { ConfirmButton } from "@/components/confirm-button";
 import { halalasToSar } from "@/lib/money";
 import { PAYMENT_METHOD_AR } from "@/lib/labels";
 import { first } from "@/lib/rows";
@@ -248,6 +249,35 @@ export default async function OwnerDetail({
           {!owner.is_self && <Fact label="الرقم الضريبي" value={(owner as any).vat_number} ltr />}
           {!owner.is_self && <Fact label="السجل التجاري" value={(owner as any).cr_number} ltr />}
         </FactGrid>
+
+        {/* The self-owner has no delete control at all — not a disabled one. It is the office
+            itself, and issue_invoice reads its tax identity for every owned property; a button
+            that can only ever refuse teaches nothing. */}
+        {!owner.is_self && (
+          <div className="mt-4 border-t border-neutral-100 pt-3 dark:border-neutral-800">
+            {(props ?? []).length === 0 ? (
+              <form action={deleteOwner}>
+                <input type="hidden" name="owner_id" value={owner.id} />
+                <ConfirmButton
+                  message={`حذف المالك «${ownerName}»؟ يبقى سجلّه محفوظاً ويمكن الرجوع إليه.`}
+                  className="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  حذف المالك
+                </ConfirmButton>
+              </form>
+            ) : (
+              <p className="text-xs text-neutral-500">
+                لا يُحذف هذا المالك — يملك{" "}
+                {(props ?? []).length === 1
+                  ? "عقاراً واحداً"
+                  : (props ?? []).length === 2
+                    ? "عقارين"
+                    : `${(props ?? []).length} عقارات`}
+                . انقل ملكيتها إلى مالك آخر أوّلاً من صفحة كل عقار.
+              </p>
+            )}
+          </div>
+        )}
       </header>
 
       {/* Statement */}

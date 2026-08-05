@@ -8,9 +8,21 @@ import { getActiveOrg } from "@/lib/supabase/active-org";
 import { normalizeSaudiPhone } from "@/lib/phone";
 import { parseArabicNumber } from "@/lib/num";
 import { sarToHalalas } from "@/lib/money";
+import { archiveRecord } from "@/lib/archive";
 
 export type OwnerState = { error?: string; ok?: boolean };
 export type OwnerInviteState = { error?: string; link?: string };
+
+// Soft-delete an owner. Refused by 0067 while they still hold properties, and refused outright for
+// the org's own self-owner — that one is the office itself, and invoices read its tax identity.
+export async function deleteOwner(formData: FormData) {
+  const owner_id = String(formData.get("owner_id") ?? "");
+  if (!owner_id) redirect("/app/owners");
+
+  await archiveRecord("owner", owner_id, `/app/owners/${owner_id}`);
+  revalidatePath("/app/owners");
+  redirect("/app/owners");
+}
 
 // Mint a portal invite for an owner; the raw token is returned once as a join link (kept out of the URL).
 export async function createOwnerInvite(

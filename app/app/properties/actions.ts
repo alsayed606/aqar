@@ -7,6 +7,7 @@ import { getActiveOrg } from "@/lib/supabase/active-org";
 import { parseArabicNumber, parseArabicInt } from "@/lib/num";
 import { translateSubscriptionError } from "@/lib/subscription-errors";
 import { safeReturnTo } from "@/lib/return-to";
+import { archiveRecord } from "@/lib/archive";
 
 export type PropState = { error?: string; ok?: boolean };
 export type UnitState = { error?: string; ok?: boolean };
@@ -79,18 +80,26 @@ export async function createProperty(
   return { ok: true };
 }
 
-// Soft-delete a property (keeps history; RLS manage_data gates it).
+// Soft-delete a property. Refused by 0067 while it still has units or contracts.
 export async function deleteProperty(formData: FormData) {
   const property_id = String(formData.get("property_id") ?? "");
   if (!property_id) redirect("/app/properties");
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("property")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", property_id);
-  if (error) redirect(`/app/properties?error=${encodeURIComponent(error.message)}`);
+
+  await archiveRecord("property", property_id, "/app/properties");
   revalidatePath("/app/properties");
   redirect("/app/properties");
+}
+
+// Soft-delete a unit. Refused by 0067 while any contract still points at it.
+export async function deleteUnit(formData: FormData) {
+  const unit_id = String(formData.get("unit_id") ?? "");
+  // `back` rides in a hidden field, so it is caller input: validated, never followed as given.
+  const back = safeReturnTo(String(formData.get("back") ?? "")) ?? "/app/units";
+  if (!unit_id) redirect(back);
+
+  await archiveRecord("unit", unit_id, back);
+  revalidatePath("/app/units");
+  redirect(back);
 }
 
 // Reassign a property to a different owner (e.g., from the self-owner to a real client).

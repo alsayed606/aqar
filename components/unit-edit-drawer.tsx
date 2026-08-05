@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { updateUnit } from "@/app/app/properties/actions";
+import { updateUnit, deleteUnit } from "@/app/app/properties/actions";
 import { UNIT_STATUS_AR } from "@/lib/labels";
 import { Button, Drawer } from "@/components/ui";
+import { ConfirmButton } from "@/components/confirm-button";
 
 type Unit = {
   id: string;
@@ -64,6 +65,23 @@ export function UnitEditDrawer({ unit }: { unit: Unit }) {
           <div className="pt-2">
             <Button type="submit" className="w-full">حفظ التعديل</Button>
           </div>
+        </form>
+
+        {/* A sibling of the edit form, never nested inside it — a form within a form does not
+            submit. The refusal, when the unit still carries a contract, comes from the database
+            and arrives as a readable sentence on the page behind. */}
+        <form action={deleteUnit} className="mt-6 border-t border-slate-200 pt-4 dark:border-slate-800">
+          <input type="hidden" name="unit_id" value={unit.id} />
+          <input type="hidden" name="back" value="/app/units" />
+          <p className="mb-2 text-xs text-slate-500">
+            الحذف يُخفي الوحدة من القوائم ويُبقي سجلّها. ولا يتمّ ما دام عليها عقد.
+          </p>
+          <ConfirmButton
+            message={`حذف الوحدة ${unit.unit_number}؟ يبقى سجلّها محفوظاً.`}
+            className="w-full rounded-lg border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+          >
+            حذف الوحدة
+          </ConfirmButton>
         </form>
       </Drawer>
     </>
