@@ -55,7 +55,7 @@ export default async function PropertyDetail({
   const { data: property } = await supabase
     .from("property")
     .select(
-      "id, name, property_kind, property_code, city, district, deed_number, owner_id, owner:owner_id(is_self, party:party_id(display_name))",
+      "id, name, property_kind, property_code, city, district, deed_number, water_meter, electricity_meter, owner_id, owner:owner_id(is_self, party:party_id(display_name))",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -218,8 +218,42 @@ export default async function PropertyDetail({
       </div>
     );
 
+  // Numbers typed into the two free-text columns that predate the utilities module. They are shown
+  // rather than quietly dropped — an office wrote them down for a reason — but they are named for
+  // what they are: text with no readings behind it. Once a real meter exists the notice goes away.
+  const legacyMeters = [
+    { label: "ماء", value: (property as any).water_meter as string | null },
+    { label: "كهرباء", value: (property as any).electricity_meter as string | null },
+  ].filter((m) => m.value);
+
   const metersTab = (
     <div className="space-y-4">
+      {/* Shown whenever a legacy number exists — never hidden, because hiding it is how the number
+          would be lost. Only the tone changes: a nudge while the property has no real meter, a
+          plain note once it does, when the office can compare it against the table below itself. */}
+      {legacyMeters.length > 0 && (
+        <div
+          className={
+            "rounded-xl px-3 py-2 text-sm " +
+            (meters.length === 0
+              ? "bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-200"
+              : "bg-slate-50 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300")
+          }
+        >
+          <b>أرقام عدّادات مسجّلة في حقل قديم:</b>{" "}
+          {legacyMeters.map((m, i) => (
+            <span key={m.label}>
+              {i > 0 && " · "}
+              {m.label} <span dir="ltr" className="font-mono">{m.value}</span>
+            </span>
+          ))}
+          .{" "}
+          {meters.length === 0
+            ? "هذه نصوص فقط — بلا قراءات ولا فواتير. أضِفها عدّادات فعلية من الزرّ أدناه ليصبح لها سجلّ."
+            : "محفوظة كنصّ من نموذج قديم — تحقّق أنها ضمن العدادات أدناه."}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm text-slate-500">
           {mainMeters.length} عدّاد رئيسي · {unitMeters.length} عدّاد وحدات

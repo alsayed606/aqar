@@ -65,8 +65,11 @@ export async function createProperty(
     occupancy_type,
     deed_type: String(formData.get("deed_type") ?? "").trim() || null,
     deed_date: String(formData.get("deed_date") ?? "").trim() || null,
-    water_meter: String(formData.get("water_meter") ?? "").trim() || null,
-    electricity_meter: String(formData.get("electricity_meter") ?? "").trim() || null,
+    // water_meter / electricity_meter are deliberately NOT written any more. They predate the
+    // utilities module (0063), which owns meters as records with readings and bills; keeping both
+    // writable gave every meter number two homes and no answer for which one was current. The
+    // columns stay in the table so values already captured are not lost — the property page shows
+    // them and points at the real thing.
     planned_residential_units: toInt(String(formData.get("planned_residential_units") ?? "")),
     planned_commercial_units: toInt(String(formData.get("planned_commercial_units") ?? "")),
   });

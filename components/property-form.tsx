@@ -129,11 +129,16 @@ export function PropertyForm({ owners = [] }: { owners?: Landlord[] }) {
         <Field label="رقم الصك"><input name="deed_number" dir="ltr" className={cls + " text-right"} /></Field>
         <Field label="تاريخ الصك"><input name="deed_date" type="date" dir="ltr" className={cls} /></Field>
 
-        <div className="sm:col-span-2 mt-1 text-xs font-medium text-slate-500">العدّادات وعدد الوحدات المخطّط</div>
-        <Field label="عدّاد الماء"><input name="water_meter" dir="ltr" className={cls + " text-right"} /></Field>
-        <Field label="عدّاد الكهرباء"><input name="electricity_meter" dir="ltr" className={cls + " text-right"} /></Field>
+        <div className="sm:col-span-2 mt-1 text-xs font-medium text-slate-500">عدد الوحدات المخطّط</div>
         <Field label="وحدات سكنية"><input name="planned_residential_units" inputMode="numeric" className={cls} /></Field>
         <Field label="وحدات تجارية"><input name="planned_commercial_units" inputMode="numeric" className={cls} /></Field>
+
+        {/* Meters used to be two free-text fields here. They are now real records with readings and
+            bills, so this form only says where they went — writing a number in two places taught the
+            office that one of them was wrong without saying which. */}
+        <p className="sm:col-span-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
+          العدّادات تُضاف بعد حفظ العقار من تبويب <span className="font-medium">«العدادات»</span> في صفحته — عدّاد لكل مرفق، بقراءاته وفواتيره.
+        </p>
       </div>
 
       {/* Step 3 — files (needs Supabase Storage; not built yet) */}
