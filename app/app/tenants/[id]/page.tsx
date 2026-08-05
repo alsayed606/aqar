@@ -8,6 +8,7 @@ import { TenantFields } from "@/components/tenant-fields";
 import { isEstablishment } from "@/lib/tenant-identity";
 import { updateTenant, addTradeName, removeTradeName, deleteTenant } from "../actions";
 import { ConfirmButton } from "@/components/confirm-button";
+import { countAr, CONTRACT_AR } from "@/lib/plural-ar";
 import { erasePartyData } from "../../privacy/actions";
 import { EntitySummary } from "@/components/entity-summary";
 import { EntityNotes } from "@/components/entity-notes";
@@ -212,34 +213,6 @@ export default async function TenantEditPage({
           )}
         </div>
 
-        {/* Deleting sits beside editing rather than at the bottom of the page: it is the same kind
-            of act on the same record. It is only offered when there is no contract to lose — the
-            0067 guard would refuse anyway, and offering a button that always fails is not an
-            option, it is a trap. */}
-        {canEdit && !p?.erased_at && (
-          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-            {contracts.length === 0 ? (
-              <form action={deleteTenant}>
-                <input type="hidden" name="tenant_id" value={tenant.id} />
-                <ConfirmButton
-                  message={`حذف «${p?.display_name}»؟ يبقى سجلّه محفوظاً ويمكن الرجوع إليه.`}
-                  className="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-                >
-                  حذف المستأجر
-                </ConfirmButton>
-              </form>
-            ) : (
-              <p className="text-xs text-slate-500">
-                لا يُحذف هذا المستأجر — مرتبط بـ
-                {contracts.length === 1 ? "عقد واحد" : contracts.length === 2 ? "عقدين" : `${contracts.length} عقود`}.{" "}
-                <Link href={`/app/contracts?tenant=${tenant.id}`} className="text-brand hover:underline">
-                  عرض العقود ←
-                </Link>
-              </p>
-            )}
-          </div>
-        )}
-
         <FactGrid>
           <Fact label={establishment ? "الرقم الموحّد" : "المعرّف الرئيسي"} value={p?.primary_id} ltr />
           <Fact label="الجوال" value={p?.phone_raw ?? p?.phone_e164} ltr />
@@ -255,6 +228,32 @@ export default async function TenantEditPage({
           <p className="mt-3 text-xs text-slate-500">
             التعديل متاح لمن يملك صلاحية إدارة البيانات.
           </p>
+        )}
+
+        {/* Below the facts, not above them. Delete belongs after the record it acts on — put
+            between the name and the data it reads as a status banner about the tenant. Matches
+            where the owner page keeps the same control. */}
+        {canEdit && !p?.erased_at && (
+          <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
+            {contracts.length === 0 ? (
+              <form action={deleteTenant}>
+                <input type="hidden" name="tenant_id" value={tenant.id} />
+                <ConfirmButton
+                  message={`حذف «${p?.display_name}»؟ يبقى سجلّه محفوظاً ويمكن الرجوع إليه.`}
+                  className="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  حذف المستأجر
+                </ConfirmButton>
+              </form>
+            ) : (
+              <p className="text-xs text-slate-500">
+                لا يُحذف هذا المستأجر — عليه {countAr(contracts.length, CONTRACT_AR)}.{" "}
+                <Link href={`/app/contracts?tenant=${tenant.id}`} className="text-brand hover:underline">
+                  عرض العقود ←
+                </Link>
+              </p>
+            )}
+          </div>
         )}
       </section>
 

@@ -7,6 +7,7 @@ import { isEstablishment } from "@/lib/tenant-identity";
 import { UNIT_STATUS_AR } from "@/lib/labels";
 import { halalasToSar, sarToHalalas } from "@/lib/money";
 import { contractFinance, type ContractFinance } from "@/lib/contract-finance";
+import { countAr, INSTALMENT_AR } from "@/lib/plural-ar";
 
 const initial: ContractState = {};
 
@@ -75,8 +76,7 @@ function FinanceSummary({ finance, kind }: { finance: ContractFinance; kind: str
       </dl>
 
       <p className="mt-3 border-t border-brand/20 pt-2 text-xs text-slate-600 dark:border-brand/30 dark:text-slate-300">
-        عند اعتماد العقد ستُنشأ <b>{finance.periods}</b>{" "}
-        {finance.periods === 1 ? "دفعة" : finance.periods === 2 ? "دفعتان" : "دفعات"} بقيمة{" "}
+        عند اعتماد العقد ستُنشأ <b>{countAr(finance.periods, INSTALMENT_AR)}</b> بقيمة{" "}
         <Money halalas={finance.instalmentTotal} />
         {unevenLast && (
           <>
@@ -152,22 +152,24 @@ export function ContractForm({
           }
           options={unitOptions}
         />
+        {/* Two stacked lines, not one wrapping row: the drawer is ~400px wide, and the long label
+            broke after "المتاحة" leaving "أيضاً" alone under a checkbox it no longer touched. */}
         {!noUnits && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-            <label className="flex cursor-pointer items-center gap-1.5 text-slate-600 dark:text-slate-300">
+          <div className="mt-1.5 space-y-1 text-xs">
+            <p className="text-slate-400">
+              {availableCount === 0
+                ? "لا توجد وحدة شاغرة أو محجوزة"
+                : `${availableCount} وحدة متاحة من ${units.length}`}
+            </p>
+            <label className="flex cursor-pointer items-start gap-1.5 text-slate-600 dark:text-slate-300">
               <input
                 type="checkbox"
                 checked={showAllUnits}
                 onChange={(e) => setShowAllUnits(e.target.checked)}
-                className="accent-brand"
+                className="mt-0.5 shrink-0 accent-brand"
               />
-              عرض الوحدات المؤجّرة وغير المتاحة أيضاً
+              <span>عرض المؤجّرة وغير المتاحة أيضاً</span>
             </label>
-            <span className="text-slate-400">
-              {availableCount === 0
-                ? "لا توجد وحدة شاغرة أو محجوزة"
-                : `${availableCount} وحدة متاحة من ${units.length}`}
-            </span>
           </div>
         )}
       </div>

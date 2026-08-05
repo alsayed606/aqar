@@ -4,6 +4,7 @@ import { getActiveOrg } from "@/lib/supabase/active-org";
 import { nationalAddressLine } from "@/lib/org-profile";
 import { Card, CardBody, CardHeader, CardTitle, Button } from "@/components/ui";
 import { Fact, FactGrid } from "@/components/entity-facts";
+import { FilePicker } from "@/components/file-picker";
 import {
   changeEmail,
   changePassword,
@@ -228,13 +229,7 @@ export default async function SettingsPage({
           {isAdmin ? (
             <div className="flex flex-wrap items-center gap-3">
               <form action={uploadOrgLogo} className="flex flex-wrap items-center gap-3">
-                <input
-                  type="file"
-                  name="logo"
-                  accept="image/png,image/jpeg,image/webp"
-                  required
-                  className="text-sm file:me-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm dark:file:bg-slate-800 dark:file:text-slate-100"
-                />
+                <FilePicker name="logo" accept="image/png,image/jpeg,image/webp" required />
                 <Button type="submit" variant="outline">رفع الشعار</Button>
               </form>
               {org.logo_path && (

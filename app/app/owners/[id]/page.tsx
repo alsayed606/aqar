@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { setOwnerFee, setOwnerTaxInfo, recordRemittance, deleteOwner } from "../actions";
 import { ConfirmButton } from "@/components/confirm-button";
+import { countAr, PROPERTY_AR } from "@/lib/plural-ar";
 import { halalasToSar } from "@/lib/money";
 import { PAYMENT_METHOD_AR } from "@/lib/labels";
 import { first } from "@/lib/rows";
@@ -267,13 +268,8 @@ export default async function OwnerDetail({
               </form>
             ) : (
               <p className="text-xs text-neutral-500">
-                لا يُحذف هذا المالك — يملك{" "}
-                {(props ?? []).length === 1
-                  ? "عقاراً واحداً"
-                  : (props ?? []).length === 2
-                    ? "عقارين"
-                    : `${(props ?? []).length} عقارات`}
-                . انقل ملكيتها إلى مالك آخر أوّلاً من صفحة كل عقار.
+                لا يُحذف هذا المالك — له {countAr((props ?? []).length, PROPERTY_AR)}. انقل ملكيتها
+                إلى مالك آخر أوّلاً من صفحة كل عقار.
               </p>
             )}
           </div>
