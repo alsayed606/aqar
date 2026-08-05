@@ -43,9 +43,11 @@ export default async function ContractsPage({
 
   const [{ data: unitData }, { data: tenantData }, { data: contractData, error, count }] =
     await Promise.all([
+      // current_status drives the form's default: a new contract offers the units that can take one.
+      // The occupied and out-of-service ones stay reachable behind a toggle rather than disappearing.
       supabase
         .from("unit")
-        .select("id, unit_number, property:property_id(name)")
+        .select("id, unit_number, current_status, property:property_id(name)")
         .is("deleted_at", null)
         .order("unit_number"),
       // entity_type and the brand list drive the commercial block in the contract form: an
@@ -60,6 +62,7 @@ export default async function ContractsPage({
   const units = (unitData ?? []).map((u: any) => ({
     id: u.id,
     label: `${first(u.property)?.name ?? "عقار"} — وحدة ${u.unit_number}`,
+    status: u.current_status as string,
   }));
   const tenants = (tenantData ?? []).map((t: any) => {
     const party = first(t.party);

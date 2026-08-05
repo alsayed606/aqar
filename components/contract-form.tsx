@@ -1,13 +1,23 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { createContract, type ContractState } from "@/app/app/contracts/actions";
 import { Combobox } from "@/components/ui";
 import { isEstablishment } from "@/lib/tenant-identity";
+import { UNIT_STATUS_AR } from "@/lib/labels";
+import { halalasToSar, sarToHalalas } from "@/lib/money";
+import { contractFinance, type ContractFinance } from "@/lib/contract-finance";
 
 const initial: ContractState = {};
 
 type Option = { id: string; label: string };
+
+// A unit that can take a new contract. `reserved` belongs here: a unit is held precisely because
+// this contract is being written for it. Everything else — rented, maintenance, out of service —
+// is behind the toggle, still reachable but never the default suggestion.
+const AVAILABLE_STATUSES = new Set(["vacant", "reserved"]);
+
+export type ContractUnitOption = Option & { status: string };
 
 export type ContractTenantOption = Option & {
   entity_type: string;
@@ -18,21 +28,108 @@ export type ContractTenantOption = Option & {
   brands: { id: string; name: string }[];
 };
 
+function Money({ halalas, bold }: { halalas: number; bold?: boolean }) {
+  return (
+    <span dir="ltr" className={bold ? "font-semibold tabular-nums" : "tabular-nums"}>
+      {halalasToSar(halalas)}
+    </span>
+  );
+}
+
+/**
+ * What the contract will charge, shown while it is still being written.
+ *
+ * The numbers are not a preview of the form — they are a mirror of app.activate_contract, down to
+ * the remainder landing on the last instalment. Deposit and service fees are named explicitly as
+ * excluded because they ARE fields on this same form, and nothing generates a charge from either.
+ */
+function FinanceSummary({ finance, kind }: { finance: ContractFinance; kind: string }) {
+  const exempt = kind !== "commercial";
+  const unevenLast = finance.lastInstalment !== finance.instalment;
+
+  return (
+    <div className="rounded-xl border border-brand/20 bg-brand/5 p-4 sm:col-span-2 dark:border-brand/30 dark:bg-brand/10">
+      <p className="mb-2 text-sm font-semibold text-brand">الملخّص المالي</p>
+
+      <dl className="space-y-1.5 text-sm">
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-slate-600 dark:text-slate-300">الإيجار السنوي (غير شامل الضريبة)</dt>
+          <dd><Money halalas={finance.rentExcl} /></dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-slate-600 dark:text-slate-300">
+            {exempt ? "ضريبة القيمة المضافة" : "ضريبة القيمة المضافة (15%)"}
+          </dt>
+          <dd>
+            {exempt ? (
+              <span className="text-xs text-slate-500">معفى — إيجار سكني</span>
+            ) : (
+              <Money halalas={finance.vat} />
+            )}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3 border-t border-brand/20 pt-1.5 dark:border-brand/30">
+          <dt className="font-medium">الإجمالي شاملاً الضريبة</dt>
+          <dd><Money halalas={finance.total} bold /></dd>
+        </div>
+      </dl>
+
+      <p className="mt-3 border-t border-brand/20 pt-2 text-xs text-slate-600 dark:border-brand/30 dark:text-slate-300">
+        عند اعتماد العقد ستُنشأ <b>{finance.periods}</b>{" "}
+        {finance.periods === 1 ? "دفعة" : finance.periods === 2 ? "دفعتان" : "دفعات"} بقيمة{" "}
+        <Money halalas={finance.instalmentTotal} />
+        {unevenLast && (
+          <>
+            {" "}— عدا الأخيرة <Money halalas={finance.lastInstalmentTotal} />، لأن القسمة تترك كسراً يُحمَّل عليها
+          </>
+        )}
+        .
+      </p>
+      <p className="mt-1 text-xs text-slate-500">التأمين ورسوم الخدمات لا تدخل في جدول الدفعات.</p>
+    </div>
+  );
+}
+
 export function ContractForm({
   units,
   tenants,
   // Preselected when the form is opened from a vacant unit's "إنشاء عقد" action.
   defaultUnitId = "",
 }: {
-  units: Option[];
+  units: ContractUnitOption[];
   tenants: ContractTenantOption[];
   defaultUnitId?: string;
 }) {
   const [state, action, pending] = useActionState(createContract, initial);
   const [tenantId, setTenantId] = useState("");
+  const [unitId, setUnitId] = useState(defaultUnitId);
+  const [showAllUnits, setShowAllUnits] = useState(false);
+  // Mirrors of the three inputs the charge schedule is derived from, so the summary below can be
+  // computed while the form is being filled rather than after it is submitted.
+  const [kind, setKind] = useState("residential");
+  const [frequency, setFrequency] = useState("quarterly");
+  const [rent, setRent] = useState("");
 
   const noUnits = units.length === 0;
   const noTenants = tenants.length === 0;
+
+  const availableCount = units.filter((u) => AVAILABLE_STATUSES.has(u.status)).length;
+  const unitOptions = useMemo(
+    () =>
+      units
+        // The selected unit is always kept in the list. Combobox reads its label out of the options
+        // it is given, so dropping it would blank the field while the hidden value stayed set —
+        // the form would look empty and submit anyway.
+        .filter((u) => showAllUnits || AVAILABLE_STATUSES.has(u.status) || u.id === unitId)
+        .map((u) => ({
+          value: u.id,
+          label: u.label,
+          hint: u.status === "vacant" ? undefined : UNIT_STATUS_AR[u.status] ?? u.status,
+        })),
+    [units, showAllUnits, unitId],
+  );
+
+  const finance = contractFinance(sarToHalalas(rent) ?? 0, kind, frequency);
   // The commercial block only belongs on an establishment's contract; the representative defaults
   // to the one recorded on the tenant, and stays editable because the contract freezes who signed.
   const tenant = tenants.find((t) => t.id === tenantId);
@@ -45,9 +142,34 @@ export function ContractForm({
         <Combobox
           name="unit_id"
           defaultValue={defaultUnitId}
-          placeholder={noUnits ? "لا توجد وحدات — أضِفها أولاً" : "ابحث واختر الوحدة…"}
-          options={units.map((u) => ({ value: u.id, label: u.label }))}
+          onChange={setUnitId}
+          placeholder={
+            noUnits
+              ? "لا توجد وحدات — أضِفها أولاً"
+              : unitOptions.length === 0
+                ? "لا توجد وحدات متاحة"
+                : "ابحث واختر الوحدة…"
+          }
+          options={unitOptions}
         />
+        {!noUnits && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <label className="flex cursor-pointer items-center gap-1.5 text-slate-600 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={showAllUnits}
+                onChange={(e) => setShowAllUnits(e.target.checked)}
+                className="accent-brand"
+              />
+              عرض الوحدات المؤجّرة وغير المتاحة أيضاً
+            </label>
+            <span className="text-slate-400">
+              {availableCount === 0
+                ? "لا توجد وحدة شاغرة أو محجوزة"
+                : `${availableCount} وحدة متاحة من ${units.length}`}
+            </span>
+          </div>
+        )}
       </div>
 
       <div>
@@ -67,7 +189,8 @@ export function ContractForm({
         <select
           id="contract_kind"
           name="contract_kind"
-          defaultValue="residential"
+          value={kind}
+          onChange={(e) => setKind(e.target.value)}
           className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700"
         >
           <option value="residential">سكني (بدون ضريبة)</option>
@@ -82,7 +205,8 @@ export function ContractForm({
         <select
           id="payment_frequency"
           name="payment_frequency"
-          defaultValue="quarterly"
+          value={frequency}
+          onChange={(e) => setFrequency(e.target.value)}
           className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700"
         >
           <option value="monthly">شهري</option>
@@ -128,6 +252,8 @@ export function ContractForm({
           name="annual_rent"
           inputMode="decimal"
           required
+          value={rent}
+          onChange={(e) => setRent(e.target.value)}
           placeholder="120000"
           className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700"
         />
@@ -156,6 +282,8 @@ export function ContractForm({
           className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700"
         />
       </div>
+
+      {finance && <FinanceSummary finance={finance} kind={kind} />}
 
       {/* Contract number is assigned by the system (CT-YYYY-NNNNN) — no manual entry. */}
       <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 sm:col-span-2 dark:bg-slate-800/50 dark:text-slate-400">
