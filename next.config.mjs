@@ -38,8 +38,9 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   // The Supabase Edge Function + Deno tests live under supabase/ and must not be bundled by Next.
+  // (./analysis/** used to be listed here too; it moved to its own repo on 6 Aug 2026.)
   outputFileTracingExcludes: {
-    '*': ['./supabase/**', './analysis/**'],
+    '*': ['./supabase/**'],
   },
   async headers() {
     // Dev needs 'unsafe-eval' for the React refresh runtime and the error overlay. Rather than widen

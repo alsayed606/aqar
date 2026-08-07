@@ -13,7 +13,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22.6+ is required: four suites are .mts and run on Node's native type stripping with no
+          # build step. On 20 they do not even parse.
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run typecheck
@@ -24,18 +26,22 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: build-time-placeholder
 
   schema:
-    name: schema_all is in sync
+    name: generated files are in sync
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
+      # build-schema.mjs generates TWO files from supabase/migrations/. Checking only one of them
+      # leaves the other free to drift — and lib/migrations.ts is what /platform/health compares the
+      # database against, so a stale copy makes the completeness check quietly wrong. That is the
+      # exact failure the ledger was built to end, so it is checked here too.
       - name: Regenerate and verify no drift
         run: |
           node supabase/build-schema.mjs
-          git diff --exit-code -- supabase/schema_all.sql \
-            || (echo "::error::schema_all.sql is out of date — run 'npm run build:schema' and commit." && exit 1)
+          git diff --exit-code -- supabase/schema_all.sql lib/migrations.ts \
+            || (echo "::error::Generated files are out of date — run 'npm run build:schema' and commit." && exit 1)
 
   db-tests:
     name: data-layer + Phase-3 tests (PostgreSQL 17)
@@ -44,7 +50,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22.6+ is required: four suites are .mts and run on Node's native type stripping with no
+          # build step. On 20 they do not even parse.
+          node-version: 24
       - name: Run test suite (embedded PostgreSQL)
         working-directory: supabase/tests/local
         run: |
