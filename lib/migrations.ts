@@ -73,4 +73,5 @@ export const EXPECTED_MIGRATIONS: ExpectedMigration[] = [
   { version: "0066", name: "0066_org_profile" },
   { version: "0067", name: "0067_archive_guards" },
   { version: "0068", name: "0068_migration_ledger" },
+  { version: "0069", name: "0069_email_mfa" },
 ];

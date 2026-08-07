@@ -50,6 +50,11 @@ export async function GET(request: Request) {
   // grows under attack from growing forever.
   await admin.rpc("rate_limit_sweep");
 
+  // 0c. And spent sign-in codes plus step-up records for sessions that can no longer exist (0069).
+  // Note the codes themselves never travel this route: they are sent the moment they are asked for,
+  // because a sign-in code that waits for tomorrow's 06:00 drain is not a sign-in code.
+  await admin.rpc("mfa_sweep");
+
   // 1. Claim a batch of eligible email deliveries (attempts incremented, next_attempt_at leased).
   const { data: claimed, error: claimErr } = await admin.rpc("claim_email_deliveries", { p_max: 50 });
   if (claimErr) {

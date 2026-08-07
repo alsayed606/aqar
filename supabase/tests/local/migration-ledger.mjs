@@ -50,8 +50,14 @@ try {
   const self = recorded.find((r) => r.version === "0068");
   ok("0068 is present", Boolean(self));
   ok("0068 is not marked backfilled", self?.backfilled === false, JSON.stringify(self));
-  ok("0001–0067 are all marked backfilled",
-    recorded.filter((r) => r.version !== "0068").every((r) => r.backfilled === true));
+  // 0068's probe block is what filled in everything BEFORE it. Every migration from 0068 onward
+  // records itself as it runs, so the boundary is the version number, not the single row "0068" —
+  // written that way the assertion broke the moment 0069 arrived, which is a test failing on a
+  // healthy change.
+  ok("everything before 0068 is marked backfilled",
+    recorded.filter((r) => r.version < "0068").every((r) => r.backfilled === true));
+  ok("everything from 0068 onward recorded itself live",
+    recorded.filter((r) => r.version >= "0068").every((r) => r.backfilled === false));
 
   console.log("\n— A missing migration is reported as missing —");
   // This is the 0029 case reproduced: remove what a migration left behind, re-run the backfill, and

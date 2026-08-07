@@ -2,11 +2,71 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { mfaErrorAr } from "@/lib/mfa";
+import { emailFactorState, mfaErrorAr, otpVerdictAr } from "@/lib/mfa";
+import { issueOtp, maskEmail } from "@/lib/mfa-server";
+import { hashOtpCode, normalizeOtpInput, OTP_LENGTH } from "@/lib/otp";
 import { safeReturnTo } from "@/lib/return-to";
 import { guardAuthAttempt } from "@/lib/rate-limit";
 
 export type ChallengeState = { error?: string };
+export type EmailChallengeState = { sent?: boolean; notice?: string; error?: string };
+
+// ---------------------------------------------------------------------------
+// The e-mail factor's step-up (migration 0069).
+// ---------------------------------------------------------------------------
+
+/** Mails a fresh code to the enrolled destination. Also the "resend" button — the database retires
+ *  the previous code, so resending never widens the set of codes that open the account. */
+export async function sendStepUpCode(
+  _prev: EmailChallengeState,
+  _formData: FormData,
+): Promise<EmailChallengeState> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const factor = await emailFactorState(supabase);
+  if (!factor.enabled || !factor.destination) return { error: "لا يوجد تحقّق مُفعّل على هذا الحساب." };
+
+  const issued = await issueOtp(supabase, {
+    accountId: user.id,
+    destination: factor.destination,
+    purpose: "step_up",
+  });
+  if (!issued.ok) return { error: issued.error };
+
+  return { sent: true, notice: `أُرسل رمز جديد إلى ${maskEmail(factor.destination)}.` };
+}
+
+/** The code comes back; on success this session is marked as having satisfied the second factor. */
+export async function verifyEmailChallenge(
+  _prev: EmailChallengeState,
+  formData: FormData,
+): Promise<EmailChallengeState> {
+  const code = normalizeOtpInput(String(formData.get("code") ?? ""));
+  const returnTo = String(formData.get("returnTo") ?? "");
+  if (code.length !== OTP_LENGTH) return { sent: true, error: "أدخل الرمز المكوّن من ٦ أرقام." };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const throttled = await guardAuthAttempt("mfa-email-verify", user.id, {
+    perIp: [20, 900], perTarget: [10, 900],
+  });
+  if (throttled) return { sent: true, error: throttled };
+
+  const { data, error } = await supabase.rpc("mfa_challenge_verify", {
+    p_code_hash: hashOtpCode(code, user.id),
+    p_purpose: "step_up",
+  });
+  if (error) return { sent: true, error: mfaErrorAr(error.message) };
+
+  const refusal = otpVerdictAr(String(data));
+  if (refusal) return { sent: true, error: refusal };
+
+  redirect(safeReturnTo(returnTo) ?? "/app");
+}
 
 // The step-up screen: the session is authenticated but has not yet used the second factor.
 export async function verifyChallenge(

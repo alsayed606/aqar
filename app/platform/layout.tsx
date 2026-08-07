@@ -1,5 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { emailFactorState } from "@/lib/mfa";
 import { PlatformSidebar } from "@/components/platform/platform-sidebar";
 
 export const dynamic = "force-dynamic";
@@ -31,8 +32,15 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   // hold it. Unlike the office app — where two-factor is the user's own choice — it is required
   // here, and the console stays shut until it is on. The middleware already steps up an operator who
   // HAS a factor; this covers the one it cannot: an operator who has never enrolled.
+  //
+  // EITHER factor satisfies this. The e-mail code (0069) is weaker than an authenticator app — it
+  // does not survive a taken inbox — but the operator's password reset already goes to that same
+  // inbox, so demanding TOTP here would not close that door either. What the requirement actually
+  // buys is that a leaked password alone is never enough, and both factors deliver that.
   const { data: factors } = await supabase.auth.mfa.listFactors();
-  if (!(factors?.totp ?? []).some((f) => f.status === "verified")) {
+  const hasTotp = (factors?.totp ?? []).some((f) => f.status === "verified");
+  const hasEmailFactor = (await emailFactorState(supabase)).enabled;
+  if (!hasTotp && !hasEmailFactor) {
     redirect("/app/security?error=" + encodeURIComponent("لوحة الإدارة العليا تتطلّب تفعيل التحقّق بخطوتين أولاً."));
   }
 

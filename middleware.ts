@@ -68,7 +68,18 @@ export async function middleware(request: NextRequest) {
   // check is the normal way this protection ends up missing from exactly one screen.
   if (isProtected && user && pathname !== "/auth/mfa") {
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (aal?.nextLevel === "aal2" && aal.currentLevel === "aal1") {
+    let stepUp = aal?.nextLevel === "aal2" && aal.currentLevel === "aal1";
+
+    // The e-mail factor (migration 0069) is ours, so Supabase's assurance level knows nothing about
+    // it and the database has to be asked. Only when TOTP has not already sent us to the same place:
+    // one redirect is one redirect, and the extra round trip buys nothing.
+    if (!stepUp) {
+      const { data: mfa } = await supabase.schema("app").rpc("mfa_state");
+      const row = Array.isArray(mfa) ? mfa[0] : mfa;
+      stepUp = row?.enabled === true && row?.stepped_up !== true;
+    }
+
+    if (stepUp) {
       const mfaUrl = new URL("/auth/mfa", origin);
       mfaUrl.searchParams.set("returnTo", pathname + search);
       return withCookies(response, NextResponse.redirect(mfaUrl));

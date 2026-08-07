@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { mfaStatus } from "@/lib/mfa";
+import { emailFactorState, mfaStatus } from "@/lib/mfa";
+import { maskEmail } from "@/lib/mfa-server";
 import { MfaChallengeForm } from "@/components/mfa-challenge-form";
+import { EmailOtpForm } from "@/components/email-otp-form";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +17,17 @@ export default async function MfaChallengePage({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // Two factors can gate a session: Supabase's TOTP and our e-mail code (0069). TOTP wins when both
+  // are set up — it is the stronger of the two, and someone who went to the trouble of an
+  // authenticator app should not be handed the weaker option instead.
+  const totp = await mfaStatus(supabase);
+  const email = await emailFactorState(supabase);
+  const needsEmail = email.enabled && !email.steppedUp && email.destination;
+
   // Already stepped up, or nothing to step up to — either way this screen has no business showing.
-  const status = await mfaStatus(supabase);
-  if (!status.stepUpRequired) redirect(returnTo && returnTo.startsWith("/") ? returnTo : "/app");
+  if (!totp.stepUpRequired && !needsEmail) {
+    redirect(returnTo && returnTo.startsWith("/") ? returnTo : "/app");
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-neutral-50 p-4 dark:bg-neutral-950">
@@ -25,10 +35,16 @@ export default async function MfaChallengePage({
         <div className="text-center">
           <h1 className="text-lg font-bold">التحقّق بخطوتين</h1>
           <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            أدخل الرمز الظاهر في تطبيق المصادقة لديك.
+            {totp.stepUpRequired
+              ? "أدخل الرمز الظاهر في تطبيق المصادقة لديك."
+              : "سنرسل رمزاً من ستّة أرقام إلى بريدك، صالحاً لعشر دقائق."}
           </p>
         </div>
-        <MfaChallengeForm returnTo={returnTo ?? ""} />
+        {totp.stepUpRequired ? (
+          <MfaChallengeForm returnTo={returnTo ?? ""} />
+        ) : (
+          <EmailOtpForm returnTo={returnTo ?? ""} masked={maskEmail(email.destination!)} />
+        )}
       </div>
     </main>
   );
