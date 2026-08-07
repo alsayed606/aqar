@@ -3,6 +3,7 @@ import { fmtDate } from "@/lib/subscription";
 import { StatCard } from "@/components/platform/stat-card";
 import { Badge } from "@/components/ui";
 import { checkMigrations, type MigrationHealth } from "@/lib/migration-health";
+import { checkIntegrations, type Probe } from "@/lib/integration-health";
 
 export const dynamic = "force-dynamic";
 
@@ -17,17 +18,67 @@ type Health = {
 
 const cardCls = "rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900";
 
-// Subsystems that live outside this database. We could draw a green dot for each of them, and it
-// would mean nothing: we have not observed them. Naming them as unmeasured, with the place to go
-// look, is the honest version — and it is also the to-do list for wiring real probes.
+// Still outside our measurement. The three that used to sit here — the service-role key, the e-mail
+// provider, and the cron secret — moved into real probes (IntegrationSection) after production ran
+// for weeks with the first two broken and nothing on this page said so.
 const EXTERNAL = [
   { name: "قاعدة البيانات (Supabase)", where: "لوحة Supabase → Database", why: "الاتصال يعمل بدليل أن هذه الصفحة ظهرت، لكن الاستخدام والنسخ الاحتياطي خارج قاعدتنا" },
-  { name: "التخزين (Storage)", where: "لوحة Supabase → Storage", why: "لم يُفعّل بعد في النظام" },
+  { name: "التخزين (Storage)", where: "لوحة Supabase → Storage", why: "سجلّاته وحصّته عند المزوّد" },
   { name: "دوال الحافة (Edge Functions)", where: "لوحة Supabase → Edge Functions", why: "سجلّاتها عند المزوّد" },
   { name: "زمن التشغيل (Vercel)", where: "لوحة Vercel → Deployments", why: "حالة النشر والأخطاء عند المزوّد" },
   { name: "معدّل الأخطاء البرمجية", where: "لم يُركَّب بعد", why: "يحتاج Sentry أو ما يعادله — لا سجلّ أخطاء تطبيقي اليوم" },
   { name: "توفّر بوابة الدفع", where: "حالة Moyasar", why: "ما نعرضه في مركز الفوترة مستخرَج من سجلّاتنا، لا فحص حيّ لهم" },
 ];
+
+const PROBE_TONE: Record<Probe["status"], { badge: "success" | "danger" | "warning"; label: string; box: string }> = {
+  ok: { badge: "success", label: "يعمل", box: "bg-emerald-50 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300" },
+  fail: { badge: "danger", label: "معطّل", box: "bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-300" },
+  unset: { badge: "warning", label: "غير مضبوط", box: "bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-200" },
+};
+
+/**
+ * The services we depend on, asked rather than assumed.
+ *
+ * Placed directly under the migrations, and for the same reason: a queue depth measured while the
+ * thing that drains the queue is dead is not a measurement, it is a distraction.
+ */
+function IntegrationSection({ probes }: { probes: Probe[] }) {
+  const broken = probes.filter((p) => p.status !== "ok");
+
+  return (
+    <section className={cardCls}>
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">الخدمات المرتبطة</h2>
+        <Badge tone={broken.length === 0 ? "success" : "danger"}>
+          {broken.length === 0 ? "الكل يعمل" : `${broken.length} تحتاج تدخّلك`}
+        </Badge>
+      </div>
+
+      <ul className="space-y-2">
+        {probes.map((p) => {
+          const tone = PROBE_TONE[p.status];
+          return (
+            <li key={p.name} className={`rounded-xl px-3 py-2 ${tone.box}`}>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="text-sm font-medium">{p.name}</span>
+                <Badge tone={tone.badge}>{tone.label}</Badge>
+              </div>
+              {/* The provider's own words. Truncating this to a tidy phrase is how the cause got lost
+                  in a log file in the first place. */}
+              <p dir="ltr" className="mt-1 text-start font-mono text-[11px] opacity-80">{p.detail}</p>
+              {p.status !== "ok" && (
+                <>
+                  <p className="mt-1 text-xs">{p.impact}</p>
+                  <p className="mt-0.5 text-[11px] opacity-70">{p.where}</p>
+                </>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
 
 function MigrationSection({ m }: { m: MigrationHealth }) {
   if (m.error) {
@@ -102,9 +153,10 @@ function MigrationSection({ m }: { m: MigrationHealth }) {
 
 export default async function HealthPage() {
   const supabase = await createClient();
-  const [{ data, error }, migrations] = await Promise.all([
+  const [{ data, error }, migrations, integrations] = await Promise.all([
     supabase.rpc("platform_health"),
     checkMigrations(),
+    checkIntegrations(),
   ]);
 
   // 0052 missing is itself a migration problem, so the migration section is shown alongside the
@@ -116,6 +168,7 @@ export default async function HealthPage() {
           طبّق الهجرة <span dir="ltr">0052</span> لتفعيل صحة المنصة.
         </p>
         <MigrationSection m={migrations} />
+        <IntegrationSection probes={integrations} />
       </div>
     );
   }
@@ -130,6 +183,7 @@ export default async function HealthPage() {
 
       {/* First, above the gauges: a gauge on an incomplete database is measuring the wrong thing. */}
       <MigrationSection m={migrations} />
+      <IntegrationSection probes={integrations} />
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="بريد بانتظار الإرسال" value={h.email_queue.pending} hint={`${h.email_queue.sent_24h} أُرسل خلال ٢٤ ساعة`} tone={h.email_queue.overdue > 0 ? "warn" : "default"} />
