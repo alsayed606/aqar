@@ -32,14 +32,30 @@ export async function mfaStatus(supabase: SupabaseClient<any, any, any>): Promis
 // assurance level therefore cannot describe one.
 // ---------------------------------------------------------------------------
 
+/** How the session in hand proved itself — see the `method` column in migration 0070. */
+export type StepUpMethod = "factor" | "recovery_code" | "email_fallback";
+
 export type EmailFactorState = {
   enabled: boolean;
   channel: string;
   destination: string | null;
   steppedUp: boolean;
+  /** Null when this session has not stepped up at all. */
+  method: StepUpMethod | null;
+  /** Unused recovery codes left on the account (0070). */
+  codesLeft: number;
+  /**
+   * True when the only thing this session proved is an e-mail code sent to bypass a lost
+   * authenticator. Weaker than the factor it stands in for, so it buys the security page and
+   * nothing else — the middleware enforces that, and every screen reads it from here.
+   */
+  restricted: boolean;
 };
 
-const NO_FACTOR: EmailFactorState = { enabled: false, channel: "email", destination: null, steppedUp: false };
+const NO_FACTOR: EmailFactorState = {
+  enabled: false, channel: "email", destination: null,
+  steppedUp: false, method: null, codesLeft: 0, restricted: false,
+};
 
 /**
  * Reads app.mfa_state() for the caller's own account and session.
@@ -52,14 +68,21 @@ export async function emailFactorState(supabase: SupabaseClient<any, any, any>):
   const { data, error } = await supabase.rpc("mfa_state");
   if (error) return NO_FACTOR;
   const row = (Array.isArray(data) ? data[0] : data) as
-    | { enabled: boolean; channel: string; destination: string | null; stepped_up: boolean }
+    | {
+        enabled: boolean; channel: string; destination: string | null; stepped_up: boolean;
+        step_up_method: StepUpMethod | null; codes_left: number | null;
+      }
     | undefined;
   if (!row) return NO_FACTOR;
+  const method = row.stepped_up === true ? row.step_up_method ?? "factor" : null;
   return {
     enabled: row.enabled === true,
     channel: row.channel ?? "email",
     destination: row.destination,
     steppedUp: row.stepped_up === true,
+    method,
+    codesLeft: Number(row.codes_left ?? 0),
+    restricted: method === "email_fallback",
   };
 }
 
@@ -81,7 +104,16 @@ export function otpVerdictAr(verdict: string): string | null {
   }
 }
 
+/** app.mfa_recovery_consume returns one of two words, and only one of them is a refusal. */
+export function recoveryVerdictAr(verdict: string): string | null {
+  if (verdict === "OK") return null;
+  // "Wrong" and "already used" are one sentence on purpose — the database refuses to tell them
+  // apart, and the screen must not undo that by guessing.
+  return "رمز الاسترداد غير صحيح أو سبق استخدامه. جرّب رمزاً آخر من قائمتك.";
+}
+
 export function mfaErrorAr(message: string): string {
+  if (/BAD_CODE_SET/.test(message)) return "تعذّر توليد رموز الاسترداد. أعِد المحاولة.";
   // Raised by name from migration 0069 and arriving inside PostgREST's message text.
   if (/STEP_UP_REQUIRED/.test(message)) return "أدخل الرمز أولاً، ثم يمكنك تعطيل التحقّق.";
   if (/NO_SESSION/.test(message)) return "انتهت جلستك. سجّل الدخول ثم أعِد المحاولة.";
