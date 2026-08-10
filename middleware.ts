@@ -68,21 +68,40 @@ export async function middleware(request: NextRequest) {
   // check is the normal way this protection ends up missing from exactly one screen.
   if (isProtected && user && pathname !== "/auth/mfa") {
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    let stepUp = aal?.nextLevel === "aal2" && aal.currentLevel === "aal1";
+    const totpPending = aal?.nextLevel === "aal2" && aal.currentLevel === "aal1";
 
-    // The e-mail factor (migration 0069) is ours, so Supabase's assurance level knows nothing about
-    // it and the database has to be asked. Only when TOTP has not already sent us to the same place:
-    // one redirect is one redirect, and the extra round trip buys nothing.
-    if (!stepUp) {
-      const { data: mfa } = await supabase.schema("app").rpc("mfa_state");
-      const row = Array.isArray(mfa) ? mfa[0] : mfa;
-      stepUp = row?.enabled === true && row?.stepped_up !== true;
-    }
+    // Our own state (0069/0071) is read whenever it can change the answer, which — since recovery
+    // arrived — includes the TOTP case: a recovery row is exactly how a session with no
+    // authenticator to hand gets past an aal1 verdict that would otherwise be final.
+    const { data: mfa } = await supabase.schema("app").rpc("mfa_state");
+    const row = (Array.isArray(mfa) ? mfa[0] : mfa) as
+      | { enabled?: boolean; stepped_up?: boolean; step_up_method?: string }
+      | undefined;
+    const steppedUp = row?.stepped_up === true;
+    const method = steppedUp ? row?.step_up_method ?? "factor" : null;
+
+    // Two gates, one screen. TOTP is pending unless SOME recovery proof was given for this session;
+    // our e-mail factor is pending until this session steps up at all.
+    const stepUp =
+      (totpPending && !steppedUp) ||
+      (row?.enabled === true && !steppedUp);
 
     if (stepUp) {
       const mfaUrl = new URL("/auth/mfa", origin);
       mfaUrl.searchParams.set("returnTo", pathname + search);
       return withCookies(response, NextResponse.redirect(mfaUrl));
+    }
+
+    // The restricted session (migration 0071): an e-mail code was accepted in place of an
+    // authenticator the user cannot reach. It is a weaker proof than the factor it replaced, so it
+    // opens the page where that factor is removed or replaced — and nothing else. Confining it here
+    // rather than page by page is the same reasoning as the gate above: a screen added next month
+    // is covered without anyone remembering to cover it.
+    // `currentLevel === "aal2"` is the escape: a user who enrolled a NEW authenticator from inside
+    // the restricted session has proven a real factor, and holding them on this page afterwards
+    // would punish them for doing exactly what the page asked.
+    if (method === "email_fallback" && aal?.currentLevel !== "aal2" && pathname !== "/app/security") {
+      return withCookies(response, NextResponse.redirect(new URL("/app/security?recovery=1", origin)));
     }
   }
 

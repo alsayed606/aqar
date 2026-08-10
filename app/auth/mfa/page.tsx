@@ -4,6 +4,7 @@ import { emailFactorState, mfaStatus } from "@/lib/mfa";
 import { maskEmail } from "@/lib/mfa-server";
 import { MfaChallengeForm } from "@/components/mfa-challenge-form";
 import { EmailOtpForm } from "@/components/email-otp-form";
+import { MfaRecoveryOptions } from "@/components/mfa-recovery-options";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,12 @@ export default async function MfaChallengePage({
           </p>
         </div>
         {totp.stepUpRequired ? (
-          <MfaChallengeForm returnTo={returnTo ?? ""} />
+          <>
+            <MfaChallengeForm returnTo={returnTo ?? ""} />
+            {/* Only under TOTP. The e-mail factor already resends to an inbox the user has, so it
+                needs no way around itself — and offering one would be a way around nothing. */}
+            <MfaRecoveryOptions returnTo={returnTo ?? ""} hasEmail={!!user.email} />
+          </>
         ) : (
           <EmailOtpForm returnTo={returnTo ?? ""} masked={maskEmail(email.destination!)} />
         )}

@@ -2,9 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { emailFactorState, mfaErrorAr, otpVerdictAr } from "@/lib/mfa";
+import { emailFactorState, mfaErrorAr, otpVerdictAr, recoveryVerdictAr } from "@/lib/mfa";
 import { issueOtp, maskEmail } from "@/lib/mfa-server";
-import { hashOtpCode, normalizeOtpInput, OTP_LENGTH } from "@/lib/otp";
+import {
+  hashOtpCode, hashRecoveryCode, normalizeOtpInput, normalizeRecoveryCode, OTP_LENGTH,
+} from "@/lib/otp";
 import { safeReturnTo } from "@/lib/return-to";
 import { guardAuthAttempt } from "@/lib/rate-limit";
 
@@ -66,6 +68,115 @@ export async function verifyEmailChallenge(
   if (refusal) return { sent: true, error: refusal };
 
   redirect(safeReturnTo(returnTo) ?? "/app");
+}
+
+// ---------------------------------------------------------------------------
+// Recovery, exit one: a code off the sheet the user printed at enrolment (migration 0071).
+// ---------------------------------------------------------------------------
+
+export type RecoveryState = { error?: string };
+
+/** Spends one recovery code. Full standing on success — this lands the user in the app, not in a
+ *  restricted session: a fifty-bit secret they stored offline is not weaker than the lost phone. */
+export async function useRecoveryCode(
+  _prev: RecoveryState,
+  formData: FormData,
+): Promise<RecoveryState> {
+  const code = normalizeRecoveryCode(String(formData.get("code") ?? ""));
+  const returnTo = String(formData.get("returnTo") ?? "");
+  if (code.length < 8) return { error: "أدخل رمز استرداد كاملاً كما هو في قائمتك." };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // Tighter than the six-digit limits: a recovery code is the strongest thing a stolen password can
+  // be paired with, and unlike an e-mail code it does not expire on its own in ten minutes.
+  const throttled = await guardAuthAttempt("mfa-recovery-code", user.id, {
+    perIp: [10, 900], perTarget: [5, 900],
+  });
+  if (throttled) return { error: throttled };
+
+  const { data, error } = await supabase.rpc("mfa_recovery_consume", {
+    p_code_hash: hashRecoveryCode(code, user.id),
+  });
+  if (error) return { error: mfaErrorAr(error.message) };
+
+  const refusal = recoveryVerdictAr(String(data));
+  if (refusal) return { error: refusal };
+
+  // Straight to the security page, not to where they were headed: they have just spent one of a
+  // finite set, and the moment to print a new sheet is now, while they are thinking about it.
+  redirect(`/app/security?recovery=used&returnTo=${encodeURIComponent(safeReturnTo(returnTo) ?? "/app")}`);
+}
+
+// ---------------------------------------------------------------------------
+// Recovery, exit two: an e-mail code for someone whose authenticator is gone AND who saved no
+// codes. Weaker than the factor it bypasses, so it opens a RESTRICTED session (see 0071).
+// ---------------------------------------------------------------------------
+
+/** Mails a recovery code to the account's own address. */
+export async function sendRecoveryEmailCode(
+  _prev: EmailChallengeState,
+  _formData: FormData,
+): Promise<EmailChallengeState> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // Offered only where it is actually a bypass: a pending TOTP factor. Without this check the
+  // action would be a second, permanently weaker door into every account that has no TOTP at all.
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (!(aal?.nextLevel === "aal2" && aal.currentLevel === "aal1")) {
+    return { error: "لا حاجة لهذا هنا." };
+  }
+
+  // The account's own address, from the verified session — never from the form, for the reason
+  // startEmailEnrollment gives: a destination the page could choose is not a second factor.
+  const destination = user.email;
+  if (!destination) {
+    return { error: "لا يوجد بريد على حسابك، فلا يمكن إرسال رمز الاسترداد. تواصل معنا." };
+  }
+
+  const issued = await issueOtp(supabase, {
+    accountId: user.id,
+    destination,
+    purpose: "recovery",
+  });
+  if (!issued.ok) return { error: issued.error };
+
+  return { sent: true, notice: `أُرسل رمز استرداد إلى ${maskEmail(destination)}.` };
+}
+
+/** Verifies it, and lands the user in the restricted session the middleware confines. */
+export async function verifyRecoveryEmailCode(
+  _prev: EmailChallengeState,
+  formData: FormData,
+): Promise<EmailChallengeState> {
+  const code = normalizeOtpInput(String(formData.get("code") ?? ""));
+  if (code.length !== OTP_LENGTH) return { sent: true, error: "أدخل الرمز المكوّن من ٦ أرقام." };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const throttled = await guardAuthAttempt("mfa-recovery-email", user.id, {
+    perIp: [20, 900], perTarget: [10, 900],
+  });
+  if (throttled) return { sent: true, error: throttled };
+
+  const { data, error } = await supabase.rpc("mfa_challenge_verify", {
+    p_code_hash: hashOtpCode(code, user.id),
+    p_purpose: "recovery",
+  });
+  if (error) return { sent: true, error: mfaErrorAr(error.message) };
+
+  const refusal = otpVerdictAr(String(data));
+  if (refusal) return { sent: true, error: refusal };
+
+  // No returnTo. This session is restricted to exactly one page, and pretending otherwise would
+  // only produce a redirect the middleware immediately overrules.
+  redirect("/app/security?recovery=1");
 }
 
 // The step-up screen: the session is authenticated but has not yet used the second factor.

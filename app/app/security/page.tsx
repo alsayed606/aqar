@@ -2,9 +2,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { MfaEnroll } from "@/components/mfa-enroll";
 import { EmailMfaEnroll } from "@/components/email-mfa-enroll";
+import { RecoveryCodes } from "@/components/recovery-codes";
 import { emailFactorState } from "@/lib/mfa";
 import { maskEmail } from "@/lib/mfa-server";
-import { removeFactor, disableEmailMfa } from "./actions";
+import { removeFactor, disableEmailMfa, removeLostAuthenticator } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -13,14 +14,15 @@ const OK_AR: Record<string, string> = {
   removed: "أُلغي التحقّق بخطوتين.",
   email_enrolled: "فُعّل التحقّق برمز البريد. سيصلك رمز عند كل تسجيل دخول من جهاز جديد.",
   email_removed: "أُلغي التحقّق برمز البريد.",
+  totp_recovered: "أُزيل تطبيق المصادقة المفقود. فعّل وسيلة تحقّق جديدة الآن لتبقى محمياً.",
 };
 
 export default async function SecurityPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<{ ok?: string; error?: string; recovery?: string; returnTo?: string }>;
 }) {
-  const { ok, error } = await searchParams;
+  const { ok, error, recovery, returnTo } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?returnTo=/app/security");
@@ -42,6 +44,36 @@ export default async function SecurityPage({
           إعدادات تخصّ حسابك أنت، لا منشأتك. تنطبق على كل منشأة تدخل إليها بهذا الحساب.
         </p>
       </div>
+
+      {/* The restricted session (migration 0071): an e-mail code stood in for an authenticator the
+          user cannot reach. Said plainly, because a page that silently refuses every link in the
+          sidebar reads as a broken app rather than as a deliberate limit. */}
+      {email.restricted && (
+        <div className="space-y-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+          <p>
+            <b>أنت في وضع الاسترداد.</b> دخلت برمز أُرسل إلى بريدك بدلاً من تطبيق المصادقة، وهذا
+            إثبات أضعف — فلن تُفتح لك بقية الصفحات حتى تُزيل التطبيق المفقود أو تُسجّل غيره.
+          </p>
+          {verified.length > 0 && (
+            <form action={removeLostAuthenticator}>
+              <button className="rounded-lg bg-amber-700 px-4 py-2 font-medium text-white hover:bg-amber-800">
+                إزالة تطبيق المصادقة المفقود
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* Arrived here after spending one of the ten. */}
+      {recovery === "used" && !email.restricted && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+          استُخدم رمز استرداد. ولّد قائمة جديدة أدناه إن أردت، أو{" "}
+          <a className="underline" href={returnTo && returnTo.startsWith("/") ? returnTo : "/app"}>
+            تابع إلى النظام
+          </a>
+          .
+        </p>
+      )}
 
       {ok && OK_AR[ok] && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
@@ -133,10 +165,23 @@ export default async function SecurityPage({
               ))}
             </ul>
             <p className="text-xs text-neutral-500">
-              إن فقدت جوالك ولم تستطع الدخول، تواصل معنا — لا يمكن تجاوز التحقّق من داخل النظام، وهذا مقصود.
+              إن فقدت جوالك، فرموز الاسترداد أدناه هي طريقك للعودة. بدونها يبقى الطريق الأضعف:
+              رمز يُرسَل إلى بريدك ويفتح صفحة الأمان فقط.
             </p>
           </div>
         )}
+      </section>
+
+      {/* Third, because it only means anything once one of the two above is on. */}
+      <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+        <div>
+          <h2 className="text-lg font-semibold">رموز الاسترداد</h2>
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+            عشرة رموز تُعرض <b>مرّة واحدة</b>، كل واحد يُستخدم مرّة. احفظها خارج جوالك — ورقة في
+            الدرج، أو مدير كلمات مرور. هي ما يعيدك إلى حسابك لو ضاع الجوال أو حُذف التطبيق.
+          </p>
+        </div>
+        <RecoveryCodes codesLeft={email.codesLeft} hasFactor={anyFactor} />
       </section>
     </div>
   );

@@ -4,9 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import QRCode from "qrcode";
 import { createClient } from "@/lib/supabase/server";
-import { mfaErrorAr, otpVerdictAr } from "@/lib/mfa";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { emailFactorState, mfaErrorAr, otpVerdictAr } from "@/lib/mfa";
 import { issueOtp, maskEmail } from "@/lib/mfa-server";
-import { hashOtpCode, normalizeOtpInput, OTP_LENGTH } from "@/lib/otp";
+import {
+  generateRecoveryCodes, hashOtpCode, hashRecoveryCode, normalizeOtpInput, OTP_LENGTH,
+  RECOVERY_CODE_COUNT,
+} from "@/lib/otp";
 import { guardAuthAttempt } from "@/lib/rate-limit";
 
 // ---------------------------------------------------------------------------
@@ -81,6 +85,81 @@ export async function disableEmailMfa() {
 
   revalidatePath("/app/security");
   redirect("/app/security?ok=email_removed");
+}
+
+// ---------------------------------------------------------------------------
+// Recovery codes (migration 0071).
+// ---------------------------------------------------------------------------
+
+export type RecoveryCodesState = { codes?: string[]; error?: string };
+
+/**
+ * Prints a fresh sheet of ten and returns it ONCE.
+ *
+ * The plaintext exists in this function's return value and nowhere else — the database is handed
+ * hashes, and a second call cannot show the same sheet again because there is nothing left to show
+ * it from. That is why the screen makes the user acknowledge having saved them, and why "lost the
+ * sheet" is answered by generating a new one rather than by looking the old one up.
+ */
+export async function generateRecoveryCodesAction(
+  _prev: RecoveryCodesState,
+  _formData: FormData,
+): Promise<RecoveryCodesState> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login?returnTo=/app/security");
+
+  const codes = generateRecoveryCodes(RECOVERY_CODE_COUNT);
+  const { error } = await supabase.rpc("mfa_recovery_generate", {
+    p_hashes: codes.map((c) => hashRecoveryCode(c, user.id)),
+  });
+  // STEP_UP_REQUIRED here is the database refusing a session that only proved a password (or only
+  // an e-mail fallback) — printing permanent keys is not something either should be able to do.
+  if (error) return { error: mfaErrorAr(error.message) };
+
+  revalidatePath("/app/security");
+  return { codes };
+}
+
+/**
+ * The last step of the weaker recovery path: remove the authenticator the user can no longer reach.
+ *
+ * GoTrue's `unenroll` demands an aal2 session — the exact proof this user has lost — so the factor
+ * is deleted with the service key instead. What makes that safe is the gate above it: the database
+ * must already say THIS session holds a recovery proof. Without that check this action would be a
+ * button that removes two-factor authentication for anyone holding a password.
+ */
+export async function removeLostAuthenticator() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login?returnTo=/app/security");
+
+  const state = await emailFactorState(supabase);
+  if (state.method !== "email_fallback" && state.method !== "recovery_code") {
+    redirect(`/app/security?error=${encodeURIComponent("هذا الإجراء متاح فقط بعد إثبات الاسترداد.")}`);
+  }
+
+  const { data: factors } = await supabase.auth.mfa.listFactors();
+  const totp = factors?.totp ?? [];
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    redirect(`/app/security?error=${encodeURIComponent("تعذّر تنفيذ الاسترداد. تواصل معنا.")}`);
+  }
+  for (const f of totp) {
+    const { error } = await admin.auth.admin.mfa.deleteFactor({ id: f.id, userId: user.id });
+    if (error) redirect(`/app/security?error=${encodeURIComponent(mfaErrorAr(error.message))}`);
+  }
+
+  // The restriction was a consequence of holding weak proof; with the factor gone there is nothing
+  // left for that proof to stand in for, so the row goes too (0071). Whatever the account still
+  // requires — a remaining e-mail factor, or nothing — decides what happens on the next request.
+  await supabase.rpc("mfa_recovery_finish");
+
+  revalidatePath("/app/security");
+  redirect("/app/security?ok=totp_recovered");
 }
 
 export type EnrollState = {

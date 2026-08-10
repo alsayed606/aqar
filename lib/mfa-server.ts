@@ -17,7 +17,7 @@ export type IssueOtpResult = { ok: true } | { ok: false; error: string };
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export async function issueOtp(
   supabase: SupabaseClient<any, any, any>,
-  input: { accountId: string; destination: string; purpose: "enroll" | "step_up" },
+  input: { accountId: string; destination: string; purpose: "enroll" | "step_up" | "recovery" },
 ): Promise<IssueOtpResult> {
   // Each send costs us an e-mail and costs the user an interruption, so the request itself is
   // limited — otherwise anyone holding a password could flood the owner's inbox from this button.
