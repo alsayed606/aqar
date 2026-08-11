@@ -13,7 +13,7 @@ const ok = (name, cond, extra = "") => {
   else { fail++; console.log("  FAIL  " + name + (extra ? "  -> " + extra : "")); }
 };
 
-const { client, stop } = await bootWithMigrations(54362);
+const { client, stop } = await bootWithMigrations(54363);
 const q = (sql, params) => client.query(sql, params);
 const one = async (sql, params) => (await q(sql, params)).rows[0];
 

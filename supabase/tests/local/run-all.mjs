@@ -7,7 +7,7 @@
 // One at a time is not a style choice. Each DB suite boots its own PostgreSQL on a fixed port, and
 // two at once collide; a crashed run also leaves a zombie holding the port, which is why a failure
 // here is reported with its suite name rather than swallowed into a single red X.
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +24,22 @@ const suites = readdirSync(HERE)
 if (suites.length === 0) {
   console.error("No test suites found — did this file move?");
   process.exit(1);
+}
+
+// Two suites on the same port is a real defect and an invisible one: they run one at a time, so the
+// second boots against a database the first left behind and fails with assertions that have nothing
+// to do with the port. It happened the moment two branches added a suite in parallel — each picked
+// "the next free number" from the list it could see. Cheaper to refuse than to debug.
+const ports = new Map();
+for (const suite of suites) {
+  const match = readFileSync(path.join(HERE, suite), "utf8").match(/bootWithMigrations\((\d+)\)/);
+  if (!match) continue;
+  const port = match[1];
+  if (ports.has(port)) {
+    console.error(`Port ${port} is claimed by both ${ports.get(port)} and ${suite}. Give one of them its own.`);
+    process.exit(1);
+  }
+  ports.set(port, suite);
 }
 
 console.log(`Running ${suites.length} suites, one at a time.\n`);
