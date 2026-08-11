@@ -20,6 +20,9 @@ export function RecoveryCodes({ codesLeft, hasFactor }: { codesLeft: number; has
     {},
   );
   const [copied, setCopied] = useState(false);
+  // A failed save is the one thing this screen must never hide: the sheet is shown once, so a user
+  // who believes they saved it and did not has lost it for good.
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const codes = state.codes;
   const text = codes?.join("\n") ?? "";
@@ -28,20 +31,29 @@ export function RecoveryCodes({ codesLeft, hasFactor }: { codesLeft: number; has
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      setSaveError(null);
       setTimeout(() => setCopied(false), 2000);
     } catch {
+      // The clipboard API refuses outside a secure context and when permission is denied. Neither is
+      // recoverable here, so the user is told to select the codes by hand rather than left guessing.
       setCopied(false);
+      setSaveError("تعذّر النسخ التلقائي. حدّد الرموز أعلاه بنفسك وانسخها.");
     }
   }
 
   function download() {
-    // A data: URL rather than a fetch — the codes must not leave the browser to come back as a file.
+    // The blob never leaves the browser — the codes must not travel to a server to come back as a file.
     const url = URL.createObjectURL(new Blob([`رموز استرداد عقار\n\n${text}\n`], { type: "text/plain;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
     a.download = "aqar-recovery-codes.txt";
+    // Attached before the click and revoked after a turn of the event loop: Firefox ignores a click
+    // on a detached anchor, and revoking in the same tick can invalidate the URL before the browser
+    // has begun reading it — both fail SILENTLY, which on this screen means codes lost for good.
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   if (codes) {
@@ -72,6 +84,11 @@ export function RecoveryCodes({ codesLeft, hasFactor }: { codesLeft: number; has
             تنزيل كملف
           </button>
         </div>
+        {saveError && (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
+            {saveError}
+          </p>
+        )}
       </div>
     );
   }

@@ -37,7 +37,8 @@ export function hashOtpCode(code: string, accountId: string): string {
 // ---------------------------------------------------------------------------
 
 export const RECOVERY_CODE_COUNT = 10;
-const RECOVERY_CODE_CHARS = 10;
+/** Ten symbols. Exported because the screen that accepts a code must reject any other length. */
+export const RECOVERY_CODE_CHARS = 10;
 
 /**
  * Crockford's base32: the digits and letters minus I, L, O and U.
@@ -62,11 +63,11 @@ export function generateRecoveryCode(): string {
   return `${out.slice(0, 5)}-${out.slice(5)}`;
 }
 
-export function generateRecoveryCodes(count = RECOVERY_CODE_COUNT): string[] {
+export function generateRecoveryCodes(): string[] {
   // A duplicate inside one sheet would be a sheet with nine codes on it, and the database rejects
   // the whole set rather than silently issuing fewer than promised.
   const codes = new Set<string>();
-  while (codes.size < count) codes.add(generateRecoveryCode());
+  while (codes.size < RECOVERY_CODE_COUNT) codes.add(generateRecoveryCode());
   return [...codes];
 }
 

@@ -9,7 +9,6 @@ import { emailFactorState, mfaErrorAr, otpVerdictAr } from "@/lib/mfa";
 import { issueOtp, maskEmail } from "@/lib/mfa-server";
 import {
   generateRecoveryCodes, hashOtpCode, hashRecoveryCode, normalizeOtpInput, OTP_LENGTH,
-  RECOVERY_CODE_COUNT,
 } from "@/lib/otp";
 import { guardAuthAttempt } from "@/lib/rate-limit";
 
@@ -109,7 +108,7 @@ export async function generateRecoveryCodesAction(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?returnTo=/app/security");
 
-  const codes = generateRecoveryCodes(RECOVERY_CODE_COUNT);
+  const codes = generateRecoveryCodes();
   const { error } = await supabase.rpc("mfa_recovery_generate", {
     p_hashes: codes.map((c) => hashRecoveryCode(c, user.id)),
   });

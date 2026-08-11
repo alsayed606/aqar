@@ -6,6 +6,7 @@ import { emailFactorState, mfaErrorAr, otpVerdictAr, recoveryVerdictAr } from "@
 import { issueOtp, maskEmail } from "@/lib/mfa-server";
 import {
   hashOtpCode, hashRecoveryCode, normalizeOtpInput, normalizeRecoveryCode, OTP_LENGTH,
+  RECOVERY_CODE_CHARS,
 } from "@/lib/otp";
 import { safeReturnTo } from "@/lib/return-to";
 import { guardAuthAttempt } from "@/lib/rate-limit";
@@ -84,7 +85,12 @@ export async function useRecoveryCode(
 ): Promise<RecoveryState> {
   const code = normalizeRecoveryCode(String(formData.get("code") ?? ""));
   const returnTo = String(formData.get("returnTo") ?? "");
-  if (code.length < 8) return { error: "أدخل رمز استرداد كاملاً كما هو في قائمتك." };
+  // Exactly ten symbols, never eight or nine. A looser check spends one of only five attempts per
+  // quarter hour on an input that cannot possibly be right — and it spends it on someone who is
+  // already locked out, which is the worst moment to be rate-limited for a typo.
+  if (code.length !== RECOVERY_CODE_CHARS) {
+    return { error: "أدخل رمز استرداد كاملاً كما هو في قائمتك (عشرة أحرف وأرقام)." };
+  }
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
