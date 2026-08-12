@@ -1,13 +1,9 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
-import { useToast } from "@/components/ui";
-import {
-  changeEmail,
-  changePassword,
-  updateMyProfile,
-  type AccountFormState,
-} from "@/app/app/settings/actions";
+import { useActionState } from "react";
+import { Field, FormError, fieldCls, inputCls, useSuccessToast } from "@/components/form-field";
+import type { FormState as AccountFormState } from "@/lib/form-state";
+import { changeEmail, changePassword, updateMyProfile } from "@/app/app/settings/actions";
 
 // The account section of the settings page, as three independent forms.
 //
@@ -17,55 +13,6 @@ import {
 // scrolled up the redirect had already discarded what they typed.
 
 const initial: AccountFormState = {};
-
-const input =
-  "w-full rounded-lg border border-slate-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-slate-700";
-const inputBad = "w-full rounded-lg border border-red-400 bg-transparent px-3 py-2 text-sm outline-none dark:border-red-500";
-
-/** Success is transient and needs no action, so it goes to a toast rather than staying on screen. */
-function useSuccessToast(state: AccountFormState) {
-  const { toast } = useToast();
-  useEffect(() => {
-    if (state.ok) toast({ title: state.ok, tone: "success" });
-  }, [state.ok, toast]);
-}
-
-function Field({
-  label,
-  hint,
-  name,
-  state,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  name: string;
-  state: AccountFormState;
-  children: React.ReactNode;
-}) {
-  const message = state.field === name ? state.error : null;
-  return (
-    <div>
-      <label className="mb-1 block text-sm font-medium" htmlFor={name}>{label}</label>
-      {children}
-      {message ? (
-        <p role="alert" className="mt-1 text-xs font-medium text-red-700 dark:text-red-400">{message}</p>
-      ) : (
-        hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>
-      )}
-    </div>
-  );
-}
-
-/** An error with no field of its own — a throttle, or something the whole form failed at. */
-function FormError({ state }: { state: AccountFormState }) {
-  if (!state.error || state.field) return null;
-  return (
-    <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
-      {state.error}
-    </p>
-  );
-}
 
 const button =
   "rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-fg disabled:opacity-60";
@@ -79,7 +26,7 @@ function ProfileForm({ fullName, phone }: { fullName: string; phone: string }) {
   return (
     <form action={action} className="grid gap-4 sm:grid-cols-2">
       <Field label="الاسم" name="full_name" state={state}>
-        <input id="full_name" name="full_name" defaultValue={fullName} className={input} />
+        <input id="full_name" name="full_name" defaultValue={fullName} className={inputCls} />
       </Field>
       <Field
         label="جوال التواصل"
@@ -94,7 +41,7 @@ function ProfileForm({ fullName, phone }: { fullName: string; phone: string }) {
           inputMode="tel"
           placeholder="05XXXXXXXX"
           defaultValue={phone}
-          className={(state.field === "phone" ? inputBad : input) + " text-start"}
+          className={fieldCls(state, "phone") + " text-start"}
         />
       </Field>
       <div className="sm:col-span-2 space-y-2">
@@ -125,7 +72,7 @@ function EmailForm({ email }: { email: string }) {
           type="email"
           dir="ltr"
           defaultValue={email}
-          className={(state.field === "email" ? inputBad : input) + " text-start"}
+          className={fieldCls(state, "email") + " text-start"}
         />
       </Field>
       <div className="flex items-end">
@@ -151,7 +98,7 @@ function PasswordForm() {
           type="password"
           autoComplete="current-password"
           required
-          className={state.field === "current_password" ? inputBad : input}
+          className={fieldCls(state, "current_password")}
         />
       </Field>
       <Field label="كلمة المرور الجديدة" name="new_password" state={state} hint="٨ أحرف على الأقل">
@@ -162,7 +109,7 @@ function PasswordForm() {
           autoComplete="new-password"
           required
           minLength={8}
-          className={state.field === "new_password" ? inputBad : input}
+          className={fieldCls(state, "new_password")}
         />
       </Field>
       <div className="sm:col-span-2 space-y-2">

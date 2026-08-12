@@ -11,7 +11,8 @@ import { isValidIban } from "@/lib/iban";
  */
 
 export type OrgProfileValues = Record<string, string | null>;
-export type OrgProfileResult = { values: OrgProfileValues; error?: string };
+/** `field` names the input the refusal belongs under — see lib/form-state.ts for why that matters. */
+export type OrgProfileResult = { values: OrgProfileValues; error?: string; field?: string };
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // Digits, spaces, dashes and a single leading +. Deliberately looser than app.normalize_phone_e164:
@@ -63,52 +64,71 @@ export function parseOrgProfile(formData: FormData): OrgProfileResult {
 
   // Only the name is required. Everything else may stay empty for as long as the office needs —
   // what it cannot be is present and wrong, because these end up on documents.
-  if (!name) return { values, error: "اسم المنشأة مطلوب" };
+  if (!name) return { values, error: "اسم المنشأة مطلوب", field: "name" };
   if (cr_number && !/^[0-9]{10}$/.test(cr_number)) {
-    return { values, error: "رقم السجل التجاري يتكوّن من ١٠ أرقام" };
+    return { values, error: "رقم السجل التجاري يتكوّن من ١٠ أرقام", field: "cr_number" };
   }
   if (vat_number && !/^3[0-9]{13}3$/.test(vat_number)) {
-    return { values, error: "الرقم الضريبي يتكوّن من ١٥ رقماً يبدأ بـ ٣ وينتهي بـ ٣" };
+    return { values, error: "الرقم الضريبي يتكوّن من ١٥ رقماً يبدأ بـ ٣ وينتهي بـ ٣", field: "vat_number" };
   }
   if (fal_license_no && !/^[0-9]{4,20}$/.test(fal_license_no)) {
-    return { values, error: "رقم ترخيص فال يتكوّن من أرقام فقط" };
+    return { values, error: "رقم ترخيص فال يتكوّن من أرقام فقط", field: "fal_license_no" };
   }
   if (values.contact_phone && !PHONE_RE.test(values.contact_phone)) {
-    return { values, error: "رقم هاتف غير صالح (مثال: 0112345678 أو 0501234567)" };
+    return { values, error: "رقم هاتف غير صالح (مثال: 0112345678 أو 0501234567)", field: "contact_phone" };
   }
   if (contact_email && !EMAIL_RE.test(contact_email)) {
-    return { values, error: "بريد إلكتروني غير صالح" };
+    return { values, error: "بريد إلكتروني غير صالح", field: "contact_email" };
   }
   if (address_building_no && !/^[0-9]{4}$/.test(address_building_no)) {
-    return { values, error: "رقم المبنى في العنوان الوطني يتكوّن من ٤ أرقام" };
+    return { values, error: "رقم المبنى في العنوان الوطني يتكوّن من ٤ أرقام", field: "address_building_no" };
   }
   if (address_postal_code && !/^[0-9]{5}$/.test(address_postal_code)) {
-    return { values, error: "الرمز البريدي يتكوّن من ٥ أرقام" };
+    return { values, error: "الرمز البريدي يتكوّن من ٥ أرقام", field: "address_postal_code" };
   }
   if (address_additional_no && !/^[0-9]{4}$/.test(address_additional_no)) {
-    return { values, error: "الرقم الإضافي يتكوّن من ٤ أرقام" };
+    return { values, error: "الرقم الإضافي يتكوّن من ٤ أرقام", field: "address_additional_no" };
   }
   if (iban) {
     if (!/^SA[0-9]{22}$/.test(iban)) {
-      return { values, error: "الآيبان السعودي يبدأ بـ SA ويتكوّن من ٢٤ خانة" };
+      return { values, error: "الآيبان السعودي يبدأ بـ SA ويتكوّن من ٢٤ خانة", field: "iban" };
     }
     if (!isValidIban(iban)) {
-      return { values, error: "الآيبان غير صحيح — راجع الأرقام، يبدو أن أحدها مقلوب" };
+      return { values, error: "الآيبان غير صحيح — راجع الأرقام، يبدو أن أحدها مقلوب", field: "iban" };
     }
   }
 
   return { values };
 }
 
-/** Postgres constraint names from 0066 → what the office should read instead. */
-export function orgProfileErrorAr(message: string): string {
-  if (/organization_vat_number_chk/.test(message)) return "الرقم الضريبي يتكوّن من ١٥ رقماً يبدأ بـ ٣ وينتهي بـ ٣";
-  if (/organization_cr_number_chk/.test(message)) return "رقم السجل التجاري يتكوّن من ١٠ أرقام";
-  if (/organization_iban_chk/.test(message)) return "الآيبان السعودي يبدأ بـ SA ويتكوّن من ٢٤ خانة";
-  if (/organization_address_chk/.test(message)) return "تحقّق من أرقام العنوان الوطني (المبنى ٤، الرمز البريدي ٥، الإضافي ٤)";
-  if (/organization_fal_chk/.test(message)) return "رقم ترخيص فال يتكوّن من أرقام فقط";
-  if (/permission denied|row-level security/i.test(message)) return "تعديل بيانات المنشأة متاح للمدراء فقط";
-  return message;
+/**
+ * Postgres constraint names from 0066 → what the office should read, and under which input.
+ *
+ * These fire only for the checks the browser let through — a constraint the parser above does not
+ * mirror, or a value edited past the form. The field is carried so even a database refusal lands
+ * beside the box that caused it.
+ */
+export function orgWriteError(message: string): { error: string; field?: string } {
+  if (/organization_vat_number_chk/.test(message)) {
+    return { error: "الرقم الضريبي يتكوّن من ١٥ رقماً يبدأ بـ ٣ وينتهي بـ ٣", field: "vat_number" };
+  }
+  if (/organization_cr_number_chk/.test(message)) {
+    return { error: "رقم السجل التجاري يتكوّن من ١٠ أرقام", field: "cr_number" };
+  }
+  if (/organization_iban_chk/.test(message)) {
+    return { error: "الآيبان السعودي يبدأ بـ SA ويتكوّن من ٢٤ خانة", field: "iban" };
+  }
+  if (/organization_address_chk/.test(message)) {
+    return { error: "تحقّق من أرقام العنوان الوطني (المبنى ٤، الرمز البريدي ٥، الإضافي ٤)", field: "address_building_no" };
+  }
+  if (/organization_fal_chk/.test(message)) {
+    return { error: "رقم ترخيص فال يتكوّن من أرقام فقط", field: "fal_license_no" };
+  }
+  // Not a field's fault — the whole write was refused.
+  if (/permission denied|row-level security/i.test(message)) {
+    return { error: "تعديل بيانات المنشأة متاح للمدراء فقط" };
+  }
+  return { error: message };
 }
 
 /** The six national-address parts as one printable line, or null when nothing has been entered. */

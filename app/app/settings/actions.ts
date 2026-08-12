@@ -5,28 +5,25 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { normalizeSaudiPhone } from "@/lib/phone";
-import { parseOrgProfile, orgProfileErrorAr } from "@/lib/org-profile";
+import { parseOrgProfile, orgWriteError } from "@/lib/org-profile";
 import { translateAuthError } from "@/lib/auth-errors";
 import { guardAuthAttempt } from "@/lib/rate-limit";
+import type { FormState } from "@/lib/form-state";
 
 const LOGO_BUCKET = "org-assets";
 const LOGO_MAX_BYTES = 512 * 1024;
 
-function done(result: { ok?: string; error?: string }): never {
-  const query = result.error
-    ? `error=${encodeURIComponent(result.error)}`
-    : `ok=${encodeURIComponent(result.ok ?? "saved")}`;
-  redirect(`/app/settings?${query}`);
-}
-
 // ── The organization's own profile ───────────────────────────────────────────────────────────────
 
-export async function updateOrgProfile(formData: FormData) {
+export async function updateOrgProfile(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
 
-  const { values, error } = parseOrgProfile(formData);
-  if (error) done({ error });
+  const { values, error, field } = parseOrgProfile(formData);
+  if (error) return { error, field };
 
   const supabase = await createClient();
   const { data, error: writeError } = await supabase
@@ -35,16 +32,16 @@ export async function updateOrgProfile(formData: FormData) {
     .eq("id", activeOrg)
     .select("id");
 
-  if (writeError) done({ error: orgProfileErrorAr(writeError.message) });
+  if (writeError) return orgWriteError(writeError.message);
 
   // A member who is not an admin passes the SELECT policy and fails the UPDATE one, and an UPDATE
   // that matches no row is not an error — it reports success having changed nothing. Asking for the
   // affected rows back is what turns that silence into a message.
-  if (!data || data.length === 0) done({ error: "تعديل بيانات المنشأة متاح للمدراء فقط" });
+  if (!data || data.length === 0) return { error: "تعديل بيانات المنشأة متاح للمدراء فقط" };
 
   revalidatePath("/app/settings");
   revalidatePath("/app");
-  done({ ok: "org" });
+  return { ok: "حُفظت بيانات المنشأة." };
 }
 
 // ── Logo ─────────────────────────────────────────────────────────────────────────────────────────
@@ -62,17 +59,20 @@ function imageExtension(bytes: Uint8Array): "png" | "jpg" | "webp" | null {
 
 const MIME_BY_EXT = { png: "image/png", jpg: "image/jpeg", webp: "image/webp" } as const;
 
-export async function uploadOrgLogo(formData: FormData) {
+export async function uploadOrgLogo(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
 
   const file = formData.get("logo");
-  if (!(file instanceof File) || file.size === 0) done({ error: "اختر ملف الشعار أولاً" });
-  if (file.size > LOGO_MAX_BYTES) done({ error: "حجم الشعار يجب أن يكون أقل من ٥٠٠ كيلوبايت" });
+  if (!(file instanceof File) || file.size === 0) return { error: "اختر ملف الشعار أولاً" };
+  if (file.size > LOGO_MAX_BYTES) return { error: "حجم الشعار يجب أن يكون أقل من ٥٠٠ كيلوبايت" };
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const ext = imageExtension(bytes);
-  if (!ext) done({ error: "الشعار يجب أن يكون صورة PNG أو JPG أو WEBP" });
+  if (!ext) return { error: "الشعار يجب أن يكون صورة PNG أو JPG أو WEBP" };
 
   const supabase = await createClient();
   const path = `${activeOrg}/logo.${ext}`;
@@ -81,12 +81,13 @@ export async function uploadOrgLogo(formData: FormData) {
     .from(LOGO_BUCKET)
     .upload(path, bytes, { contentType: MIME_BY_EXT[ext], upsert: true });
   if (uploadError) {
-    const ar = /row-level security|not authorized|Unauthorized/i.test(uploadError.message)
-      ? "رفع الشعار متاح للمدراء فقط"
-      : /Bucket not found/i.test(uploadError.message)
-        ? "لم تُنشأ مساحة التخزين بعد — طبّق الهجرة 0066"
-        : uploadError.message;
-    done({ error: ar });
+    if (/row-level security|not authorized|Unauthorized/i.test(uploadError.message)) {
+      return { error: "رفع الشعار متاح للمدراء فقط" };
+    }
+    if (/Bucket not found/i.test(uploadError.message)) {
+      return { error: "لم تُنشأ مساحة التخزين بعد — طبّق الهجرة 0066" };
+    }
+    return { error: uploadError.message };
   }
 
   // Replacing a PNG with a WEBP writes a new object; without this the old one would stay in the
@@ -101,14 +102,14 @@ export async function uploadOrgLogo(formData: FormData) {
     .update({ logo_path: path, updated_at: new Date().toISOString() })
     .eq("id", activeOrg)
     .select("id");
-  if (linkError) done({ error: orgProfileErrorAr(linkError.message) });
-  if (!data || data.length === 0) done({ error: "رفع الشعار متاح للمدراء فقط" });
+  if (linkError) return orgWriteError(linkError.message);
+  if (!data || data.length === 0) return { error: "رفع الشعار متاح للمدراء فقط" };
 
   revalidatePath("/app/settings");
-  done({ ok: "logo" });
+  return { ok: "حُدّث الشعار." };
 }
 
-export async function removeOrgLogo() {
+export async function removeOrgLogo(_prev: FormState): Promise<FormState> {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
 
@@ -120,15 +121,15 @@ export async function removeOrgLogo() {
     .update({ logo_path: null, updated_at: new Date().toISOString() })
     .eq("id", activeOrg)
     .select("id");
-  if (error) done({ error: orgProfileErrorAr(error.message) });
-  if (!data || data.length === 0) done({ error: "حذف الشعار متاح للمدراء فقط" });
+  if (error) return orgWriteError(error.message);
+  if (!data || data.length === 0) return { error: "حذف الشعار متاح للمدراء فقط" };
 
   // The row is cleared first on purpose: if the object delete fails the page stops showing a logo
   // it can no longer fetch, instead of keeping a link to a file that may or may not be gone.
   if (current?.logo_path) await supabase.storage.from(LOGO_BUCKET).remove([current.logo_path]);
 
   revalidatePath("/app/settings");
-  done({ ok: "logo_removed" });
+  return { ok: "أُزيل الشعار." };
 }
 
 // ── The signed-in person ─────────────────────────────────────────────────────────────────────────
@@ -140,8 +141,7 @@ export async function removeOrgLogo() {
 //
 // The org-profile actions above still redirect. They are the next step, not this one.
 
-/** `field` names the input the message belongs under; undefined means the form as a whole. */
-export type AccountFormState = { error?: string; field?: string; ok?: string };
+export type AccountFormState = FormState;
 
 export async function updateMyProfile(
   _prev: AccountFormState,
