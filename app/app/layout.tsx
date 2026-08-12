@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { daysLeft, type Summary } from "@/lib/subscription";
 import { AppSidebar } from "@/components/app-sidebar";
+import { UpdateBanner } from "@/components/update-banner";
 import { ToastProvider } from "@/components/ui";
 import { signOut } from "./actions";
 
@@ -73,6 +74,9 @@ export default async function AppLayout({
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
           <AppSidebar orgName={orgName} unread={unread} />
           <div className="md:ps-64 print:ps-0">
+            {/* Above the subscription banner: a stale bundle is the one thing that can swallow the
+                work in progress, so it is read before anything else. */}
+            <UpdateBanner />
             {banner}
             <main className="mx-auto max-w-4xl px-4 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6">{children}</main>
           </div>
@@ -84,6 +88,7 @@ export default async function AppLayout({
   // No active org yet (create/select org): a minimal top bar, no sidebar.
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <UpdateBanner />
       <header className="no-print border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-3">
           <Link href="/app" className="text-lg font-bold">عقار</Link>

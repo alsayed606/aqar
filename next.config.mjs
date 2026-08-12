@@ -37,6 +37,13 @@ const securityHeaders = [
 
 const nextConfig = {
   reactStrictMode: true,
+  // The id of the deployment this bundle was built from, baked into the browser bundle so an open
+  // tab can tell whether it is still the one being served (see components/update-banner.tsx and
+  // app/api/version). The route reads the SAME variable at runtime — keep the two in step.
+  // Empty everywhere but Vercel, and empty means the banner stays silent.
+  env: {
+    NEXT_PUBLIC_BUILD_ID: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.VERCEL_DEPLOYMENT_ID ?? "",
+  },
   // The Supabase Edge Function + Deno tests live under supabase/ and must not be bundled by Next.
   // (./analysis/** used to be listed here too; it moved to its own repo on 6 Aug 2026.)
   outputFileTracingExcludes: {
