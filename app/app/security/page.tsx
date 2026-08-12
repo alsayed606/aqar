@@ -137,6 +137,9 @@ export default async function SecurityPage({
           <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
             كلمة المرور وحدها تكفي من يسرقها. مع التحقّق بخطوتين يحتاج أيضاً إلى جوالك.
           </p>
+          <p className="mt-1 text-xs text-neutral-500">
+            يلزمك تطبيق مصادقة على جوالك قبل التفعيل، مثل Google Authenticator أو Microsoft Authenticator أو Authy.
+          </p>
         </div>
 
         {verified.length === 0 ? (

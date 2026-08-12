@@ -119,7 +119,7 @@ export function mfaErrorAr(message: string): string {
   if (/NO_SESSION/.test(message)) return "انتهت جلستك. سجّل الدخول ثم أعِد المحاولة.";
   if (/CHANNEL_UNAVAILABLE/.test(message)) return "الإرسال بالرسائل النصية غير متاح بعد.";
   if (/DESTINATION_REQUIRED/.test(message)) return "لا يوجد بريد على حسابك. أضِفه أولاً.";
-  if (/invalid.*code|invalid.*totp|verification failed/i.test(message)) return "الرمز غير صحيح. تحقّق من التطبيق وأعِد المحاولة.";
+  if (/invalid.*code|invalid.*totp|verification failed/i.test(message)) return "الرمز غير صحيح. غالباً السبب أن ساعة جوالك غير مضبوطة تلقائياً — تحقّق من ذلك وأعِد المحاولة.";
   if (/expired/i.test(message)) return "انتهت صلاحية الرمز. أدخل الرمز الظاهر الآن.";
   if (/rate|too many/i.test(message)) return "محاولات كثيرة. انتظر قليلاً ثم أعِد المحاولة.";
   if (/already.*enrolled|already exists/i.test(message)) return "لديك عامل تحقّق مُفعّل بهذا الاسم.";
