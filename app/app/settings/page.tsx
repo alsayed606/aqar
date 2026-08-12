@@ -5,24 +5,16 @@ import { nationalAddressLine } from "@/lib/org-profile";
 import { Card, CardBody, CardHeader, CardTitle, Button } from "@/components/ui";
 import { Fact, FactGrid } from "@/components/entity-facts";
 import { FilePicker } from "@/components/file-picker";
-import {
-  changeEmail,
-  changePassword,
-  removeOrgLogo,
-  updateMyProfile,
-  updateOrgProfile,
-  uploadOrgLogo,
-} from "./actions";
+import { AccountForms } from "@/components/account-forms";
+import { removeOrgLogo, updateOrgProfile, uploadOrgLogo } from "./actions";
 
 export const dynamic = "force-dynamic";
 
+// Only the organization actions still speak through the URL. The account forms report themselves.
 const OK_AR: Record<string, string> = {
   org: "حُفظت بيانات المنشأة.",
   logo: "حُدّث الشعار.",
   logo_removed: "أُزيل الشعار.",
-  profile: "حُفظت بياناتك.",
-  password: "غُيّرت كلمة المرور.",
-  email_pending: "أرسلنا رابط تأكيد إلى بريدك الجديد. لن يتغيّر البريد قبل فتحه.",
 };
 
 const input =
@@ -252,45 +244,13 @@ export default async function SettingsPage({
           <CardTitle>حسابي</CardTitle>
         </CardHeader>
         <CardBody className="space-y-6">
-          <form action={updateMyProfile} className="grid gap-4 sm:grid-cols-2">
-            <Field label="الاسم">
-              <input name="full_name" defaultValue={identity?.full_name ?? ""} className={input} />
-            </Field>
-            <Field label="جوال التواصل" hint="تسجيل الدخول بالبريد وكلمة المرور — هذا الرقم للتواصل">
-              <input
-                name="phone"
-                dir="ltr"
-                inputMode="tel"
-                placeholder="05XXXXXXXX"
-                defaultValue={identity?.phone_raw ?? identity?.phone_e164 ?? ""}
-                className={input + " text-start"}
-              />
-            </Field>
-            <div className="sm:col-span-2">
-              <Button type="submit">حفظ بياناتي</Button>
-            </div>
-          </form>
-
-          <form action={changeEmail} className="grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2 dark:border-slate-800">
-            <Field label="البريد الإلكتروني" hint="تغييره يتطلّب فتح رابط التأكيد من البريد الجديد">
-              <input name="email" type="email" dir="ltr" defaultValue={user.email ?? ""} className={input + " text-start"} />
-            </Field>
-            <div className="flex items-end">
-              <Button type="submit" variant="outline">تغيير البريد</Button>
-            </div>
-          </form>
-
-          <form action={changePassword} className="grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2 dark:border-slate-800">
-            <Field label="كلمة المرور الحالية">
-              <input name="current_password" type="password" autoComplete="current-password" required className={input} />
-            </Field>
-            <Field label="كلمة المرور الجديدة" hint="٨ أحرف على الأقل">
-              <input name="new_password" type="password" autoComplete="new-password" required minLength={8} className={input} />
-            </Field>
-            <div className="sm:col-span-2">
-              <Button type="submit" variant="outline">تغيير كلمة المرور</Button>
-            </div>
-          </form>
+          {/* Three client forms: each message lands under its own field, and nothing the user typed
+              is lost to a page reload. The organization card above still redirects — next step. */}
+          <AccountForms
+            fullName={identity?.full_name ?? ""}
+            phone={identity?.phone_raw ?? identity?.phone_e164 ?? ""}
+            email={user.email ?? ""}
+          />
         </CardBody>
       </Card>
     </div>

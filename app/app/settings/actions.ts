@@ -132,8 +132,21 @@ export async function removeOrgLogo() {
 }
 
 // ── The signed-in person ─────────────────────────────────────────────────────────────────────────
+//
+// These three return their outcome instead of redirecting, and the difference is not cosmetic. A
+// redirect reloads the page: the message lands at the top, far from the field that caused it, AND
+// every value the user typed is gone — so the reader who finally notices the warning has nothing
+// left to correct. Returning state keeps the message under its own field and the input where it was.
+//
+// The org-profile actions above still redirect. They are the next step, not this one.
 
-export async function updateMyProfile(formData: FormData) {
+/** `field` names the input the message belongs under; undefined means the form as a whole. */
+export type AccountFormState = { error?: string; field?: string; ok?: string };
+
+export async function updateMyProfile(
+  _prev: AccountFormState,
+  formData: FormData,
+): Promise<AccountFormState> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?returnTo=/app/settings");
@@ -143,7 +156,7 @@ export async function updateMyProfile(formData: FormData) {
   let phone_e164: string | null = null;
   if (phoneRaw) {
     phone_e164 = normalizeSaudiPhone(phoneRaw);
-    if (!phone_e164) done({ error: "رقم جوال غير صالح (مثال: 05XXXXXXXX)" });
+    if (!phone_e164) return { error: "رقم جوال غير صالح (مثال: 05XXXXXXXX)", field: "phone" };
   }
 
   const { error } = await supabase
@@ -152,62 +165,82 @@ export async function updateMyProfile(formData: FormData) {
     .eq("id", user.id);
 
   if (error) {
-    const ar = /identity_contact_present/.test(error.message)
-      ? "لا يمكن ترك الجوال والبريد فارغين معاً"
-      : /duplicate|unique/i.test(error.message)
-        ? "هذا الجوال مسجّل لحساب آخر"
-        : error.message;
-    done({ error: ar });
+    if (/identity_contact_present/.test(error.message)) {
+      return { error: "لا يمكن ترك الجوال والبريد فارغين معاً", field: "phone" };
+    }
+    if (/duplicate|unique/i.test(error.message)) {
+      return { error: "هذا الجوال مسجّل لحساب آخر", field: "phone" };
+    }
+    return { error: error.message };
   }
 
   revalidatePath("/app/settings");
-  done({ ok: "profile" });
+  return { ok: "حُفظت بياناتك." };
 }
 
-export async function changeEmail(formData: FormData) {
+export async function changeEmail(
+  _prev: AccountFormState,
+  formData: FormData,
+): Promise<AccountFormState> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) done({ error: "أدخل بريداً إلكترونياً صالحاً" });
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return { error: "أدخل بريداً إلكترونياً صالحاً", field: "email" };
+  }
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?returnTo=/app/settings");
-  if (user.email?.toLowerCase() === email) done({ error: "هذا هو بريدك الحالي" });
+  if (user.email?.toLowerCase() === email) return { error: "هذا هو بريدك الحالي", field: "email" };
 
   // Changing the login address is an account-takeover step if it is ever done by someone else, so it
   // is throttled like a sign-in attempt.
   const throttled = await guardAuthAttempt("email-change", user.id, { perIp: [5, 3600], perTarget: [3, 3600] });
-  if (throttled) done({ error: throttled });
+  if (throttled) return { error: throttled, field: "email" };
 
   const { error } = await supabase.auth.updateUser({ email });
-  if (error) done({ error: translateAuthError(error.message) });
+  if (error) {
+    // translateAuthError answers this case with "sign in instead of registering", which is the
+    // sign-up wording and nonsense on a settings page. Said here in the words of what just happened.
+    const taken = /already registered|already.*exists|user already|email.*taken/i.test(error.message);
+    return {
+      error: taken ? "هذا البريد مسجَّل لحساب آخر. اختر بريداً غيره." : translateAuthError(error.message),
+      field: "email",
+    };
+  }
 
   // The address does not change until the link is opened. app.identity follows automatically then,
   // through the auth.users trigger added in 0066.
-  done({ ok: "email_pending" });
+  return { ok: "أرسلنا رابط تأكيد إلى بريدك الجديد. لن يتغيّر البريد قبل فتحه." };
 }
 
-export async function changePassword(formData: FormData) {
+export async function changePassword(
+  _prev: AccountFormState,
+  formData: FormData,
+): Promise<AccountFormState> {
   const current = String(formData.get("current_password") ?? "");
   const next = String(formData.get("new_password") ?? "");
-  if (next.length < 8) done({ error: "كلمة المرور الجديدة يجب أن تكون ٨ أحرف على الأقل" });
-  if (next === current) done({ error: "كلمة المرور الجديدة مطابقة للحالية" });
+  if (next.length < 8) return { error: "كلمة المرور الجديدة يجب أن تكون ٨ أحرف على الأقل", field: "new_password" };
+  if (next === current) return { error: "كلمة المرور الجديدة مطابقة للحالية", field: "new_password" };
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?returnTo=/app/settings");
-  if (!user.email) done({ error: "لا يوجد بريد على هذا الحساب — تواصل معنا لتغيير كلمة المرور" });
+  if (!user.email) return { error: "لا يوجد بريد على هذا الحساب — تواصل معنا لتغيير كلمة المرور" };
 
   const throttled = await guardAuthAttempt("password-change", user.id, { perIp: [10, 900], perTarget: [5, 900] });
-  if (throttled) done({ error: throttled });
+  if (throttled) return { error: throttled };
 
   // Supabase will change the password for anyone holding the session. That is one stolen laptop away
   // from a locked-out owner, so the current password is proved first — the check the session alone
   // cannot make.
   const { error: reauthError } = await supabase.auth.signInWithPassword({ email: user.email, password: current });
-  if (reauthError) done({ error: "كلمة المرور الحالية غير صحيحة" });
+  if (reauthError) return { error: "كلمة المرور الحالية غير صحيحة", field: "current_password" };
 
   const { error } = await supabase.auth.updateUser({ password: next });
-  if (error) done({ error: translateAuthError(error.message) });
+  if (error) return { error: translateAuthError(error.message), field: "new_password" };
 
-  done({ ok: "password" });
+  // Proving the old password opened a NEW session, and the second-factor proof (0069) is keyed to
+  // the old one — so the next page this user opens will ask for their code again. Said out loud
+  // because a verification screen straight after a password change reads as a fault.
+  return { ok: "غُيّرت كلمة المرور. قد يُطلب منك رمز التحقّق مرّة أخرى عند الصفحة التالية." };
 }
