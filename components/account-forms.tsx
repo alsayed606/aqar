@@ -26,7 +26,12 @@ function ProfileForm({ fullName, phone }: { fullName: string; phone: string }) {
   return (
     <form action={action} className="grid gap-4 sm:grid-cols-2">
       <Field label="الاسم" name="full_name" state={state}>
-        <input id="full_name" name="full_name" defaultValue={fullName} className={inputCls} />
+        <input
+          id="full_name"
+          name="full_name"
+          defaultValue={state.values?.full_name ?? fullName}
+          className={inputCls}
+        />
       </Field>
       <Field
         label="جوال التواصل"
@@ -40,7 +45,7 @@ function ProfileForm({ fullName, phone }: { fullName: string; phone: string }) {
           dir="ltr"
           inputMode="tel"
           placeholder="05XXXXXXXX"
-          defaultValue={phone}
+          defaultValue={state.values?.phone ?? phone}
           className={fieldCls(state, "phone") + " text-start"}
         />
       </Field>
@@ -71,7 +76,7 @@ function EmailForm({ email }: { email: string }) {
           name="email"
           type="email"
           dir="ltr"
-          defaultValue={email}
+          defaultValue={state.values?.email ?? email}
           className={fieldCls(state, "email") + " text-start"}
         />
       </Field>

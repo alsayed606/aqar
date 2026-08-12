@@ -23,7 +23,9 @@ export async function updateOrgProfile(
   if (!activeOrg) redirect("/app");
 
   const { values, error, field } = parseOrgProfile(formData);
-  if (error) return { error, field };
+  // `values` rides along on every refusal: React resets the form when the action resolves, so the
+  // inputs default to whatever we hand back — and handing back the stored row would erase the edit.
+  if (error) return { error, field, values };
 
   const supabase = await createClient();
   const { data, error: writeError } = await supabase
@@ -32,12 +34,12 @@ export async function updateOrgProfile(
     .eq("id", activeOrg)
     .select("id");
 
-  if (writeError) return orgWriteError(writeError.message);
+  if (writeError) return { ...orgWriteError(writeError.message), values };
 
   // A member who is not an admin passes the SELECT policy and fails the UPDATE one, and an UPDATE
   // that matches no row is not an error — it reports success having changed nothing. Asking for the
   // affected rows back is what turns that silence into a message.
-  if (!data || data.length === 0) return { error: "تعديل بيانات المنشأة متاح للمدراء فقط" };
+  if (!data || data.length === 0) return { error: "تعديل بيانات المنشأة متاح للمدراء فقط", values };
 
   revalidatePath("/app/settings");
   revalidatePath("/app");
@@ -153,10 +155,13 @@ export async function updateMyProfile(
 
   const full_name = String(formData.get("full_name") ?? "").trim() || null;
   const phoneRaw = String(formData.get("phone") ?? "").trim();
+  // Echoed on every refusal — see FormState.values for why an untouched form still loses its input.
+  const typed = { full_name, phone: phoneRaw || null };
+
   let phone_e164: string | null = null;
   if (phoneRaw) {
     phone_e164 = normalizeSaudiPhone(phoneRaw);
-    if (!phone_e164) return { error: "رقم جوال غير صالح (مثال: 05XXXXXXXX)", field: "phone" };
+    if (!phone_e164) return { error: "رقم جوال غير صالح (مثال: 05XXXXXXXX)", field: "phone", values: typed };
   }
 
   const { error } = await supabase
@@ -166,12 +171,12 @@ export async function updateMyProfile(
 
   if (error) {
     if (/identity_contact_present/.test(error.message)) {
-      return { error: "لا يمكن ترك الجوال والبريد فارغين معاً", field: "phone" };
+      return { error: "لا يمكن ترك الجوال والبريد فارغين معاً", field: "phone", values: typed };
     }
     if (/duplicate|unique/i.test(error.message)) {
-      return { error: "هذا الجوال مسجّل لحساب آخر", field: "phone" };
+      return { error: "هذا الجوال مسجّل لحساب آخر", field: "phone", values: typed };
     }
-    return { error: error.message };
+    return { error: error.message, values: typed };
   }
 
   revalidatePath("/app/settings");
@@ -183,19 +188,21 @@ export async function changeEmail(
   formData: FormData,
 ): Promise<AccountFormState> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  // Echoed on every refusal — see FormState.values.
+  const typed = { email };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return { error: "أدخل بريداً إلكترونياً صالحاً", field: "email" };
+    return { error: "أدخل بريداً إلكترونياً صالحاً", field: "email", values: typed };
   }
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?returnTo=/app/settings");
-  if (user.email?.toLowerCase() === email) return { error: "هذا هو بريدك الحالي", field: "email" };
+  if (user.email?.toLowerCase() === email) return { error: "هذا هو بريدك الحالي", field: "email", values: typed };
 
   // Changing the login address is an account-takeover step if it is ever done by someone else, so it
   // is throttled like a sign-in attempt.
   const throttled = await guardAuthAttempt("email-change", user.id, { perIp: [5, 3600], perTarget: [3, 3600] });
-  if (throttled) return { error: throttled, field: "email" };
+  if (throttled) return { error: throttled, field: "email", values: typed };
 
   const { error } = await supabase.auth.updateUser({ email });
   if (error) {
@@ -205,6 +212,7 @@ export async function changeEmail(
     return {
       error: taken ? "هذا البريد مسجَّل لحساب آخر. اختر بريداً غيره." : translateAuthError(error.message),
       field: "email",
+      values: typed,
     };
   }
 

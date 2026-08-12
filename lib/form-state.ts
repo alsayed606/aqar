@@ -15,4 +15,13 @@ export type FormState = {
   field?: string;
   /** What went right — shown as a toast, because it needs no action. */
   ok?: string;
+  /**
+   * What the user had typed, echoed back so a refused form still holds it.
+   *
+   * NOT redundant with "we no longer redirect". React resets a form once its action resolves, which
+   * returns every uncontrolled input to its `defaultValue` — the stored value, not the attempted
+   * one. Measured on the live page: the message appeared correctly under its field, and the field
+   * beneath it was blank. So the action hands the attempt back and the inputs default to it.
+   */
+  values?: Record<string, string | null>;
 };

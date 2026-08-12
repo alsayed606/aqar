@@ -22,12 +22,16 @@ export function OrgProfileForm({
   const [state, action, pending] = useActionState(updateOrgProfile, initial);
   useSuccessToast(state);
 
-  // Every input is the same three things — its name, its stored value, and the border that turns red
-  // when the name matches the refusal. Spelling that out fifteen times is where a typo hides.
+  // Every input is the same three things — its name, its value, and the border that turns red when
+  // the name matches the refusal. Spelling that out fifteen times is where a typo hides.
+  //
+  // The value is the ATTEMPT when there was one, and the stored row otherwise. React resets the form
+  // once the action resolves, so whatever `defaultValue` says here is what the office is left
+  // holding — and being left holding the old row after a rejected edit is the bug this page had.
   const text = (name: string) => ({
     id: name,
     name,
-    defaultValue: org[name] ?? "",
+    defaultValue: state.values?.[name] ?? org[name] ?? "",
     className: fieldCls(state, name),
   });
   const ltr = (name: string) => ({ ...text(name), dir: "ltr" as const, className: fieldCls(state, name) + " text-start" });
