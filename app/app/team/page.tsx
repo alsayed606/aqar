@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { InviteMemberForm } from "@/components/invite-member-form";
-import { revokeInvitation, setMemberRole, setMemberStatus } from "./actions";
+import { MemberRoleForm, MemberStatusButton, RevokeInviteButton } from "@/components/team-row-actions";
 import { ROLE_AR, MEMBER_STATUS_AR, MEMBER_STATUS_TONE } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -27,12 +27,7 @@ type Invite = {
   expires_at: string;
 };
 
-export default async function TeamPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const { error: flashError } = await searchParams;
+export default async function TeamPage() {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
 
@@ -81,11 +76,8 @@ export default async function TeamPage({
     <div className="space-y-6">
       <h1 className="text-xl font-bold">الفريق والصلاحيات</h1>
 
-      {flashError && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
-          {flashError}
-        </p>
-      )}
+      {/* No page banner: the invite form answers under its own fields, and each row action answers
+          in a toast beside the button that was pressed. */}
 
       {/* Invite */}
       <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
@@ -120,21 +112,11 @@ export default async function TeamPage({
                       {isSelf ? (
                         <span className="font-medium">{ROLE_AR[m.role] ?? m.role}</span>
                       ) : (
-                        <form action={setMemberRole} className="flex items-center gap-1">
-                          <input type="hidden" name="membership_id" value={m.membership_id} />
-                          <select
-                            name="role"
-                            defaultValue={m.role}
-                            className="rounded border border-neutral-300 bg-transparent px-1.5 py-1 text-xs outline-none dark:border-neutral-700"
-                          >
-                            {ROLE_OPTIONS.map((r) => (
-                              <option key={r} value={r}>{ROLE_AR[r] ?? r}</option>
-                            ))}
-                          </select>
-                          <button className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
-                            حفظ
-                          </button>
-                        </form>
+                        <MemberRoleForm
+                          membershipId={m.membership_id}
+                          role={m.role}
+                          roles={ROLE_OPTIONS}
+                        />
                       )}
                     </td>
                     <td className="px-4 py-2">
@@ -155,17 +137,7 @@ export default async function TeamPage({
                       {isSelf ? (
                         <span className="text-xs text-neutral-400">—</span>
                       ) : (
-                        <form action={setMemberStatus}>
-                          <input type="hidden" name="membership_id" value={m.membership_id} />
-                          <input
-                            type="hidden"
-                            name="status"
-                            value={m.status === "active" ? "suspended" : "active"}
-                          />
-                          <button className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
-                            {m.status === "active" ? "إيقاف" : "تفعيل"}
-                          </button>
-                        </form>
+                        <MemberStatusButton membershipId={m.membership_id} status={m.status} />
                       )}
                     </td>
                   </tr>
@@ -235,12 +207,7 @@ export default async function TeamPage({
                         {expired && <span className="mr-2 text-xs text-red-600 dark:text-red-400">منتهية</span>}
                       </td>
                       <td className="px-4 py-2">
-                        <form action={revokeInvitation}>
-                          <input type="hidden" name="invitation_id" value={inv.id} />
-                          <button className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
-                            إلغاء
-                          </button>
-                        </form>
+                        <RevokeInviteButton invitationId={inv.id} />
                       </td>
                     </tr>
                   );

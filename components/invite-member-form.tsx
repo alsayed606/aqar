@@ -21,8 +21,16 @@ export function InviteMemberForm() {
             inputMode="tel"
             dir="ltr"
             placeholder="05XXXXXXXX"
-            className="w-40 rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
+            className={
+              "w-40 rounded-lg border bg-transparent px-3 py-1.5 text-sm outline-none " +
+              (state.field === "phone"
+                ? "border-red-400 dark:border-red-500"
+                : "border-neutral-300 focus:border-brand dark:border-neutral-700")
+            }
           />
+          {state.field === "phone" && state.error && (
+            <p role="alert" className="mt-1 text-xs font-medium text-red-700 dark:text-red-400">{state.error}</p>
+          )}
         </div>
         <div>
           <label className="mb-1 block text-xs text-neutral-500" htmlFor="email">أو البريد</label>
@@ -57,8 +65,10 @@ export function InviteMemberForm() {
         </button>
       </form>
 
-      {state.error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
+      {/* Only what belongs to no single field — "enter a phone OR an e-mail" is about the pair, and
+          a refusal from the database is about the whole request. */}
+      {state.error && !state.field && (
+        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
           {state.error}
         </p>
       )}

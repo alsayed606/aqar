@@ -7,10 +7,19 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { normalizeSaudiPhone } from "@/lib/phone";
 import { translateSubscriptionError } from "@/lib/subscription-errors";
+import type { FormState } from "@/lib/form-state";
 
-export type InviteState = { error?: string; link?: string; role?: string };
+export type InviteState = { error?: string; field?: string; link?: string; role?: string };
 
 const MEMBER_ROLES = ["admin", "manager", "accountant", "staff", "viewer"];
+
+// The row actions below report through their return value, not through `?error=` on the URL.
+//
+// WHY A TOAST AND NOT A FIELD, HERE
+// The settings page moved its messages under the inputs that caused them. These have no input to sit
+// under: they are one button on one row of a table, and what they change is the row itself. So the
+// answer is a toast — close to the pointer, gone when read, and it does not push the table down.
+// Same principle as there, different shape: the message belongs where the action was taken.
 
 // Admin mints an invitation; the raw token is returned once and rendered as a join link in-page
 // (kept out of the URL). Only the token hash is stored server-side.
@@ -22,15 +31,16 @@ export async function createInvitation(
   if (!activeOrg) return { error: "اختر منشأة نشطة أولاً" };
 
   const role = String(formData.get("role") ?? "staff");
-  if (!MEMBER_ROLES.includes(role)) return { error: "دور غير صالح" };
+  if (!MEMBER_ROLES.includes(role)) return { error: "دور غير صالح", field: "role" };
 
   const phoneRaw = String(formData.get("phone") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim() || null;
   let phone: string | null = null;
   if (phoneRaw) {
     phone = normalizeSaudiPhone(phoneRaw);
-    if (!phone) return { error: "رقم جوال غير صالح (مثال: 05XXXXXXXX)" };
+    if (!phone) return { error: "رقم جوال غير صالح (مثال: 05XXXXXXXX)", field: "phone" };
   }
+  // Neither one is "the" wrong field, so this one stays with the form as a whole.
   if (!phone && !email) return { error: "أدخل رقم جوال أو بريداً إلكترونياً" };
 
   const supabase = await createClient();
@@ -53,59 +63,60 @@ export async function createInvitation(
   return { link: `${proto}://${host}/app/join?token=${token}`, role };
 }
 
-export async function revokeInvitation(formData: FormData) {
+export async function revokeInvitation(_prev: FormState, formData: FormData): Promise<FormState> {
   const invitation_id = String(formData.get("invitation_id") ?? "");
-  if (!invitation_id) redirect("/app/team");
+  if (!invitation_id) return { error: "دعوة غير معروفة" };
   const supabase = await createClient();
   const { error } = await supabase
     .from("invitation")
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", invitation_id)
     .is("accepted_at", null);
-  if (error) redirect(`/app/team?error=${encodeURIComponent(error.message)}`);
+  if (error) return { error: error.message };
   revalidatePath("/app/team");
-  redirect("/app/team");
+  return { ok: "أُلغيت الدعوة." };
 }
 
-export async function setMemberRole(formData: FormData) {
+export async function setMemberRole(_prev: FormState, formData: FormData): Promise<FormState> {
   const membership_id = String(formData.get("membership_id") ?? "");
   const role = String(formData.get("role") ?? "");
-  if (!membership_id || !["owner", ...MEMBER_ROLES].includes(role)) {
-    redirect(`/app/team?error=${encodeURIComponent("دور غير صالح")}`);
-  }
+  if (!membership_id || !["owner", ...MEMBER_ROLES].includes(role)) return { error: "دور غير صالح" };
+
   const supabase = await createClient();
   const { error } = await supabase.from("membership").update({ role }).eq("id", membership_id);
   if (error) {
-    const msg = /LAST_OWNER/i.test(error.message)
-      ? "لا يمكن إنزال دور المالك الوحيد للمنشأة"
-      : error.message;
-    redirect(`/app/team?error=${encodeURIComponent(msg)}`);
+    return {
+      error: /LAST_OWNER/i.test(error.message)
+        ? "لا يمكن إنزال دور المالك الوحيد للمنشأة"
+        : error.message,
+    };
   }
   revalidatePath("/app/team");
-  redirect("/app/team");
+  return { ok: "حُفظ الدور." };
 }
 
-export async function setMemberStatus(formData: FormData) {
+export async function setMemberStatus(_prev: FormState, formData: FormData): Promise<FormState> {
   const membership_id = String(formData.get("membership_id") ?? "");
   const status = String(formData.get("status") ?? "");
   if (!membership_id || !["active", "suspended", "revoked"].includes(status)) {
-    redirect(`/app/team?error=${encodeURIComponent("حالة غير صالحة")}`);
+    return { error: "حالة غير صالحة" };
   }
   const supabase = await createClient();
   const { error } = await supabase.from("membership").update({ status }).eq("id", membership_id);
   if (error) {
-    const msg = /LAST_OWNER|last.owner/i.test(error.message)
-      ? "لا يمكن تعطيل المالك الوحيد للمنشأة"
-      : error.message;
-    redirect(`/app/team?error=${encodeURIComponent(msg)}`);
+    return {
+      error: /LAST_OWNER|last.owner/i.test(error.message)
+        ? "لا يمكن تعطيل المالك الوحيد للمنشأة"
+        : error.message,
+    };
   }
   revalidatePath("/app/team");
-  redirect("/app/team");
+  return { ok: status === "active" ? "فُعّل العضو." : "أُوقف العضو." };
 }
 
 // Restrict a member to specific properties (scope_all=false + membership_property_scope rows), or
 // reopen everything (scope_all=true). RLS on the portfolio tables (has_property_access) enforces it.
-export async function setMemberScope(formData: FormData) {
+export async function setMemberScope(_prev: FormState, formData: FormData): Promise<FormState> {
   const activeOrg = await getActiveOrg();
   const membership_id = String(formData.get("membership_id") ?? "");
   if (!activeOrg || !membership_id) redirect("/app/team");
@@ -122,13 +133,11 @@ export async function setMemberScope(formData: FormData) {
     .maybeSingle();
   if (!m) redirect("/app/team");
 
-  const back = (msg: string) => redirect(`/app/team?error=${encodeURIComponent(msg)}`);
-
   const { error: uErr } = await supabase
     .from("membership")
     .update({ scope_all: scopeAll })
     .eq("id", membership_id);
-  if (uErr) back(uErr.message);
+  if (uErr) return { error: uErr.message };
 
   // Rewrite the scope set: clear, then add the chosen properties (only when scoped). The delete
   // error is checked because a silent failure here would leave stale grants and WIDEN the member's
@@ -137,15 +146,17 @@ export async function setMemberScope(formData: FormData) {
     .from("membership_property_scope")
     .delete()
     .eq("membership_id", membership_id);
-  if (dErr) back(dErr.message);
+  if (dErr) return { error: dErr.message };
   if (!scopeAll && propertyIds.length > 0) {
     const { error: iErr } = await supabase
       .from("membership_property_scope")
       .insert(propertyIds.map((property_id) => ({ membership_id, property_id })));
-    if (iErr) back(iErr.message);
+    if (iErr) return { error: iErr.message };
   }
 
   revalidatePath("/app/team");
+  // Back to the team list on success only. A refusal keeps the admin on the page with their
+  // selection intact — this form is a set of checkboxes that is tedious to rebuild.
   redirect("/app/team");
 }
 
