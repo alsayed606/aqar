@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
-import { setOwnerFee, setOwnerTaxInfo, recordRemittance, deleteOwner } from "../actions";
+import { deleteOwner } from "../actions";
+import { OwnerFeeForm, OwnerTaxForm, RemittanceForm } from "@/components/owner-detail-forms";
 import { ConfirmButton } from "@/components/confirm-button";
 import { countAr, PROPERTY_AR } from "@/lib/plural-ar";
 import { halalasToSar } from "@/lib/money";
@@ -138,6 +139,9 @@ export default async function OwnerDetail({
         <span className="text-neutral-700 dark:text-neutral-300">{ownerName}</span>
       </nav>
 
+      {/* The three forms on this page answer under their own fields now. This banner stays for the
+          one action that still speaks through the URL: archiving the owner, which is handled by the
+          shared archiveRecord and refuses with the dependants it found. */}
       {sp.error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
           {sp.error}
@@ -169,65 +173,13 @@ export default async function OwnerDetail({
               }
             >
               <div className="space-y-6">
+        {!owner.is_self && <OwnerFeeForm ownerId={owner.id} currentPct={currentPct} />}
         {!owner.is_self && (
-          <form action={setOwnerFee} className="mt-4 flex flex-wrap items-end gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-800">
-            <input type="hidden" name="owner_id" value={owner.id} />
-            <div>
-              <label className="mb-1 block text-xs text-neutral-500" htmlFor="percent">
-                نسبة أتعاب الإدارة (% من التحصيل)
-              </label>
-              <input
-                id="percent"
-                name="percent"
-                inputMode="decimal"
-                defaultValue={currentPct ? String(currentPct) : ""}
-                placeholder="مثال: 5"
-                className="w-28 rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-              />
-            </div>
-            <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
-              حفظ النسبة
-            </button>
-            <span className="text-xs text-neutral-400">
-              النسبة الحالية: {currentPct}%
-            </span>
-          </form>
-        )}
-        {!owner.is_self && (
-          <form action={setOwnerTaxInfo} className="mt-4 flex flex-wrap items-end gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-800">
-            <input type="hidden" name="owner_id" value={owner.id} />
-            <div>
-              <label className="mb-1 block text-xs text-neutral-500" htmlFor="vat_number">
-                الرقم الضريبي (15 رقماً)
-              </label>
-              <input
-                id="vat_number"
-                name="vat_number"
-                inputMode="numeric"
-                dir="ltr"
-                defaultValue={(owner as any).vat_number ?? ""}
-                placeholder="3XXXXXXXXXXXXX3"
-                className="w-52 rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-neutral-500" htmlFor="cr_number">
-                السجل التجاري
-              </label>
-              <input
-                id="cr_number"
-                name="cr_number"
-                dir="ltr"
-                defaultValue={(owner as any).cr_number ?? ""}
-                placeholder="10XXXXXXXX"
-                className="w-40 rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-              />
-            </div>
-            <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
-              حفظ البيانات الضريبية
-            </button>
-            <span className="text-xs text-neutral-400">تُستخدم كمورّد على فواتير عقارات هذا المالك.</span>
-          </form>
+          <OwnerTaxForm
+            ownerId={owner.id}
+            vatNumber={(owner as any).vat_number ?? ""}
+            crNumber={(owner as any).cr_number ?? ""}
+          />
         )}
 
         {!owner.is_self && (
@@ -380,50 +332,13 @@ export default async function OwnerDetail({
           </div>
 
           {/* Record a remittance */}
-          <form
-            action={recordRemittance}
-            className="mb-4 flex flex-wrap items-end gap-2 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900"
-          >
-            <input type="hidden" name="owner_id" value={owner.id} />
-            <input type="hidden" name="period_from" value={from} />
-            <input type="hidden" name="period_to" value={to} />
-            <div>
-              <label className="mb-1 block text-xs text-neutral-500" htmlFor="amount">المبلغ (ر.س)</label>
-              <input
-                id="amount"
-                name="amount"
-                inputMode="decimal"
-                defaultValue={dueToOwner > 0 ? String(dueToOwner / 100) : ""}
-                className="w-32 rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-neutral-500" htmlFor="method">الطريقة</label>
-              <select
-                id="method"
-                name="method"
-                defaultValue="bank_transfer"
-                className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm outline-none dark:border-neutral-700"
-              >
-                {Object.entries(PAYMENT_METHOD_AR).map(([v, l]) => (
-                  <option key={v} value={v}>{l}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-neutral-500" htmlFor="remitted_at">التاريخ</label>
-              <input id="remitted_at" name="remitted_at" type="date" defaultValue={to}
-                className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm outline-none dark:border-neutral-700" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-neutral-500" htmlFor="reference">المرجع (اختياري)</label>
-              <input id="reference" name="reference" dir="ltr" placeholder="رقم التحويل"
-                className="w-36 rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700" />
-            </div>
-            <button className="rounded-lg bg-brand px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-fg">
-              تسجيل التوريد
-            </button>
-          </form>
+          <RemittanceForm
+            ownerId={owner.id}
+            periodFrom={from}
+            periodTo={to}
+            suggestedAmount={dueToOwner > 0 ? String(dueToOwner / 100) : ""}
+            methods={Object.entries(PAYMENT_METHOD_AR).map(([value, label]) => ({ value, label }))}
+          />
 
           {/* History */}
           {remittances.length === 0 ? (

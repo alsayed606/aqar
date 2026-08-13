@@ -8,6 +8,7 @@ import { parseArabicNumber, parseArabicInt } from "@/lib/num";
 import { translateSubscriptionError } from "@/lib/subscription-errors";
 import { safeReturnTo } from "@/lib/return-to";
 import { archiveRecord } from "@/lib/archive";
+import type { FormState } from "@/lib/form-state";
 
 export type PropState = { error?: string; ok?: boolean };
 export type UnitState = { error?: string; ok?: boolean };
@@ -103,15 +104,15 @@ export async function deleteUnit(formData: FormData) {
 }
 
 // Reassign a property to a different owner (e.g., from the self-owner to a real client).
-export async function changePropertyOwner(formData: FormData) {
+export async function changePropertyOwner(_prev: FormState, formData: FormData): Promise<FormState> {
   const property_id = String(formData.get("property_id") ?? "");
   const owner_id = String(formData.get("owner_id") ?? "");
-  if (!property_id || !owner_id) redirect(`/app/properties/${property_id}`);
+  if (!property_id || !owner_id) return { error: "اختر المالك" };
   const supabase = await createClient();
   const { error } = await supabase.from("property").update({ owner_id }).eq("id", property_id);
-  if (error) redirect(`/app/properties/${property_id}?error=${encodeURIComponent(error.message)}`);
+  if (error) return { error: error.message };
   revalidatePath(`/app/properties/${property_id}`);
-  redirect(`/app/properties/${property_id}`);
+  return { ok: "غُيّر مالك العقار." };
 }
 
 export async function createUnit(
@@ -156,14 +157,18 @@ export async function createUnit(
 }
 
 // Edit a unit's mutable fields (unit numbering, status, size). RLS (manage_data) gates the write.
-export async function updateUnit(formData: FormData) {
+export async function updateUnit(_prev: FormState, formData: FormData): Promise<FormState> {
   const unit_id = String(formData.get("unit_id") ?? "");
-  // `back` rides in a hidden field, so it is caller input: validated, never followed as given.
-  const back = safeReturnTo(String(formData.get("back") ?? "")) ?? "/app/units";
-  if (!unit_id) redirect(back);
+  if (!unit_id) return { error: "وحدة غير معروفة" };
 
+  // The `back` field is gone with the redirect it existed for: the drawer stays open on a refusal
+  // and closes itself on success, so nothing needs to be told where the user came from.
   const unit_number = String(formData.get("unit_number") ?? "").trim();
-  if (!unit_number) redirect(`${back}?error=${encodeURIComponent("رقم الوحدة مطلوب")}`);
+  const typed: Record<string, string> = {};
+  for (const [key, value] of formData.entries()) {
+    if (typeof value === "string" && key !== "unit_id") typed[key] = value;
+  }
+  if (!unit_number) return { error: "رقم الوحدة مطلوب", field: "unit_number", values: typed };
 
   const patch = {
     unit_number,
@@ -177,11 +182,13 @@ export async function updateUnit(formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase.from("unit").update(patch).eq("id", unit_id);
   if (error) {
-    const msg = /duplicate key|unit_number/i.test(error.message)
-      ? `رقم الوحدة "${unit_number}" مستخدم بالفعل في هذا العقار.`
-      : error.message;
-    redirect(`${back}?error=${encodeURIComponent(msg)}`);
+    const duplicate = /duplicate key|unit_number/i.test(error.message);
+    return {
+      error: duplicate ? `رقم الوحدة "${unit_number}" مستخدم بالفعل في هذا العقار.` : error.message,
+      field: duplicate ? "unit_number" : undefined,
+      values: typed,
+    };
   }
   revalidatePath("/app/units");
-  redirect(back);
+  return { ok: "حُفظت الوحدة." };
 }

@@ -6,7 +6,7 @@ import { getActiveOrg } from "@/lib/supabase/active-org";
 import { UnitForm } from "@/components/unit-form";
 import { ConfirmButton } from "@/components/confirm-button";
 import { FormDrawer } from "@/components/form-drawer";
-import { changePropertyOwner } from "../actions";
+import { PropertyOwnerForm } from "@/components/property-owner-form";
 import { MeterForm } from "@/components/meter-form";
 import { EntityNotes } from "@/components/entity-notes";
 import { Fact, FactGrid } from "@/components/entity-facts";
@@ -347,32 +347,12 @@ export default async function PropertyDetail({
                 </svg>
                 }
               >
-            <form action={changePropertyOwner} className="mt-3 flex flex-wrap items-end gap-2">
-              <input type="hidden" name="property_id" value={property.id} />
-              <div>
-                <label className="mb-1 block text-xs text-slate-500" htmlFor="owner_id">المالك</label>
-                <select
-                  id="owner_id"
-                  name="owner_id"
-                  defaultValue={property.owner_id}
-                  className="rounded-lg border border-slate-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-slate-700"
-                >
-                  {owners.map((o: any) => (
-                    <option key={o.id} value={o.id}>{ownerLabel(o)}</option>
-                  ))}
-                </select>
-              </div>
-              <ConfirmButton
-                message="تغيير مالك العقار قد يؤثّر على العقود والالتزامات المالية والبيانات المرتبطة به. هل تريد المتابعة؟"
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-              >
-                حفظ المالك
-              </ConfirmButton>
-              <span className="self-center text-xs text-slate-400">الحالي: {ownerLabel((property as any).owner)}</span>
-              <p className="w-full text-xs text-amber-600 dark:text-amber-500">
-                ⚠️ تغيير المالك قد يؤثّر على العقود والالتزامات المالية المرتبطة بالعقار.
-              </p>
-            </form>
+            <PropertyOwnerForm
+              propertyId={property.id}
+              currentOwnerId={property.owner_id}
+              currentOwnerLabel={ownerLabel((property as any).owner)}
+              owners={owners.map((o: any) => ({ id: o.id, label: ownerLabel(o) }))}
+            />
               </FormDrawer>
             </div>
           </div>

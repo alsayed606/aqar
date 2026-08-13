@@ -9,6 +9,7 @@ import { normalizeSaudiPhone } from "@/lib/phone";
 import { isEstablishment, tenantErrorAr, type EntityType, type PersonIdKind } from "@/lib/tenant-identity";
 import { archiveRecord } from "@/lib/archive";
 import { rpcErrorAr } from "@/lib/rpc-errors";
+import type { FormState } from "@/lib/form-state";
 
 export type TenantState = { error?: string; ok?: boolean };
 
@@ -174,61 +175,79 @@ export async function createTenant(
 
 // Brand names under one commercial registration (0057). Each carries its own municipal licence,
 // and a contract copies the name it was signed under.
-export async function addTradeName(formData: FormData) {
+// These three answer through their return value: a trade name and a tenant's identity are typed by
+// hand, and a refusal that reloads the page takes the typing with it.
+export async function addTradeName(_prev: FormState, formData: FormData): Promise<FormState> {
   const activeOrg = await getActiveOrg();
   const tenant_id = String(formData.get("tenant_id") ?? "");
   const party_id = String(formData.get("party_id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
-  if (!activeOrg || !tenant_id || !party_id) redirect("/app/tenants");
-  if (!name) redirect(`/app/tenants/${tenant_id}?error=${encodeURIComponent("اسم تجاري مطلوب")}`);
+  const typed = {
+    name,
+    municipal_license_no: String(formData.get("municipal_license_no") ?? ""),
+    license_expiry: String(formData.get("license_expiry") ?? ""),
+  };
+  if (!activeOrg || !tenant_id || !party_id) return { error: "مستأجر غير معروف" };
+  if (!name) return { error: "اسم تجاري مطلوب", field: "name", values: typed };
 
   const supabase = await createClient();
   const { error } = await supabase.from("trade_name").insert({
     org_id: activeOrg,
     party_id,
     name,
-    municipal_license_no: String(formData.get("municipal_license_no") ?? "").trim() || null,
-    license_expiry: String(formData.get("license_expiry") ?? "").trim() || null,
+    municipal_license_no: typed.municipal_license_no.trim() || null,
+    license_expiry: typed.license_expiry.trim() || null,
   });
   if (error) {
-    const ar = /duplicate|unique/i.test(error.message) ? "هذا الاسم التجاري مضاف مسبقاً" : error.message;
-    redirect(`/app/tenants/${tenant_id}?error=${encodeURIComponent(ar)}`);
+    const duplicate = /duplicate|unique/i.test(error.message);
+    return {
+      error: duplicate ? "هذا الاسم التجاري مضاف مسبقاً" : error.message,
+      field: duplicate ? "name" : undefined,
+      values: typed,
+    };
   }
   revalidatePath(`/app/tenants/${tenant_id}`);
-  redirect(`/app/tenants/${tenant_id}?ok=1`);
+  return { ok: "أُضيف الاسم التجاري." };
 }
 
-export async function removeTradeName(formData: FormData) {
+export async function removeTradeName(_prev: FormState, formData: FormData): Promise<FormState> {
   const tenant_id = String(formData.get("tenant_id") ?? "");
   const id = String(formData.get("trade_name_id") ?? "");
-  if (!tenant_id || !id) redirect("/app/tenants");
+  if (!tenant_id || !id) return { error: "اسم تجاري غير معروف" };
 
   const supabase = await createClient();
   // Soft delete: contracts keep the name they were signed under either way.
   const { error } = await supabase.from("trade_name").update({ deleted_at: new Date().toISOString() }).eq("id", id);
-  if (error) redirect(`/app/tenants/${tenant_id}?error=${encodeURIComponent(error.message)}`);
+  if (error) return { error: error.message };
   revalidatePath(`/app/tenants/${tenant_id}`);
-  redirect(`/app/tenants/${tenant_id}?ok=1`);
+  return { ok: "أُزيل الاسم التجاري." };
 }
 
 // Edit an existing tenant (party fields + tenant_type). RLS (manage_data) gates the write.
-export async function updateTenant(formData: FormData) {
+export async function updateTenant(_prev: FormState, formData: FormData): Promise<FormState> {
   const tenant_id = String(formData.get("tenant_id") ?? "");
   const party_id = String(formData.get("party_id") ?? "");
-  if (!tenant_id || !party_id) redirect("/app/tenants");
+  if (!tenant_id || !party_id) return { error: "مستأجر غير معروف" };
+
+  // Every text field the drawer shows, echoed back on refusal. This form has sixteen inputs, so
+  // losing them to a re-render is the difference between fixing one digit and retyping a record.
+  const typed: Record<string, string> = {};
+  for (const [key, value] of formData.entries()) {
+    if (typeof value === "string" && key !== "tenant_id" && key !== "party_id") typed[key] = value;
+  }
 
   const display_name = String(formData.get("display_name") ?? "").trim();
-  if (!display_name) redirect(`/app/tenants/${tenant_id}?error=${encodeURIComponent("الاسم مطلوب")}`);
+  if (!display_name) return { error: "الاسم مطلوب", field: "display_name", values: typed };
 
   // No completeness check here on purpose: a record that predates 0057 must stay correctable.
   const identity = identityFields(formData);
-  if (identity.error) redirect(`/app/tenants/${tenant_id}?error=${encodeURIComponent(identity.error)}`);
+  if (identity.error) return { error: identity.error, values: typed };
 
   const phoneRaw = String(formData.get("phone") ?? "").trim();
   let phone_e164: string | null = null;
   if (phoneRaw) {
     phone_e164 = normalizeSaudiPhone(phoneRaw);
-    if (!phone_e164) redirect(`/app/tenants/${tenant_id}?error=${encodeURIComponent("رقم جوال غير صالح")}`);
+    if (!phone_e164) return { error: "رقم جوال غير صالح", field: "phone", values: typed };
   }
 
   const supabase = await createClient();
@@ -242,8 +261,9 @@ export async function updateTenant(formData: FormData) {
       ...identity.values,
     })
     .eq("id", party_id);
-  if (pErr) redirect(`/app/tenants/${tenant_id}?error=${encodeURIComponent(tenantErrorAr(pErr.message))}`);
+  if (pErr) return { error: tenantErrorAr(pErr.message), values: typed };
 
   revalidatePath("/app/tenants");
-  redirect(`/app/tenants/${tenant_id}?ok=1`);
+  revalidatePath(`/app/tenants/${tenant_id}`);
+  return { ok: "حُفظت التعديلات." };
 }

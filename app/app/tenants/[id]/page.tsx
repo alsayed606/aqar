@@ -4,9 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { getCapabilities } from "@/lib/capabilities";
-import { TenantFields } from "@/components/tenant-fields";
 import { isEstablishment } from "@/lib/tenant-identity";
-import { updateTenant, addTradeName, removeTradeName, deleteTenant } from "../actions";
+import { deleteTenant } from "../actions";
+import {
+  TenantEditForm,
+  AddTradeNameForm,
+  RemoveTradeNameButton,
+} from "@/components/tenant-detail-forms";
 import { ConfirmButton } from "@/components/confirm-button";
 import { countAr, CONTRACT_AR } from "@/lib/plural-ar";
 import { erasePartyData } from "../../privacy/actions";
@@ -125,6 +129,9 @@ export default async function TenantEditPage({
         <span className="text-neutral-700 dark:text-neutral-300">{p?.display_name}</span>
       </nav>
 
+      {/* The edit drawer and the trade-name forms answer for themselves now. What still arrives on
+          the URL: archiving the tenant (shared archiveRecord) and PDPL erasure, both of which are
+          about the record as a whole rather than any field in it. */}
       {ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{ok === "1" ? "حُفظت التعديلات." : ok}</p>}
       {flashError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{flashError}</p>}
 
@@ -182,11 +189,10 @@ export default async function TenantEditPage({
                 </svg>
               }
             >
-              <form action={updateTenant} className="space-y-4">
-                <input type="hidden" name="tenant_id" value={tenant.id} />
-                <input type="hidden" name="party_id" value={p?.id} />
-                <TenantFields
-                  defaults={{
+              <TenantEditForm
+                tenantId={tenant.id}
+                partyId={p?.id ?? ""}
+                defaults={{
                     display_name: p?.display_name ?? "",
                     tenant_type: p?.entity_type ?? (tenant as any).tenant_type ?? "individual",
                     phone: p?.phone_raw ?? p?.phone_e164 ?? "",
@@ -202,13 +208,9 @@ export default async function TenantEditPage({
                     rep_id_number: p?.rep_id_number ?? "",
                     rep_capacity: p?.rep_capacity ?? "",
                     rep_phone: p?.rep_phone_raw ?? "",
-                    id_exempt_reason: p?.id_exempt_reason ?? "",
-                  }}
-                />
-                <button className="rounded-lg bg-brand px-4 py-2.5 font-medium text-white hover:bg-brand-fg">
-                  حفظ التعديلات
-                </button>
-              </form>
+                  id_exempt_reason: p?.id_exempt_reason ?? "",
+                }}
+              />
             </FormDrawer>
           )}
         </div>
@@ -281,13 +283,7 @@ export default async function TenantEditPage({
                     </p>
                   </div>
                   {canEdit && (
-                    <form action={removeTradeName}>
-                      <input type="hidden" name="tenant_id" value={tenant.id} />
-                      <input type="hidden" name="trade_name_id" value={b.id} />
-                      <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
-                        إزالة
-                      </button>
-                    </form>
+                    <RemoveTradeNameButton tenantId={tenant.id} tradeNameId={b.id} />
                   )}
                 </li>
               ))}
@@ -295,14 +291,7 @@ export default async function TenantEditPage({
           )}
 
           {canEdit && (
-            <form action={addTradeName} className="grid gap-3 border-t border-neutral-100 pt-3 sm:grid-cols-3 dark:border-neutral-800">
-              <input type="hidden" name="tenant_id" value={tenant.id} />
-              <input type="hidden" name="party_id" value={p?.id} />
-              <input name="name" required placeholder="الاسم التجاري (مثال: مخابز الريان)" className={cls + " sm:col-span-3"} />
-              <input name="municipal_license_no" dir="ltr" placeholder="رقم رخصة البلدية" className={cls + " text-right"} />
-              <input name="license_expiry" type="date" dir="ltr" className={cls} />
-              <button className="rounded-lg bg-brand px-4 py-2 font-medium text-white hover:bg-brand-fg">إضافة</button>
-            </form>
+            <AddTradeNameForm tenantId={tenant.id} partyId={p?.id ?? ""} />
           )}
         </section>
       )}

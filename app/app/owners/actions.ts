@@ -10,6 +10,7 @@ import { parseArabicNumber } from "@/lib/num";
 import { sarToHalalas } from "@/lib/money";
 import { archiveRecord } from "@/lib/archive";
 import { rpcErrorAr } from "@/lib/rpc-errors";
+import type { FormState } from "@/lib/form-state";
 
 export type OwnerState = { error?: string; ok?: boolean };
 export type OwnerInviteState = { error?: string; link?: string };
@@ -101,24 +102,28 @@ export async function createOwner(
 }
 
 // Record a payout (remittance) to the owner. A numbered voucher (RM-…) is assigned by the DB.
-export async function recordRemittance(formData: FormData) {
+export async function recordRemittance(_prev: FormState, formData: FormData): Promise<FormState> {
   const activeOrg = await getActiveOrg();
   const owner_id = String(formData.get("owner_id") ?? "");
-  if (!activeOrg || !owner_id) redirect(`/app/owners/${owner_id}`);
+  if (!activeOrg || !owner_id) return { error: "مالك غير معروف" };
 
-  const back = (extra: Record<string, string>) => {
-    const qs = new URLSearchParams({ ...extra });
-    redirect(`/app/owners/${owner_id}?${qs.toString()}`);
+  const rawAmount = String(formData.get("amount") ?? "");
+  const amount = sarToHalalas(rawAmount);
+  // Money and dates, typed by hand. Everything the office entered rides back on a refusal, because
+  // rebuilding a payout row from memory is how the second attempt gets a different number.
+  const typed = {
+    amount: rawAmount,
+    reference: String(formData.get("reference") ?? ""),
+    remitted_at: String(formData.get("remitted_at") ?? ""),
+    period_from: String(formData.get("period_from") ?? ""),
+    period_to: String(formData.get("period_to") ?? ""),
   };
-
-  const amount = sarToHalalas(String(formData.get("amount") ?? ""));
-  if (amount == null || amount <= 0) back({ error: "أدخل مبلغ التوريد" });
+  if (amount == null || amount <= 0) {
+    return { error: "أدخل مبلغ التوريد", field: "amount", values: typed };
+  }
 
   const method = String(formData.get("method") ?? "bank_transfer");
-  const remitted_at = String(formData.get("remitted_at") ?? "").trim() || new Date().toISOString().slice(0, 10);
-  const period_from = String(formData.get("period_from") ?? "").trim() || null;
-  const period_to = String(formData.get("period_to") ?? "").trim() || null;
-  const reference = String(formData.get("reference") ?? "").trim() || null;
+  const remitted_at = typed.remitted_at.trim() || new Date().toISOString().slice(0, 10);
 
   const supabase = await createClient();
   const { error } = await supabase.from("owner_remittance").insert({
@@ -127,25 +132,28 @@ export async function recordRemittance(formData: FormData) {
     amount_halalas: amount,
     method,
     remitted_at: new Date(remitted_at).toISOString(),
-    period_from,
-    period_to,
-    reference,
+    period_from: typed.period_from.trim() || null,
+    period_to: typed.period_to.trim() || null,
+    reference: typed.reference.trim() || null,
   });
-  if (error) back({ error: error.message });
+  if (error) return { error: error.message, values: typed };
 
   revalidatePath(`/app/owners/${owner_id}`);
-  redirect(`/app/owners/${owner_id}`);
+  return { ok: "سُجّل التوريد." };
 }
 
 // Set the owner's tax identity (VAT + CR numbers) — used as the supplier on their properties' invoices.
-export async function setOwnerTaxInfo(formData: FormData) {
+// Both forms below report through their return value: the message belongs under the box that holds
+// the rejected number, and the number the owner's agent typed must survive the refusal.
+export async function setOwnerTaxInfo(_prev: FormState, formData: FormData): Promise<FormState> {
   const owner_id = String(formData.get("owner_id") ?? "");
-  if (!owner_id) redirect(`/app/owners/${owner_id}`);
+  if (!owner_id) return { error: "مالك غير معروف" };
 
   const vat_number = String(formData.get("vat_number") ?? "").trim().replace(/\s+/g, "") || null;
   const cr_number = String(formData.get("cr_number") ?? "").trim().replace(/\s+/g, "") || null;
+  const typed = { vat_number, cr_number };
   if (vat_number && !/^\d{15}$/.test(vat_number)) {
-    redirect(`/app/owners/${owner_id}?error=${encodeURIComponent("الرقم الضريبي يجب أن يكون 15 رقماً")}`);
+    return { error: "الرقم الضريبي يجب أن يكون 15 رقماً", field: "vat_number", values: typed };
   }
 
   const supabase = await createClient();
@@ -153,21 +161,22 @@ export async function setOwnerTaxInfo(formData: FormData) {
     .from("owner")
     .update({ vat_number, cr_number })
     .eq("id", owner_id);
-  if (error) redirect(`/app/owners/${owner_id}?error=${encodeURIComponent(error.message)}`);
+  if (error) return { error: error.message, values: typed };
 
   revalidatePath(`/app/owners/${owner_id}`);
-  redirect(`/app/owners/${owner_id}`);
+  return { ok: "حُفظت البيانات الضريبية." };
 }
 
 // Set the owner's management fee (% of collection) — replaces any existing percentage agreement.
-export async function setOwnerFee(formData: FormData) {
+export async function setOwnerFee(_prev: FormState, formData: FormData): Promise<FormState> {
   const activeOrg = await getActiveOrg();
   const owner_id = String(formData.get("owner_id") ?? "");
-  const pct = parseArabicNumber(String(formData.get("percent") ?? ""));
+  const raw = String(formData.get("percent") ?? "");
+  const pct = parseArabicNumber(raw);
 
-  if (!activeOrg || !owner_id) redirect(`/app/owners/${owner_id}`);
+  if (!activeOrg || !owner_id) return { error: "مالك غير معروف" };
   if (pct == null || pct < 0 || pct > 100) {
-    redirect(`/app/owners/${owner_id}?error=${encodeURIComponent("نسبة غير صالحة (0–100)")}`);
+    return { error: "نسبة غير صالحة (0–100)", field: "percent", values: { percent: raw } };
   }
   const fraction = Math.round((pct / 100) * 10000) / 10000; // numeric(5,4)
 
@@ -186,8 +195,8 @@ export async function setOwnerFee(formData: FormData) {
     fee_model: "percentage_of_collection",
     fee_percentage: fraction,
   });
-  if (error) redirect(`/app/owners/${owner_id}?error=${encodeURIComponent(error.message)}`);
+  if (error) return { error: error.message, values: { percent: raw } };
 
   revalidatePath(`/app/owners/${owner_id}`);
-  redirect(`/app/owners/${owner_id}`);
+  return { ok: "حُفظت نسبة الأتعاب." };
 }
