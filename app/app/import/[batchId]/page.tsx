@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
-import { commitImport, revertImport } from "../actions";
+import { CommitImportButton, RevertImportButton } from "@/components/import-batch-actions";
 import { KIND_LABEL } from "@/lib/import-headers";
 
 export const dynamic = "force-dynamic";
@@ -12,13 +12,10 @@ type ErrRow = { row_number: number; errors: Array<{ field: string; value: string
 
 export default async function ImportBatchPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ batchId: string }>;
-  searchParams: Promise<{ error?: string }>;
 }) {
   const { batchId } = await params;
-  const { error: flashError } = await searchParams;
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
 
@@ -51,11 +48,7 @@ export default async function ImportBatchPage({
         / <span className="text-neutral-700 dark:text-neutral-300">معاينة الدفعة</span>
       </nav>
 
-      {flashError && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
-          {flashError}
-        </p>
-      )}
+      {/* Both batch buttons answer in a toast beside themselves — nothing reports here. */}
 
       <header className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
         <h1 className="mb-1 text-lg font-semibold">
@@ -78,24 +71,14 @@ export default async function ImportBatchPage({
               <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
                 ✓ تم الاعتماد ({batch.valid_rows} سجل)
               </span>
-              <form action={revertImport}>
-                <input type="hidden" name="batch_id" value={batch.id} />
-                <button className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/20">
-                  التراجع عن الدفعة
-                </button>
-              </form>
+              <RevertImportButton batchId={batch.id} />
             </>
           ) : batch.status === "reverted" ? (
             <span className="rounded-full bg-neutral-100 px-3 py-1 text-sm font-medium text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
               تم التراجع عن هذه الدفعة (حُذفت سجلاتها)
             </span>
           ) : canCommit ? (
-            <form action={commitImport}>
-              <input type="hidden" name="batch_id" value={batch.id} />
-              <button className="rounded-lg bg-brand px-4 py-2 font-medium text-white hover:bg-brand-fg">
-                اعتماد الصفوف الصحيحة ({batch.valid_rows})
-              </button>
-            </form>
+            <CommitImportButton batchId={batch.id} validRows={batch.valid_rows} />
           ) : (
             <span className="text-sm text-neutral-500">
               لا توجد صفوف صحيحة للاعتماد. صحّح الأخطاء أدناه ثم أعد الرفع.

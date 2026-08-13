@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { HEADERS, IMPORT_KINDS, type ImportKind } from "@/lib/import-headers";
+import type { FormState } from "@/lib/form-state";
 
 export type ImportState = { error?: string };
 
@@ -61,23 +62,25 @@ export async function startImport(
   redirect(`/app/import/${batch.id}`);
 }
 
-export async function commitImport(formData: FormData) {
+// Two buttons on the batch page. Neither has a field, and both change the page they sit on, so they
+// answer in a toast and let the batch refresh underneath.
+export async function commitImport(_prev: FormState, formData: FormData): Promise<FormState> {
   const batchId = String(formData.get("batch_id") ?? "");
   const supabase = await createClient();
   const { error } = await supabase.rpc("import_commit", { p_batch: batchId });
-  if (error) redirect(`/app/import/${batchId}?error=${encodeURIComponent(error.message)}`);
+  if (error) return { error: error.message };
   revalidatePath(`/app/import/${batchId}`);
-  redirect(`/app/import/${batchId}`);
+  return { ok: "اعتُمد الاستيراد." };
 }
 
-export async function revertImport(formData: FormData) {
+export async function revertImport(_prev: FormState, formData: FormData): Promise<FormState> {
   const batchId = String(formData.get("batch_id") ?? "");
   const supabase = await createClient();
   const { error } = await supabase.rpc("import_revert", {
     p_batch: batchId,
     p_reason: "user_revert",
   });
-  if (error) redirect(`/app/import/${batchId}?error=${encodeURIComponent(error.message)}`);
+  if (error) return { error: error.message };
   revalidatePath(`/app/import/${batchId}`);
-  redirect(`/app/import/${batchId}`);
+  return { ok: "تُرجِع الاستيراد." };
 }

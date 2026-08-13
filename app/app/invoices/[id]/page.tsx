@@ -7,7 +7,7 @@ import { halalasToSar } from "@/lib/money";
 import { tafqitSar } from "@/lib/tafqit";
 import { buildZatcaQrBase64, halalasToDecimal } from "@/lib/zatca";
 import { PrintButton } from "@/components/print-button";
-import { issueCreditNote, issueDebitNote } from "../actions";
+import { CreditNoteForm, DebitNoteForm } from "@/components/invoice-note-forms";
 
 export const dynamic = "force-dynamic";
 
@@ -24,13 +24,10 @@ type Line = {
 
 export default async function InvoicePage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
 }) {
   const { id } = await params;
-  const { error: flashError } = await searchParams;
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
 
@@ -123,11 +120,7 @@ export default async function InvoicePage({
         <PrintButton label={`طباعة ${docNoun}`} />
       </div>
 
-      {flashError && (
-        <p className="no-print rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
-          {flashError}
-        </p>
-      )}
+      {/* Both note forms answer under their own fields now — nothing reports here. */}
 
       <article className="print-sheet mx-auto max-w-3xl rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
         {/* Header */}
@@ -279,50 +272,8 @@ export default async function InvoicePage({
         <section className="no-print mx-auto max-w-3xl space-y-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
           <h3 className="text-base font-semibold">تعديل الفاتورة</h3>
           <div className="grid gap-5 sm:grid-cols-2">
-            {/* Credit note */}
-            <form action={issueCreditNote} className="space-y-2 rounded-xl border border-neutral-100 p-3 dark:border-neutral-800">
-              <p className="text-sm font-medium">إشعار دائن (إلغاء الفاتورة)</p>
-              <p className="text-xs text-neutral-500">يلغي الفاتورة بالكامل ويحرّر استحقاقها لإعادة الإصدار.</p>
-              <input type="hidden" name="invoice_id" value={inv.id} />
-              <input
-                name="reason"
-                required
-                placeholder="سبب الإلغاء (مثال: خطأ في الإصدار)"
-                className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-              />
-              <button className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700">
-                إصدار إشعار دائن
-              </button>
-            </form>
-
-            {/* Debit note */}
-            <form action={issueDebitNote} className="space-y-2 rounded-xl border border-neutral-100 p-3 dark:border-neutral-800">
-              <p className="text-sm font-medium">إشعار مدين (إضافة مبلغ)</p>
-              <p className="text-xs text-neutral-500">يضيف مبلغاً على الفاتورة (تُطبَّق نسبة ضريبتها).</p>
-              <input type="hidden" name="invoice_id" value={inv.id} />
-              <input
-                name="description"
-                placeholder="الوصف (مثال: غرامة تأخير)"
-                className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-              />
-              <div className="flex gap-2">
-                <input
-                  name="amount"
-                  inputMode="decimal"
-                  placeholder="المبلغ (ر.س، غير شامل)"
-                  className="w-40 rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-                />
-                <input
-                  name="reason"
-                  required
-                  placeholder="السبب"
-                  className="flex-1 rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-                />
-              </div>
-              <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
-                إصدار إشعار مدين
-              </button>
-            </form>
+            <CreditNoteForm invoiceId={inv.id} />
+            <DebitNoteForm invoiceId={inv.id} />
           </div>
         </section>
       )}

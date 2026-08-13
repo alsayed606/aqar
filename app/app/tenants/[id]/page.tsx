@@ -13,7 +13,7 @@ import {
 } from "@/components/tenant-detail-forms";
 import { ConfirmButton } from "@/components/confirm-button";
 import { countAr, CONTRACT_AR } from "@/lib/plural-ar";
-import { erasePartyData } from "../../privacy/actions";
+import { ErasePartyForm } from "@/components/erase-party-form";
 import { EntitySummary } from "@/components/entity-summary";
 import { EntityNotes } from "@/components/entity-notes";
 import { EntityTimeline, type TimelineEvent } from "@/components/entity-timeline";
@@ -129,9 +129,9 @@ export default async function TenantEditPage({
         <span className="text-neutral-700 dark:text-neutral-300">{p?.display_name}</span>
       </nav>
 
-      {/* The edit drawer and the trade-name forms answer for themselves now. What still arrives on
-          the URL: archiving the tenant (shared archiveRecord) and PDPL erasure, both of which are
-          about the record as a whole rather than any field in it. */}
+      {/* Every form on this page answers for itself now. This banner is left for one thing only:
+          archiving the tenant, which goes through the shared archiveRecord and refuses with the
+          contracts it found — a statement about the record, not about a field. */}
       {ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{ok === "1" ? "حُفظت التعديلات." : ok}</p>}
       {flashError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{flashError}</p>}
 
@@ -305,15 +305,7 @@ export default async function TenantEditPage({
             عند طلب صاحب البيانات: يُحذف الاسم والهوية والجوال والبريد وبيانات الممثل نهائياً، ويبقى العقد بشروطه
             المالية و<b>الفواتير الضريبية</b> لأن الأنظمة تُلزم بحفظها. لا يمكن التراجع.
           </p>
-          <form action={erasePartyData} className="grid gap-3 sm:grid-cols-3">
-            <input type="hidden" name="tenant_id" value={tenant.id} />
-            <input type="hidden" name="party_id" value={p?.id} />
-            <input name="reason" placeholder="سبب الطلب (اختياري)" className={cls + " sm:col-span-2"} />
-            <input name="confirm" required autoComplete="off" placeholder="اكتب: حذف" className={cls} />
-            <button className="rounded-lg bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 sm:col-span-3 sm:w-auto sm:justify-self-start">
-              حذف البيانات الشخصية
-            </button>
-          </form>
+          <ErasePartyForm tenantId={tenant.id} partyId={p?.id ?? ""} />
         </section>
       )}
 

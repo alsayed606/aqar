@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
+import type { FormState } from "@/lib/form-state";
 
 export type PrivacyState = { error?: string; ok?: string };
 
@@ -57,23 +58,25 @@ export async function cancelDeletion() {
 
 // Erasure of one data subject, run by the office. We are the processor here — the office is the
 // controller, so this is their action to take, not ours.
-export async function erasePartyData(formData: FormData) {
+export async function erasePartyData(_prev: FormState, formData: FormData): Promise<FormState> {
   const activeOrg = await getActiveOrg();
   const tenantId = String(formData.get("tenant_id") ?? "");
   const partyId = String(formData.get("party_id") ?? "");
-  if (!activeOrg || !tenantId || !partyId) redirect("/app/tenants");
+  if (!activeOrg || !tenantId || !partyId) return { error: "سجلّ غير معروف" };
 
+  const reason = String(formData.get("reason") ?? "");
+  // The confirmation word is a field, and mistyping it must not cost the office the reason it wrote.
   if (String(formData.get("confirm") ?? "").trim() !== "حذف") {
-    redirect(`/app/tenants/${tenantId}?error=${encodeURIComponent('اكتب كلمة «حذف» للتأكيد.')}`);
+    return { error: "اكتب كلمة «حذف» للتأكيد.", field: "confirm", values: { reason } };
   }
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("erase_party", {
     p_org: activeOrg,
     p_party: partyId,
-    p_reason: String(formData.get("reason") ?? "").trim() || "طلب صاحب البيانات",
+    p_reason: reason.trim() || "طلب صاحب البيانات",
   });
-  if (error) redirect(`/app/tenants/${tenantId}?error=${encodeURIComponent(translate(error.message))}`);
+  if (error) return { error: translate(error.message), values: { reason } };
 
   // The count of retained invoices is surfaced, not hidden: the office has to be able to tell the
   // data subject exactly what was kept and under which obligation.
@@ -82,5 +85,8 @@ export async function erasePartyData(formData: FormData) {
     ? `حُذفت البيانات الشخصية. احتُفظ بـ ${kept} فاتورة ضريبية بحكم النظام.`
     : "حُذفت البيانات الشخصية.";
   revalidatePath("/app/tenants");
-  redirect(`/app/tenants/${tenantId}?ok=${encodeURIComponent(note)}`);
+  revalidatePath(`/app/tenants/${tenantId}`);
+  // The retained-invoice count is the one message that must NOT vanish like a toast: it is what the
+  // office repeats to the data subject. It stays on the page as the section's own answer.
+  return { ok: note };
 }
