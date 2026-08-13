@@ -5,7 +5,7 @@ import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { getCapabilities } from "@/lib/capabilities";
 import { MeterForm } from "@/components/meter-form";
-import { ConfirmButton } from "@/components/confirm-button";
+import { MeterStatusForm, DeleteMeterButton } from "@/components/utility-row-actions";
 import { FormDrawer } from "@/components/form-drawer";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
@@ -13,7 +13,7 @@ import { FilterableTable } from "@/components/filterable-list";
 import { Badge } from "@/components/ui";
 import { parseListParams, likePattern } from "@/lib/list-params";
 import { UTILITY_TYPE_AR, METER_STATUS_AR } from "@/lib/labels";
-import { deleteMeter, setMeterStatus } from "./actions";
+
 import { UtilitiesTabs } from "@/components/utilities-tabs";
 import { loadMeterProperties } from "./queries";
 
@@ -30,12 +30,12 @@ const STATUS_TONE: Record<string, "success" | "warning" | "neutral"> = {
 export default async function MetersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string; error?: string }>;
+  searchParams: Promise<{ q?: string; page?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
   const { q, page, from, to } = parseListParams(await searchParams);
-  const { error: flashError } = await searchParams;
+
   const caps = await getCapabilities(activeOrg);
   const canData = caps.has("manage_data");
 
@@ -88,10 +88,7 @@ export default async function MetersPage({
 
       <UtilitiesTabs />
 
-      {flashError && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{flashError}</p>
-      )}
-
+      {/* No page banner: each row action answers in a toast beside the button that was pressed. */}
       {properties.length === 0 && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
           أضِف <Link href="/app/properties" className="underline">عقاراً</Link> أولاً لربط العدّاد به.
@@ -163,32 +160,17 @@ export default async function MetersPage({
                         </Link>
                         {canData && (
                           <>
-                            <form action={setMeterStatus} className="flex items-center gap-1">
-                              <input type="hidden" name="meter_id" value={m.id} />
-                              <input type="hidden" name="property_id" value={m.property_id} />
-                              <label className="sr-only" htmlFor={`status-${m.id}`}>حالة العدّاد</label>
-                              <select
-                                id={`status-${m.id}`}
-                                name="status"
-                                defaultValue={m.status}
-                                className="rounded-lg border border-slate-300 bg-transparent px-2 py-1 text-xs outline-none focus:border-brand dark:border-slate-700"
-                              >
-                                {Object.entries(METER_STATUS_AR).map(([value, label]) => (
-                                  <option key={value} value={value}>{label}</option>
-                                ))}
-                              </select>
-                              <button className="text-xs text-brand hover:underline">حفظ</button>
-                            </form>
-                            <form action={deleteMeter}>
-                              <input type="hidden" name="meter_id" value={m.id} />
-                              <input type="hidden" name="property_id" value={m.property_id} />
-                              <ConfirmButton
-                                message={`حذف العدّاد «${m.meter_number}»؟ تبقى قراءاته في السجلّات.`}
-                                className="text-xs text-red-600 hover:underline"
-                              >
-                                حذف
-                              </ConfirmButton>
-                            </form>
+                            <MeterStatusForm
+                              meterId={m.id}
+                              propertyId={m.property_id}
+                              status={m.status}
+                              options={Object.entries(METER_STATUS_AR).map(([value, label]) => ({ value, label }))}
+                            />
+                            <DeleteMeterButton
+                              meterId={m.id}
+                              propertyId={m.property_id}
+                              meterNumber={m.meter_number}
+                            />
                           </>
                         )}
                       </div>

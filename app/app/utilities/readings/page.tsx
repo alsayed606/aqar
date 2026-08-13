@@ -5,14 +5,14 @@ import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { getCapabilities } from "@/lib/capabilities";
 import { ReadingForm, type ReadingMeter } from "@/components/reading-form";
-import { ConfirmButton } from "@/components/confirm-button";
+import { MarkResetButton, UpdateReadingForm, DeleteReadingButton } from "@/components/utility-row-actions";
 import { FormDrawer } from "@/components/form-drawer";
 import { Pagination } from "@/components/pagination";
 import { Badge } from "@/components/ui";
 import { UtilitiesTabs } from "@/components/utilities-tabs";
 import { meterLabel } from "@/lib/utilities";
 import { PAGE_SIZE } from "@/lib/list-params";
-import { deleteReading, markReadingReset, updateReadingValue } from "../actions";
+
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +33,7 @@ type ConsumptionRow = {
 export default async function ReadingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ meter?: string; page?: string; review?: string; error?: string }>;
+  searchParams: Promise<{ meter?: string; page?: string; review?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
@@ -100,14 +100,6 @@ export default async function ReadingsPage({
     lastValue: lastByMeter.get(m.id) ?? null,
   }));
 
-  // Where the row actions return to, carrying whatever filter and page the user was looking at.
-  const backParams = new URLSearchParams({
-    ...(meterFilter ? { meter: meterFilter } : {}),
-    ...(reviewOnly ? { review: "1" } : {}),
-    ...(page > 1 ? { page: String(page) } : {}),
-  }).toString();
-  const back = `/app/utilities/readings${backParams ? `?${backParams}` : ""}`;
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -124,9 +116,7 @@ export default async function ReadingsPage({
 
       <UtilitiesTabs />
 
-      {sp.error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{sp.error}</p>
-      )}
+      {/* No page banner: each row action answers in a toast beside the button that was pressed. */}
 
       {meters.length === 0 && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
@@ -202,37 +192,11 @@ export default async function ReadingsPage({
                           {/* The two answers to "lower than the last reading", exactly as §3 frames them. */}
                           {r.needs_review && (
                             <>
-                              <form action={markReadingReset}>
-                                <input type="hidden" name="reading_id" value={r.id} />
-                                <input type="hidden" name="back" value={back} />
-                                <button className="text-xs text-brand hover:underline">نعم، عدّاد جديد</button>
-                              </form>
-                              <form action={updateReadingValue} className="flex items-center gap-1">
-                                <input type="hidden" name="reading_id" value={r.id} />
-                                <input type="hidden" name="back" value={back} />
-                                <label className="sr-only" htmlFor={`value-${r.id}`}>تصحيح القراءة</label>
-                                <input
-                                  id={`value-${r.id}`}
-                                  name="value"
-                                  inputMode="decimal"
-                                  dir="ltr"
-                                  defaultValue={r.value}
-                                  className="w-24 rounded-lg border border-slate-300 bg-transparent px-2 py-1 text-xs outline-none focus:border-brand dark:border-slate-700"
-                                />
-                                <button className="text-xs text-brand hover:underline">تصحيح</button>
-                              </form>
+                              <MarkResetButton readingId={r.id} />
+                              <UpdateReadingForm readingId={r.id} value={r.value} />
                             </>
                           )}
-                          <form action={deleteReading}>
-                            <input type="hidden" name="reading_id" value={r.id} />
-                            <input type="hidden" name="back" value={back} />
-                            <ConfirmButton
-                              message={`حذف قراءة ${r.reading_date}؟ سيُعاد احتساب استهلاك القراءة التالية.`}
-                              className="text-xs text-red-600 hover:underline"
-                            >
-                              حذف
-                            </ConfirmButton>
-                          </form>
+                          <DeleteReadingButton readingId={r.id} readingDate={r.reading_date} />
                         </div>
                       )}
                     </td>

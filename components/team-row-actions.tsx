@@ -1,9 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { useSuccessToast } from "@/components/form-field";
-import { useToast } from "@/components/ui";
-import { useEffect } from "react";
+import { useResultToast } from "@/components/form-field";
 import type { FormState } from "@/lib/form-state";
 import { revokeInvitation, setMemberRole, setMemberStatus } from "@/app/app/team/actions";
 import { ROLE_AR } from "@/lib/labels";
@@ -15,15 +13,6 @@ import { ROLE_AR } from "@/lib/labels";
 const initial: FormState = {};
 const cellButton =
   "rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800";
-
-/** A refusal here is the whole answer, so it is spoken as loudly as a success. */
-function useResultToast(state: FormState) {
-  useSuccessToast(state);
-  const { toast } = useToast();
-  useEffect(() => {
-    if (state.error) toast({ title: state.error, tone: "error" });
-  }, [state.error, toast]);
-}
 
 export function MemberRoleForm({
   membershipId,

@@ -5,7 +5,7 @@ import { first } from "@/lib/rows";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { getCapabilities } from "@/lib/capabilities";
 import { BillForm, type BillMeter } from "@/components/bill-form";
-import { ConfirmButton } from "@/components/confirm-button";
+import { BillPaidButton, DeleteBillButton } from "@/components/utility-row-actions";
 import { FormDrawer } from "@/components/form-drawer";
 import { Pagination } from "@/components/pagination";
 import { Badge } from "@/components/ui";
@@ -14,7 +14,7 @@ import { meterLabel } from "@/lib/utilities";
 import { halalasToSar } from "@/lib/money";
 import { UTILITY_TYPE_AR } from "@/lib/labels";
 import { PAGE_SIZE } from "@/lib/list-params";
-import { clearBillPaid, deleteBill, markBillPaid } from "../actions";
+
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +55,7 @@ const FILTERS = [
 export default async function BillsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ meter?: string; status?: string; page?: string; error?: string }>;
+  searchParams: Promise<{ meter?: string; status?: string; page?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
@@ -102,8 +102,7 @@ export default async function BillsPage({
   }));
   const meterLabelById = new Map(formMeters.map((m) => [m.id, m.label]));
 
-  // Changing one filter keeps the others. `page` is carried only into `back`, so an action returns
-  // the user to the page they acted on.
+  // Changing one filter keeps the others.
   const href = (next: { status?: string; meter?: string; page?: number }) => {
     const params = new URLSearchParams();
     const s = next.status ?? status;
@@ -114,8 +113,6 @@ export default async function BillsPage({
     const qs = params.toString();
     return `/app/utilities/bills${qs ? `?${qs}` : ""}`;
   };
-  const back = href({ page });
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -137,9 +134,7 @@ export default async function BillsPage({
         كشف المالك. تُظهر من يتحمّلها ليُطالَب خارج النظام.
       </p>
 
-      {sp.error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{sp.error}</p>
-      )}
+      {/* No page banner: each row action answers in a toast beside the button that was pressed. */}
 
       {formMeters.length === 0 && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
@@ -253,23 +248,12 @@ export default async function BillsPage({
                     <td>
                       {canData && (
                         <div className="flex flex-wrap items-center gap-2">
-                          <form action={b.is_paid ? clearBillPaid : markBillPaid}>
-                            <input type="hidden" name="bill_id" value={b.id} />
-                            <input type="hidden" name="back" value={back} />
-                            <button className="text-xs text-brand hover:underline">
-                              {b.is_paid ? "إلغاء السداد" : "تعليم مسدَّدة"}
-                            </button>
-                          </form>
-                          <form action={deleteBill}>
-                            <input type="hidden" name="bill_id" value={b.id} />
-                            <input type="hidden" name="back" value={back} />
-                            <ConfirmButton
-                              message={`حذف فاتورة ${b.billing_month.slice(0, 7)} للعدّاد ${b.meter_number}؟`}
-                              className="text-xs text-red-600 hover:underline"
-                            >
-                              حذف
-                            </ConfirmButton>
-                          </form>
+                          <BillPaidButton billId={b.id} isPaid={b.is_paid} />
+                          <DeleteBillButton
+                            billId={b.id}
+                            billingMonth={b.billing_month}
+                            meterNumber={b.meter_number}
+                          />
                         </div>
                       )}
                     </td>

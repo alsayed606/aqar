@@ -27,6 +27,21 @@ export function useSuccessToast(state: FormState) {
 }
 
 /**
+ * For a button on a row: both outcomes speak, and both speak as toasts.
+ *
+ * A row action has no field to sit under and nothing typed to lose — what it changes is the row
+ * itself. So the refusal is said as loudly as the success, beside the button that was pressed,
+ * rather than as a banner at the top of a table the user has scrolled past.
+ */
+export function useResultToast(state: FormState) {
+  useSuccessToast(state);
+  const { toast } = useToast();
+  useEffect(() => {
+    if (state.error) toast({ title: state.error, tone: "error" });
+  }, [state.error, toast]);
+}
+
+/**
  * A labelled input with its own error slot.
  *
  * The error replaces the hint rather than stacking under it: two lines of small grey-and-red text
