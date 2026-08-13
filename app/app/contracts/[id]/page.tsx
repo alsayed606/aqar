@@ -4,15 +4,15 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { getCapabilities } from "@/lib/capabilities";
 import {
-  activateContract,
-  recordPayment,
-  issueInvoice,
-  amendRent,
-  terminateContract,
-  renewContract,
-  activateRenewal,
-  updateDraftContract,
-} from "../actions";
+  ActivateContractButton,
+  ActivateRenewalButton,
+  IssueInvoiceButton,
+  RecordPaymentForm,
+  AmendRentForm,
+  TerminateContractForm,
+  RenewContractForm,
+} from "@/components/contract-detail-forms";
+import { ContractDraftForm, type DraftContractValues } from "@/components/contract-draft-form";
 import {
   CONTRACT_STATUS_AR,
   CONTRACT_STATUS_TONE,
@@ -65,13 +65,10 @@ type Amendment = {
 
 export default async function ContractDetail({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
 }) {
   const { id } = await params;
-  const { error: flashError } = await searchParams;
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
   const caps = await getCapabilities(activeOrg);
@@ -193,8 +190,6 @@ export default async function ContractDetail({
     draftUnits = u.data ?? [];
     draftTenants = t.data ?? [];
   }
-  const efCls = "w-full rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700";
-
   const Info = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div>
       <dt className="text-xs text-neutral-500">{label}</dt>
@@ -213,12 +208,6 @@ export default async function ContractDetail({
           طباعة العقد ←
         </Link>
       </nav>
-
-      {flashError && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
-          {flashError}
-        </p>
-      )}
 
       <header className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
         <div className="mb-4 flex items-center justify-between">
@@ -327,12 +316,7 @@ export default async function ContractDetail({
                 استحقاقاته المستقبلية غير المدفوعة)، ثم يبدأ هذا العقد ويولّد جدول استحقاقاته. بعد التفعيل لا
                 يمكن تعديل بنوده.
               </p>
-              <form action={activateRenewal}>
-                <input type="hidden" name="contract_id" value={contract.id} />
-                <button className="rounded-lg bg-brand px-4 py-2 font-medium text-white hover:bg-brand-fg">
-                  تفعيل التجديد
-                </button>
-              </form>
+              <ActivateRenewalButton contractId={contract.id} />
             </div>
           ) : (
             <div className="mt-6 border-t border-neutral-100 pt-4 dark:border-neutral-800">
@@ -340,12 +324,7 @@ export default async function ContractDetail({
                 العقد مسودة. تفعيله يولّد جدول الاستحقاقات تلقائياً ويجعل الوحدة «مؤجرة». بعد التفعيل لا يمكن
                 تعديل بنوده.
               </p>
-              <form action={activateContract}>
-                <input type="hidden" name="contract_id" value={contract.id} />
-                <button className="rounded-lg bg-brand px-4 py-2 font-medium text-white hover:bg-brand-fg">
-                  تفعيل العقد
-                </button>
-              </form>
+              <ActivateContractButton contractId={contract.id} />
             </div>
           ))}
       </header>
@@ -355,117 +334,11 @@ export default async function ContractDetail({
           <details>
             <summary className="cursor-pointer select-none text-base font-semibold">تعديل المسودة</summary>
             <p className="mt-1 mb-3 text-xs text-neutral-500">يمكن التعديل ما دام العقد مسودة. بعد التفعيل تُجمَّد بنوده.</p>
-            <form action={updateDraftContract} className="grid gap-3 sm:grid-cols-2">
-              <input type="hidden" name="contract_id" value={contract.id} />
-              <div>
-                <label className="mb-1 block text-sm font-medium">الوحدة *</label>
-                <select name="unit_id" required defaultValue={(contract as any).unit_id ?? ""} className={efCls}>
-                  {draftUnits.map((u) => (
-                    <option key={u.id} value={u.id}>{first(u.property)?.name ?? "عقار"} — وحدة {u.unit_number}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">المستأجر *</label>
-                <select name="tenant_id" required defaultValue={(contract as any).tenant_id ?? ""} className={efCls}>
-                  {draftTenants.map((t) => (
-                    <option key={t.id} value={t.id}>{first(t.party)?.display_name ?? "مستأجر"}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">نوع العقد</label>
-                <select name="contract_kind" defaultValue={contract.contract_kind} className={efCls}>
-                  <option value="residential">سكني (بدون ضريبة)</option>
-                  <option value="commercial">تجاري (ضريبة 15%)</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">دورية الدفع</label>
-                <select name="payment_frequency" defaultValue={contract.payment_frequency} className={efCls}>
-                  <option value="monthly">شهري</option>
-                  <option value="quarterly">ربع سنوي</option>
-                  <option value="semi_annual">نصف سنوي</option>
-                  <option value="annual">سنوي</option>
-                  <option value="one_time">دفعة واحدة</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">تاريخ البداية *</label>
-                <input name="start_date" type="date" required defaultValue={contract.start_date} className={efCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">تاريخ النهاية *</label>
-                <input name="end_date" type="date" required defaultValue={contract.end_date} className={efCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">الإيجار السنوي (ر.س) *</label>
-                <input name="annual_rent" inputMode="decimal" required defaultValue={Number(contract.annual_rent_halalas) / 100} className={efCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">التأمين (ر.س)</label>
-                <input name="deposit" inputMode="decimal" defaultValue={Number(contract.deposit_halalas) / 100} className={efCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">رسوم الخدمات (ر.س)</label>
-                <input name="service_fees" inputMode="decimal" defaultValue={Number(contract.service_fees_halalas) / 100} className={efCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">اسم المحل التجاري</label>
-                <input name="trade_name" defaultValue={(contract as any).trade_name ?? ""} className={efCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">اسم الممثل</label>
-                <input name="representative_name" defaultValue={(contract as any).representative_name ?? ""} className={efCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">صفة الممثل</label>
-                <input name="representative_capacity" defaultValue={(contract as any).representative_capacity ?? ""} className={efCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">جوال الممثل</label>
-                <input name="representative_phone" dir="ltr" defaultValue={(contract as any).representative_phone ?? ""} className={efCls + " text-right"} />
-              </div>
-              <details className="rounded-lg border border-neutral-200 sm:col-span-2 dark:border-neutral-800">
-                <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-300">
-                  بيانات منصة إيجار (اختياري)
-                </summary>
-                <div className="grid gap-3 border-t border-neutral-100 p-3 sm:grid-cols-2 dark:border-neutral-800">
-                  <div className="sm:col-span-2">
-                    <label className="mb-1 block text-sm font-medium">رقم العقد في منصة إيجار</label>
-                    <input name="ejar_contract_number" dir="ltr" defaultValue={(contract as any).ejar_contract_number ?? ""} className={efCls + " text-right"} />
-                  </div>
-                  <div className="sm:col-span-2 text-xs font-medium text-neutral-500">معلومات الوسيط العقاري</div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">اسم المكتب</label>
-                    <input name="ejar_broker_office" defaultValue={(contract as any).ejar_broker_office ?? ""} className={efCls} />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">رقم المكتب</label>
-                    <input name="ejar_broker_number" dir="ltr" defaultValue={(contract as any).ejar_broker_number ?? ""} className={efCls + " text-right"} />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="mb-1 block text-sm font-medium">ممثل المكتب</label>
-                    <input name="ejar_broker_representative" defaultValue={(contract as any).ejar_broker_representative ?? ""} className={efCls} />
-                  </div>
-                  <fieldset className="sm:col-span-2">
-                    <legend className="mb-1 text-sm font-medium">هل توجد بنود أو شروط إضافية في عقد منصة إيجار؟</legend>
-                    <div className="flex items-center gap-4 text-sm">
-                      <label className="flex items-center gap-1.5">
-                        <input type="radio" name="ejar_has_extra_terms" value="yes" defaultChecked={(contract as any).ejar_has_extra_terms === true} className="accent-brand" /> نعم
-                      </label>
-                      <label className="flex items-center gap-1.5">
-                        <input type="radio" name="ejar_has_extra_terms" value="no" defaultChecked={(contract as any).ejar_has_extra_terms === false} className="accent-brand" /> لا
-                      </label>
-                    </div>
-                  </fieldset>
-                </div>
-              </details>
-
-              <div className="sm:col-span-2">
-                <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-fg">حفظ تعديلات المسودة</button>
-              </div>
-            </form>
+            <ContractDraftForm
+              contract={contract as unknown as DraftContractValues}
+              units={draftUnits.map((u) => ({ id: u.id, label: `${first(u.property)?.name ?? "عقار"} — وحدة ${u.unit_number}` }))}
+              tenants={draftTenants.map((t) => ({ id: t.id, label: first(t.party)?.display_name ?? "مستأجر" }))}
+            />
           </details>
         </section>
       )}
@@ -528,13 +401,7 @@ export default async function ContractDetail({
                               {invoiceByCharge.get(c.charge_id)!.invoice_no ?? "عرض"}
                             </Link>
                           ) : canFinance ? (
-                            <form action={issueInvoice}>
-                              <input type="hidden" name="contract_id" value={contract.id} />
-                              <input type="hidden" name="charge_id" value={c.charge_id} />
-                              <button className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
-                                إصدار
-                              </button>
-                            </form>
+                            <IssueInvoiceButton chargeId={c.charge_id} />
                           ) : (
                             <span className="text-xs text-neutral-400">—</span>
                           )}
@@ -543,30 +410,12 @@ export default async function ContractDetail({
                           {c.is_settled || !canFinance ? (
                             <span className="text-xs text-neutral-400">—</span>
                           ) : (
-                            <form action={recordPayment} className="flex items-center gap-1">
-                              <input type="hidden" name="contract_id" value={contract.id} />
-                              <input type="hidden" name="charge_id" value={c.charge_id} />
-                              <input
-                                name="amount"
-                                inputMode="decimal"
-                                defaultValue={(Number(c.balance_halalas) / 100).toString()}
-                                className="w-24 rounded border border-neutral-300 bg-transparent px-2 py-1 text-sm outline-none focus:border-brand dark:border-neutral-700"
-                              />
-                              <select
-                                name="method"
-                                defaultValue="cash"
-                                className="rounded border border-neutral-300 bg-transparent px-1 py-1 text-xs outline-none dark:border-neutral-700"
-                              >
-                                {PAYMENT_METHODS.map(([v, l]) => (
-                                  <option key={v} value={v}>
-                                    {l}
-                                  </option>
-                                ))}
-                              </select>
-                              <button className="rounded bg-brand px-2 py-1 text-xs font-medium text-white hover:bg-brand-fg">
-                                دفع
-                              </button>
-                            </form>
+                            <RecordPaymentForm
+                              contractId={contract.id}
+                              chargeId={c.charge_id}
+                              balanceHalalas={Number(c.balance_halalas)}
+                              methods={PAYMENT_METHODS}
+                            />
                           )}
                         </td>
                       </tr>
@@ -659,53 +508,9 @@ export default async function ContractDetail({
 
           {canData && contract.status === "active" && (
             <div className="grid gap-4 sm:grid-cols-2">
-              {/* Rent change */}
-              <form action={amendRent} className="space-y-2 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-                <p className="text-sm font-medium">تعديل الإيجار</p>
-                <p className="text-xs text-neutral-500">يُعيد تسعير الاستحقاقات المستقبلية غير المدفوعة من تاريخ السريان.</p>
-                <input type="hidden" name="contract_id" value={contract.id} />
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    name="new_annual"
-                    inputMode="decimal"
-                    placeholder="الإيجار السنوي الجديد (ر.س)"
-                    className="w-44 rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-                  />
-                  <input
-                    name="effective_date"
-                    type="date"
-                    className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm outline-none dark:border-neutral-700"
-                  />
-                </div>
-                <input
-                  name="reason"
-                  placeholder="سبب التعديل"
-                  className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-                />
-                <button className="rounded-lg bg-brand px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-fg">
-                  حفظ ملحق التعديل
-                </button>
-              </form>
+              <AmendRentForm contractId={contract.id} />
 
-              {/* Early termination */}
-              <form action={terminateContract} className="space-y-2 rounded-2xl border border-red-200 bg-white p-4 shadow-sm dark:border-red-900/40 dark:bg-neutral-900">
-                <p className="text-sm font-medium text-red-700 dark:text-red-400">إنهاء مبكر</p>
-                <p className="text-xs text-neutral-500">يُنهي العقد ويلغي الاستحقاقات المستقبلية غير المدفوعة ويُحرّر الوحدة.</p>
-                <input type="hidden" name="contract_id" value={contract.id} />
-                <input
-                  name="effective_date"
-                  type="date"
-                  className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm outline-none dark:border-neutral-700"
-                />
-                <input
-                  name="reason"
-                  placeholder="سبب الإنهاء"
-                  className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-                />
-                <button className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700">
-                  إنهاء العقد
-                </button>
-              </form>
+              <TerminateContractForm contractId={contract.id} />
             </div>
           )}
 
@@ -721,51 +526,12 @@ export default async function ContractDetail({
       {canData && renewalReady && (contract.status === "active" || contract.status === "expired") && !successor && (
         <section>
           <h2 className="mb-3 text-base font-semibold">تجديد العقد</h2>
-          <form
-            action={renewContract}
-            className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900"
-          >
-            <p className="text-xs text-neutral-500">
-              يُنشئ عقداً لاحقاً (مسودة) بنفس الوحدة والمستأجر — لا يُعدّل هذا العقد. تُراجع المسودة ثم تُفعّلها،
-              وعندها يصبح هذا العقد «منتهياً» ويبدأ العقد الجديد.
-            </p>
-            <input type="hidden" name="contract_id" value={contract.id} />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="mb-0.5 block text-xs text-neutral-500">بداية العقد الجديد</span>
-                <input
-                  name="start_date"
-                  type="date"
-                  defaultValue={renewStart}
-                  className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-0.5 block text-xs text-neutral-500">نهاية العقد الجديد</span>
-                <input
-                  name="end_date"
-                  type="date"
-                  defaultValue={renewEnd}
-                  className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-0.5 block text-xs text-neutral-500">الإيجار السنوي الجديد (ر.س)</span>
-                <input
-                  name="new_annual"
-                  inputMode="decimal"
-                  defaultValue={(Number(contract.annual_rent_halalas) / 100).toString()}
-                  className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700"
-                />
-              </label>
-              <p className="self-end text-xs text-neutral-500">
-                رقم عقد التجديد يُشتق تلقائياً من رقم العقد الحالي.
-              </p>
-            </div>
-            <button className="rounded-lg bg-brand px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-fg">
-              إنشاء عقد التجديد
-            </button>
-          </form>
+          <RenewContractForm
+            contractId={contract.id}
+            defaultStart={renewStart}
+            defaultEnd={renewEnd}
+            defaultAnnualSar={(Number(contract.annual_rent_halalas) / 100).toString()}
+          />
         </section>
       )}
     </div>

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { sarToHalalas } from "@/lib/money";
 import { translateSubscriptionError } from "@/lib/subscription-errors";
+import type { FormState } from "@/lib/form-state";
 
 export type ContractState = { error?: string };
 
@@ -109,27 +110,47 @@ export async function createContract(
   redirect(`/app/contracts/${created.id}`);
 }
 
-// Plain form actions (button / small form) — surface errors via ?error= on the detail page.
+// The contract lifecycle answers where it was asked.
+//
+// Every action below used to redirect to `?error=…`, which reloaded the detail page and threw away
+// what had been typed. On this page that cost is the highest in the product: the same forms carry a
+// rent amendment, an early termination, and a payment amount. So each action returns a FormState —
+// the message names its field, and the attempt is handed back.
+
+// The fields a refused draft edit must not lose. Read once, echoed once.
+const DRAFT_FIELDS = [
+  "unit_id", "tenant_id", "contract_kind", "payment_frequency", "start_date", "end_date",
+  "annual_rent", "deposit", "service_fees", "deed_number", "trade_name", "representative_name",
+  "representative_capacity", "representative_id", "representative_phone", "ejar_contract_number",
+  "ejar_broker_office", "ejar_broker_number", "ejar_broker_representative", "ejar_has_extra_terms",
+] as const;
+
+const draftValues = (formData: FormData): Record<string, string | null> =>
+  Object.fromEntries(DRAFT_FIELDS.map((f) => [f, String(formData.get(f) ?? "")]));
+
 // Edit a DRAFT contract. The update is scoped to status='draft' (0 rows otherwise), so an active
 // contract stays immutable exactly as tg_contract_immutable enforces at the DB. RLS (manage_data) gates it.
-export async function updateDraftContract(formData: FormData) {
+export async function updateDraftContract(_prev: FormState, formData: FormData): Promise<FormState> {
   const contract_id = String(formData.get("contract_id") ?? "");
-  if (!contract_id) redirect("/app/contracts");
-  const back = `/app/contracts/${contract_id}`;
+  if (!contract_id) return { error: "عقد غير معروف" };
+  const values = draftValues(formData);
+  const bad = (error: string, field?: string): FormState => ({ error, field, values });
 
   const unit_id = String(formData.get("unit_id") ?? "");
   const tenant_id = String(formData.get("tenant_id") ?? "");
   const start_date = String(formData.get("start_date") ?? "");
   const end_date = String(formData.get("end_date") ?? "");
-  if (!unit_id || !tenant_id) redirect(`${back}?error=${encodeURIComponent("اختر الوحدة والمستأجر")}`);
-  if (!start_date || !end_date) redirect(`${back}?error=${encodeURIComponent("حدّد التواريخ")}`);
-  if (end_date < start_date) redirect(`${back}?error=${encodeURIComponent("تاريخ النهاية قبل البداية")}`);
+  if (!unit_id) return bad("اختر الوحدة", "unit_id");
+  if (!tenant_id) return bad("اختر المستأجر", "tenant_id");
+  if (!start_date) return bad("حدّد تاريخ البداية", "start_date");
+  if (!end_date) return bad("حدّد تاريخ النهاية", "end_date");
+  if (end_date < start_date) return bad("تاريخ النهاية قبل البداية", "end_date");
   const annual = sarToHalalas(String(formData.get("annual_rent") ?? ""));
-  if (annual == null || annual < 0) redirect(`${back}?error=${encodeURIComponent("أدخل الإيجار السنوي")}`);
+  if (annual == null || annual < 0) return bad("أدخل الإيجار السنوي", "annual_rent");
 
   const supabase = await createClient();
   const { data: unit } = await supabase.from("unit").select("property_id").eq("id", unit_id).maybeSingle();
-  if (!unit) redirect(`${back}?error=${encodeURIComponent("الوحدة غير موجودة")}`);
+  if (!unit) return bad("الوحدة غير موجودة", "unit_id");
 
   // contract_number is system-assigned (0045) and never edited by hand.
   const ejarExtra = String(formData.get("ejar_has_extra_terms") ?? "").trim();
@@ -163,38 +184,38 @@ export async function updateDraftContract(formData: FormData) {
     .select("id");
   if (error) {
     const msg = /contract_number|duplicate key/i.test(error.message) ? "رقم العقد مستخدم بالفعل" : error.message;
-    redirect(`${back}?error=${encodeURIComponent(msg)}`);
+    return bad(msg);
   }
-  if (!data || data.length === 0) redirect(`${back}?error=${encodeURIComponent("لا يمكن تعديل عقد بعد تفعيله")}`);
-  revalidatePath(back);
-  redirect(back);
+  // Zero rows is not an error at the database: the status='draft' filter simply matched nothing,
+  // which means the contract was activated while this form was open.
+  if (!data || data.length === 0) return bad("لا يمكن تعديل عقد بعد تفعيله");
+  revalidatePath(`/app/contracts/${contract_id}`);
+  return { ok: "حُفظت تعديلات المسودة." };
 }
 
-export async function activateContract(formData: FormData) {
+// Activation has no field of its own, so both outcomes are toasts beside the button that was
+// pressed — and the page underneath refreshes into its activated shape.
+export async function activateContract(_prev: FormState, formData: FormData): Promise<FormState> {
   const contract_id = String(formData.get("contract_id") ?? "");
   const supabase = await createClient();
   const { error } = await supabase.rpc("activate_contract", { p_contract: contract_id });
-  if (error) {
-    redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent(error.message)}`);
-  }
+  if (error) return { error: error.message };
   revalidatePath(`/app/contracts/${contract_id}`);
-  redirect(`/app/contracts/${contract_id}`);
+  return { ok: "فُعِّل العقد وتولّد جدول الاستحقاقات." };
 }
 
-export async function issueInvoice(formData: FormData) {
-  const contract_id = String(formData.get("contract_id") ?? "");
+export async function issueInvoice(_prev: FormState, formData: FormData): Promise<FormState> {
   const charge_id = String(formData.get("charge_id") ?? "");
-  if (!charge_id) {
-    redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent("استحقاق غير صالح")}`);
-  }
+  if (!charge_id) return { error: "استحقاق غير صالح" };
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("issue_invoice", { p_charge: charge_id });
   if (error) {
     const msg = /ALREADY_INVOICED/i.test(error.message)
       ? "توجد فاتورة لهذا الاستحقاق بالفعل"
       : error.message;
-    redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent(msg)}`);
+    return { error: msg };
   }
+  // The issued invoice is a destination, not a message: the office goes to read it.
   redirect(`/app/invoices/${data}`);
 }
 
@@ -205,17 +226,21 @@ const AMEND_ERRORS: Array<[RegExp, string]> = [
 ];
 const amendError = (m: string) => AMEND_ERRORS.find(([re]) => re.test(m))?.[1] ?? m;
 
-export async function amendRent(formData: FormData) {
+// A rent amendment is written in three fields — an amount, a date, and a sentence the office composes
+// in its own words. Losing that sentence to a redirect is the whole reason this campaign exists.
+export async function amendRent(_prev: FormState, formData: FormData): Promise<FormState> {
   const contract_id = String(formData.get("contract_id") ?? "");
-  const newAnnual = sarToHalalas(String(formData.get("new_annual") ?? ""));
+  const newAnnualRaw = String(formData.get("new_annual") ?? "");
   const effective = String(formData.get("effective_date") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim();
-  if (!contract_id) redirect("/app/contracts");
-  if (newAnnual == null || newAnnual < 0) {
-    redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent("أدخل الإيجار السنوي الجديد")}`);
-  }
-  if (!effective) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent("حدّد تاريخ سريان التعديل")}`);
-  if (!reason) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent("اكتب سبب التعديل")}`);
+  const values = { new_annual: newAnnualRaw, effective_date: effective, reason };
+  const bad = (error: string, field?: string): FormState => ({ error, field, values });
+  if (!contract_id) return bad("عقد غير معروف");
+
+  const newAnnual = sarToHalalas(newAnnualRaw);
+  if (newAnnual == null || newAnnual < 0) return bad("أدخل الإيجار السنوي الجديد", "new_annual");
+  if (!effective) return bad("حدّد تاريخ سريان التعديل", "effective_date");
+  if (!reason) return bad("اكتب سبب التعديل", "reason");
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("amend_contract_rent", {
@@ -224,18 +249,20 @@ export async function amendRent(formData: FormData) {
     p_effective: effective,
     p_reason: reason,
   });
-  if (error) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent(amendError(error.message))}`);
+  if (error) return bad(amendError(error.message));
   revalidatePath(`/app/contracts/${contract_id}`);
-  redirect(`/app/contracts/${contract_id}`);
+  return { ok: "سُجِّل ملحق تعديل الإيجار وأُعيد تسعير الاستحقاقات المستقبلية." };
 }
 
-export async function terminateContract(formData: FormData) {
+export async function terminateContract(_prev: FormState, formData: FormData): Promise<FormState> {
   const contract_id = String(formData.get("contract_id") ?? "");
   const effective = String(formData.get("effective_date") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim();
-  if (!contract_id) redirect("/app/contracts");
-  if (!effective) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent("حدّد تاريخ الإنهاء")}`);
-  if (!reason) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent("اكتب سبب الإنهاء")}`);
+  const values = { effective_date: effective, reason };
+  const bad = (error: string, field?: string): FormState => ({ error, field, values });
+  if (!contract_id) return bad("عقد غير معروف");
+  if (!effective) return bad("حدّد تاريخ الإنهاء", "effective_date");
+  if (!reason) return bad("اكتب سبب الإنهاء", "reason");
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("amend_contract_terminate", {
@@ -243,9 +270,9 @@ export async function terminateContract(formData: FormData) {
     p_effective: effective,
     p_reason: reason,
   });
-  if (error) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent(amendError(error.message))}`);
+  if (error) return bad(amendError(error.message));
   revalidatePath(`/app/contracts/${contract_id}`);
-  redirect(`/app/contracts/${contract_id}`);
+  return { ok: "أُنهي العقد وأُلغيت الاستحقاقات المستقبلية غير المدفوعة." };
 }
 
 const RENEW_ERRORS: Array<[RegExp, string]> = [
@@ -257,16 +284,20 @@ const RENEW_ERRORS: Array<[RegExp, string]> = [
 ];
 const renewError = (m: string) => RENEW_ERRORS.find(([re]) => re.test(m))?.[1] ?? m;
 
-export async function renewContract(formData: FormData) {
+export async function renewContract(_prev: FormState, formData: FormData): Promise<FormState> {
   const source_id = String(formData.get("contract_id") ?? "");
   const start = String(formData.get("start_date") ?? "").trim();
   const end = String(formData.get("end_date") ?? "").trim();
-  const newAnnual = sarToHalalas(String(formData.get("new_annual") ?? ""));
+  const newAnnualRaw = String(formData.get("new_annual") ?? "");
   const number = String(formData.get("contract_number") ?? "").trim() || null;
-  if (!source_id) redirect("/app/contracts");
-  if (!start || !end) redirect(`/app/contracts/${source_id}?error=${encodeURIComponent("حدّد تاريخي البداية والنهاية")}`);
-  if (end < start) redirect(`/app/contracts/${source_id}?error=${encodeURIComponent("تاريخ النهاية قبل البداية")}`);
-  if (newAnnual == null || newAnnual < 0) redirect(`/app/contracts/${source_id}?error=${encodeURIComponent("أدخل الإيجار السنوي الجديد")}`);
+  const values = { start_date: start, end_date: end, new_annual: newAnnualRaw };
+  const bad = (error: string, field?: string): FormState => ({ error, field, values });
+  if (!source_id) return bad("عقد غير معروف");
+  if (!start) return bad("حدّد تاريخ البداية", "start_date");
+  if (!end) return bad("حدّد تاريخ النهاية", "end_date");
+  if (end < start) return bad("تاريخ النهاية قبل البداية", "end_date");
+  const newAnnual = sarToHalalas(newAnnualRaw);
+  if (newAnnual == null || newAnnual < 0) return bad("أدخل الإيجار السنوي الجديد", "new_annual");
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("renew_contract", {
@@ -276,40 +307,38 @@ export async function renewContract(formData: FormData) {
     p_new_annual: newAnnual,
     p_number: number,
   });
-  if (error) {
-    const msg = translateSubscriptionError(error.message) ?? renewError(error.message);
-    redirect(`/app/contracts/${source_id}?error=${encodeURIComponent(msg)}`);
-  }
+  if (error) return bad(translateSubscriptionError(error.message) ?? renewError(error.message));
+  // The renewal draft is a destination: it was created to be reviewed, so we open it.
   redirect(`/app/contracts/${data}`);
 }
 
-export async function activateRenewal(formData: FormData) {
+export async function activateRenewal(_prev: FormState, formData: FormData): Promise<FormState> {
   const contract_id = String(formData.get("contract_id") ?? "");
-  if (!contract_id) redirect("/app/contracts");
+  if (!contract_id) return { error: "عقد غير معروف" };
   const supabase = await createClient();
   const { error } = await supabase.rpc("activate_renewal", { p_new: contract_id });
-  if (error) redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent(renewError(error.message))}`);
+  if (error) return { error: renewError(error.message) };
   revalidatePath(`/app/contracts/${contract_id}`);
-  redirect(`/app/contracts/${contract_id}`);
+  return { ok: "فُعِّل التجديد وأُنهي العقد السابق." };
 }
 
-export async function recordPayment(formData: FormData) {
+export async function recordPayment(_prev: FormState, formData: FormData): Promise<FormState> {
   const contract_id = String(formData.get("contract_id") ?? "");
   const charge_id = String(formData.get("charge_id") ?? "");
-  const amount = sarToHalalas(String(formData.get("amount") ?? ""));
+  const amountRaw = String(formData.get("amount") ?? "");
   const method = String(formData.get("method") ?? "cash");
-  if (!charge_id || amount == null || amount <= 0) {
-    redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent("أدخل مبلغاً صحيحاً")}`);
-  }
+  const values = { amount: amountRaw };
+  if (!charge_id) return { error: "استحقاق غير صالح", values };
+  const amount = sarToHalalas(amountRaw);
+  if (amount == null || amount <= 0) return { error: "أدخل مبلغاً صحيحاً", field: "amount", values };
+
   const supabase = await createClient();
   const { error } = await supabase.rpc("record_charge_payment", {
     p_charge: charge_id,
     p_amount_halalas: amount,
     p_method: method,
   });
-  if (error) {
-    redirect(`/app/contracts/${contract_id}?error=${encodeURIComponent(error.message)}`);
-  }
+  if (error) return { error: error.message, values };
   revalidatePath(`/app/contracts/${contract_id}`);
-  redirect(`/app/contracts/${contract_id}`);
+  return { ok: "سُجِّلت الدفعة." };
 }
