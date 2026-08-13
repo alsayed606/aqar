@@ -42,10 +42,13 @@ export function MfaEnroll() {
   return (
     <div className="space-y-4">
       <ol className="list-inside list-decimal space-y-1 text-sm text-neutral-600 dark:text-neutral-400">
-        <li>افتح تطبيق مصادقة مثل Google Authenticator أو Microsoft Authenticator.</li>
+        <li>افتح تطبيق مصادقة مثل Google Authenticator أو Microsoft Authenticator أو Authy.</li>
         <li>امسح الرمز أدناه، أو أدخل المفتاح يدوياً.</li>
         <li>اكتب الرمز المكوّن من ٦ أرقام الذي يعرضه التطبيق.</li>
       </ol>
+      <p className="text-xs text-neutral-500">
+        لا تملك أحدها؟ هذه التطبيقات مجانية، ويمكن تنزيل أيّ منها من متجر تطبيقات جوالك.
+      </p>
 
       <div className="flex flex-col items-center gap-3 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
         {/* Generated locally by the server action from the TOTP uri — not third-party markup. */}
