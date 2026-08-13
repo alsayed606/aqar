@@ -128,9 +128,24 @@ export default async function PropertyDetail({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm text-slate-500">{units.length} وحدة</span>
-        <FormDrawer label="إضافة وحدة جديدة" title={`إضافة وحدة — ${property.name}`}>
-          <UnitForm propertyId={property.id} />
-        </FormDrawer>
+        <div className="flex items-center gap-2">
+          {/* Two answers to two questions: a sheet to hand over, and a file to work in. */}
+          <Link
+            href={`/app/properties/${property.id}/report`}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+          >
+            تقرير الوحدات
+          </Link>
+          <a
+            href={`/api/export/units?property=${property.id}`}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+          >
+            ⬇ تصدير Excel
+          </a>
+          <FormDrawer label="إضافة وحدة جديدة" title={`إضافة وحدة — ${property.name}`}>
+            <UnitForm propertyId={property.id} />
+          </FormDrawer>
+        </div>
       </div>
 
       {units.length === 0 ? (

@@ -4,6 +4,7 @@ import { first } from "@/lib/rows";
 import type { CsvColumn } from "@/lib/csv";
 import {
   PROPERTY_KIND_AR,
+  UNIT_STATUS_AR,
   CONTRACT_STATUS_AR,
   DOC_KIND_AR,
   PAYMENT_METHOD_AR,
@@ -85,6 +86,31 @@ export const LIST_SPECS: Record<string, ListSpec> = {
     ],
     filename: "properties",
     label: "العقارات",
+  },
+
+  // Units are not a list page of their own — they live inside a property. The spec exists for the
+  // export alone, and the `property` filter is what makes it useful: "the units of this property",
+  // which is the file an office actually asks for.
+  units: {
+    table: "unit",
+    select: "id, unit_number, floor, area_sqm, bedrooms, bathrooms, current_status, created_at",
+    applySearch: ilike("unit_number"),
+    sorts: [
+      { key: "number", label: "رقم الوحدة", column: "unit_number", ascending: true },
+      NEWEST,
+      { key: "area", label: "الأكبر مساحة", column: "area_sqm", ascending: false },
+    ],
+    columns: [
+      { header: "رقم الوحدة", value: (r) => r.unit_number },
+      { header: "الدور", value: (r) => r.floor },
+      { header: "المساحة (م²)", value: (r) => r.area_sqm },
+      { header: "غرف النوم", value: (r) => r.bedrooms },
+      { header: "دورات المياه", value: (r) => r.bathrooms },
+      { header: "الحالة", value: (r) => UNIT_STATUS_AR[r.current_status] ?? r.current_status },
+    ],
+    filters: { property: "property_id" },
+    filename: "units",
+    label: "الوحدات",
   },
 
   tenants: {

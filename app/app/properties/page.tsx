@@ -92,6 +92,13 @@ export default async function PropertiesPage({
         <h1 className="text-xl font-bold">العقارات</h1>
         <div className="flex items-center gap-3">
           <span className="text-sm text-neutral-500">{total} عقار</span>
+          {/* A document, not a download: the export beside it answers the other question. */}
+          <Link
+            href="/app/properties/report"
+            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
+            تقرير العقارات
+          </Link>
           {canData && (
             <FormDrawer label="إضافة عقار" title="إضافة عقار">
               <PropertyForm owners={owners} />
