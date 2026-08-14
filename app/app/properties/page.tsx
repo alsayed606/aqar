@@ -4,14 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { getCapabilities } from "@/lib/capabilities";
 import { PropertyForm } from "@/components/property-form";
-import { ConfirmButton } from "@/components/confirm-button";
-import { deleteProperty } from "./actions";
-import { PROPERTY_KIND_AR } from "@/lib/labels";
 import { parseListParams, likePattern } from "@/lib/list-params";
 import { LIST_SPECS, resolveSort, applySort } from "@/lib/list-specs";
 import { ListToolbar } from "@/components/list-toolbar";
 import { Pagination } from "@/components/pagination";
-import { FilterableTable } from "@/components/filterable-list";
+import { PropertiesGrid } from "@/components/properties-grid";
+import type { PropertyCardData } from "@/components/property-card";
 import { FormDrawer } from "@/components/form-drawer";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +22,10 @@ type PropertyRow = {
   property_code: string | null;
   holding_type: string;
   city: string | null;
+  district: string | null;
+  deed_number: string | null;
+  owner_id: string | null;
 };
-const HOLDING_AR: Record<string, string> = { owned: "مملوك", managed: "إدارة أملاك", investment: "استثمار" };
 
 function Kpi({ label, value }: { label: string; value: number }) {
   return (
@@ -52,7 +52,7 @@ export default async function PropertiesPage({
   const supabase = await createClient();
   let propQuery = supabase
     .from("property")
-    .select("id, name, property_kind, property_code, holding_type, city", { count: "exact" })
+    .select("id, name, property_kind, property_code, holding_type, city, district, deed_number, owner_id", { count: "exact" })
     .is("deleted_at", null);
   if (q) propQuery = propQuery.ilike("name", likePattern(q));
 
@@ -73,18 +73,56 @@ export default async function PropertiesPage({
     return { id: o.id, label: o.is_self ? "المنشأة (مالك ذاتي)" : p?.display_name ?? "مالك", national_id: p?.national_id ?? null };
   });
 
-  // Per-property unit totals for the visible page.
+  // Per-property figures for the visible page: occupancy, how much of the data was left empty, and
+  // what the property is contracted to collect. Two reads for the page, not two per card.
   const ids = properties.map((p) => p.id);
-  const unitMap = new Map<string, { total: number; vacant: number }>();
+  const unitMap = new Map<string, { total: number; rented: number; vacant: number; missingArea: number }>();
+  const rentMap = new Map<string, number>();
   if (ids.length) {
-    const { data: us } = await supabase.from("unit").select("property_id, current_status").is("deleted_at", null).in("property_id", ids);
+    const [{ data: us }, { data: cs }] = await Promise.all([
+      supabase.from("unit").select("property_id, current_status, area_sqm").is("deleted_at", null).in("property_id", ids),
+      // Active only: a draft is not money, and an ended contract is not this year's.
+      supabase
+        .from("contract")
+        .select("property_id, annual_rent_halalas")
+        .eq("status", "active")
+        .is("deleted_at", null)
+        .in("property_id", ids),
+    ]);
     for (const u of us ?? []) {
-      const m = unitMap.get(u.property_id) ?? { total: 0, vacant: 0 };
+      const m = unitMap.get(u.property_id) ?? { total: 0, rented: 0, vacant: 0, missingArea: 0 };
       m.total++;
       if (u.current_status === "vacant") m.vacant++;
+      else if (u.current_status === "rented") m.rented++;
+      if (u.area_sqm == null) m.missingArea++;
       unitMap.set(u.property_id, m);
     }
+    for (const c of (cs ?? []) as any[]) {
+      rentMap.set(c.property_id, (rentMap.get(c.property_id) ?? 0) + Number(c.annual_rent_halalas));
+    }
   }
+
+  const cards: PropertyCardData[] = properties.map((p) => {
+    const u = unitMap.get(p.id) ?? { total: 0, rented: 0, vacant: 0, missingArea: 0 };
+    return {
+      id: p.id,
+      name: p.name,
+      property_kind: p.property_kind,
+      property_code: p.property_code,
+      holding_type: p.holding_type,
+      city: p.city,
+      district: p.district,
+      // The number itself is not shown: a list is where you notice a deed is missing, not where you
+      // read one. Same for the owner link.
+      has_deed: !!p.deed_number,
+      has_owner: !!p.owner_id,
+      units: u.total,
+      rented: u.rented,
+      vacant: u.vacant,
+      missingArea: u.missingArea,
+      annualRentHalalas: rentMap.get(p.id) ?? 0,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -111,7 +149,8 @@ export default async function PropertiesPage({
         <Kpi label="إجمالي الوحدات" value={totalU.count ?? 0} />
         <Kpi label="شاغرة" value={vacantU.count ?? 0} />
         <Kpi label="مؤجرة" value={rentedU.count ?? 0} />
-        <Kpi label="غير مكتملة" value={incompleteU.count ?? 0} />
+        {/* Named for what it counts. "Incomplete" invited the reader to guess which field. */}
+        <Kpi label="بلا مساحة" value={incompleteU.count ?? 0} />
       </div>
 
       {flashError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{flashError}</p>}
@@ -126,63 +165,7 @@ export default async function PropertiesPage({
         </p>
       ) : (
         <>
-          <FilterableTable
-            placeholder="تصفية سريعة في هذه الصفحة…"
-            headers={
-              <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
-                <th>العقار</th>
-                <th>التصنيف</th>
-                <th>الكود</th>
-                <th>العلاقة</th>
-                <th>الوحدات</th>
-                <th>شاغرة</th>
-                <th></th>
-              </tr>
-            }
-            rows={properties.map((p) => {
-              const u = unitMap.get(p.id) ?? { total: 0, vacant: 0 };
-              return {
-                id: p.id,
-                search: [p.name, p.city, p.property_code, PROPERTY_KIND_AR[p.property_kind] ?? p.property_kind, HOLDING_AR[p.holding_type] ?? p.holding_type]
-                  .filter(Boolean)
-                  .join(" "),
-                cells: (
-                  <>
-                    <td className="px-3 py-2 font-medium">
-                      <Link href={`/app/properties/${p.id}`} className="hover:text-brand hover:underline">{p.name}</Link>
-                      {p.city && <span className="mr-2 text-xs text-slate-400">{p.city}</span>}
-                    </td>
-                    <td className="px-3 py-2">{PROPERTY_KIND_AR[p.property_kind] ?? p.property_kind}</td>
-                    <td dir="ltr" className="px-3 py-2 text-right text-slate-500">{p.property_code ?? "—"}</td>
-                    <td className="px-3 py-2">{HOLDING_AR[p.holding_type] ?? p.holding_type}</td>
-                    <td className="px-3 py-2">{u.total}</td>
-                    <td className="px-3 py-2">{u.vacant}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <Link href={`/app/properties/${p.id}`} className="text-xs text-brand hover:underline">عرض/تعديل</Link>
-                        {/* Offered only while the property is empty. The 0067 guard refuses the
-                            rest anyway, and a delete link that always fails is not a safeguard —
-                            it is a promise the row cannot keep. */}
-                        {canData && u.total === 0 && (
-                          <form action={deleteProperty}>
-                            <input type="hidden" name="property_id" value={p.id} />
-                            <ConfirmButton message={`حذف العقار «${p.name}»؟ يبقى سجلّه محفوظاً.`} className="text-xs text-red-600 hover:underline">
-                              حذف
-                            </ConfirmButton>
-                          </form>
-                        )}
-                        {canData && u.total > 0 && (
-                          <span className="text-xs text-slate-400" title="احذف وحداته أوّلاً">
-                            لا يُحذف
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </>
-                ),
-              };
-            })}
-          />
+          <PropertiesGrid properties={cards} canData={canData} />
           <Pagination page={page} total={total} q={q} basePath="/app/properties" params={{ sort: sortOption.key }} />
         </>
       )}
