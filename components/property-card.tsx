@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { Badge } from "@/components/ui";
 import { ConfirmButton } from "@/components/confirm-button";
-import { PROPERTY_KIND_AR } from "@/lib/labels";
+import { PROPERTY_KIND_AR, HOLDING_TYPE_AR } from "@/lib/labels";
+import { occupancyPercent } from "@/lib/occupancy";
 import { halalasToSar } from "@/lib/money";
 import { deleteProperty } from "@/app/app/properties/actions";
 
@@ -41,8 +42,6 @@ export function propertyBucket(p: PropertyCardData): PropertyBucket {
   if (p.units === 0) return "empty";
   return p.vacant > 0 ? "vacancy" : "full";
 }
-
-const HOLDING_AR: Record<string, string> = { owned: "مملوك", managed: "إدارة أملاك", investment: "استثمار" };
 
 function Icon({ path, className }: { path: React.ReactNode; className?: string }) {
   return (
@@ -81,7 +80,8 @@ function Mark({ label, ok, missingHint }: { label: string; ok: boolean; missingH
 export function PropertyCard({ property, canData }: { property: PropertyCardData; canData: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { units, rented, vacant } = property;
-  const occupancy = units === 0 ? 0 : Math.round((rented / units) * 100);
+  // The bar is only rendered when there are units, so the no-units case never reaches it.
+  const occupancy = occupancyPercent(rented, units) ?? 0;
   const place = [property.city, property.district].filter(Boolean).join(" · ");
   const item = "block w-full px-3 py-1.5 text-right hover:bg-slate-50 dark:hover:bg-slate-800";
 
@@ -152,7 +152,7 @@ export function PropertyCard({ property, canData }: { property: PropertyCardData
           />
         )}
         <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-          {HOLDING_AR[property.holding_type] ?? property.holding_type}
+          {HOLDING_TYPE_AR[property.holding_type] ?? property.holding_type}
         </span>
       </div>
 
