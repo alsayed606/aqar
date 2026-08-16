@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { halalasToSar } from "@/lib/money";
 import { CONTRACT_STATUS_AR, PAYMENT_METHOD_AR } from "@/lib/labels";
 import { Card, CardBody, Badge, Tabs } from "@/components/ui";
+import { MaintenanceRequestForm, type PortalUnit } from "@/components/maintenance-request-form";
+import { MAINTENANCE_CATEGORY_AR, MAINTENANCE_URGENCY_AR, MAINTENANCE_STATUS_AR } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,18 @@ type Charge = {
   is_settled: boolean;
   is_overdue: boolean;
 };
+type PortalUnitRow = { unit_id: string; unit_number: string; property_name: string };
+type MaintenanceLine = {
+  id: string;
+  request_no: string | null;
+  category: string;
+  urgency: string;
+  status: string;
+  description: string;
+  unit_number: string | null;
+  created_at: string;
+  resolved_at: string | null;
+};
 type Payment = {
   id: string;
   receipt_no: string | null;
@@ -50,17 +64,28 @@ export default async function TenantPortalDashboard({ params }: { params: Promis
   const link = ((linkData ?? []) as TenantLink[]).find((l) => l.tenant_id === tenantId);
   if (!link) redirect("/portal");
 
-  const [{ data: contractData }, { data: chargeData }, { data: payData }] = await Promise.all([
+  const [{ data: contractData }, { data: chargeData }, { data: payData }, { data: maintData }, { data: unitData }] =
+    await Promise.all([
     supabase.rpc("tenant_portal_contracts", { p_tenant: tenantId }),
     supabase.rpc("tenant_portal_charges", { p_tenant: tenantId }),
     supabase.rpc("tenant_portal_payments", { p_tenant: tenantId }),
+    supabase.rpc("tenant_portal_maintenance", { p_tenant: tenantId }),
+    supabase.rpc("tenant_portal_units", { p_tenant: tenantId }),
   ]);
 
   const contracts = (contractData ?? []) as Contract[];
   const charges = (chargeData ?? []) as Charge[];
   const payments = (payData ?? []) as Payment[];
 
+  const requests = (maintData ?? []) as MaintenanceLine[];
   const totalDue = charges.reduce((s, c) => s + Number(c.balance_halalas), 0);
+
+  // Active contracts only (0073) — the same rule submit_maintenance_request enforces. Offering a
+  // wider list would only produce refusals the tenant cannot act on.
+  const openUnits: PortalUnit[] = ((unitData ?? []) as PortalUnitRow[]).map((u) => ({
+    unit_id: u.unit_id,
+    label: `${u.property_name} — وحدة ${u.unit_number}`,
+  }));
 
   const contractsTab =
     contracts.length === 0 ? (
@@ -146,6 +171,50 @@ export default async function TenantPortalDashboard({ params }: { params: Promis
       </div>
     );
 
+  const maintenanceTab = (
+    <div className="space-y-5">
+      <Card>
+        <CardBody className="space-y-3">
+          <h3 className="text-base font-semibold text-slate-900 dark:text-white">طلب صيانة جديد</h3>
+          <MaintenanceRequestForm tenantId={tenantId} units={openUnits} />
+        </CardBody>
+      </Card>
+
+      {requests.length > 0 && (
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900/60">
+              <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
+                <th>الرقم</th>
+                <th>الوحدة</th>
+                <th>النوع</th>
+                <th>الأهمية</th>
+                <th>الحالة</th>
+                <th>التاريخ</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {requests.map((r) => (
+                <tr key={r.id} className="[&>td]:px-4 [&>td]:py-2">
+                  <td className="font-mono" dir="ltr">{r.request_no ?? "—"}</td>
+                  <td>{r.unit_number ?? "—"}</td>
+                  <td className="text-slate-600 dark:text-slate-300">{MAINTENANCE_CATEGORY_AR[r.category] ?? r.category}</td>
+                  <td className="text-slate-600 dark:text-slate-300">{MAINTENANCE_URGENCY_AR[r.urgency] ?? r.urgency}</td>
+                  <td>
+                    <Badge tone={r.status === "resolved" ? "success" : r.status === "in_progress" ? "info" : r.status === "cancelled" ? "neutral" : "warning"}>
+                      {MAINTENANCE_STATUS_AR[r.status] ?? r.status}
+                    </Badge>
+                  </td>
+                  <td dir="ltr">{new Date(r.created_at).toISOString().slice(0, 10)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -167,6 +236,7 @@ export default async function TenantPortalDashboard({ params }: { params: Promis
         items={[
           { id: "contracts", label: `العقود والاستحقاقات (${contracts.length})`, content: contractsTab },
           { id: "payments", label: `دفعاتي (${payments.length})`, content: paymentsTab },
+          { id: "maintenance", label: `طلبات الصيانة (${requests.length})`, content: maintenanceTab },
         ]}
       />
 

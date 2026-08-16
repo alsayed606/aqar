@@ -24,6 +24,7 @@ export default async function AppLayout({
   const activeOrg = await getActiveOrg();
   let orgName: string | null = null;
   let unread = 0;
+  let openMaintenance = 0;
   let subBanner: { tone: "amber" | "red"; text: string } | null = null;
   if (activeOrg) {
     const { data } = await supabase
@@ -38,6 +39,14 @@ export default async function AppLayout({
       .select("id", { count: "exact", head: true })
       .is("read_at", null);
     unread = count ?? 0;
+    // Open maintenance requests for the sidebar badge (0072). Head-count only, and it degrades to
+    // 0 rather than throwing for an org whose database has not had 0072 applied yet.
+    const { count: openCount } = await supabase
+      .from("maintenance_request")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["open", "in_progress"])
+      .is("deleted_at", null);
+    openMaintenance = openCount ?? 0;
     // Subscription banner: lock notice when inactive, trial countdown in the last week.
     // Degrades to no banner (data null) before migration 0036 is applied.
     const { data: sub } = await supabase.rpc("subscription_summary", { p_org: activeOrg });
@@ -72,7 +81,7 @@ export default async function AppLayout({
     return (
       <ToastProvider>
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-          <AppSidebar orgName={orgName} unread={unread} />
+          <AppSidebar orgName={orgName} unread={unread} openMaintenance={openMaintenance} />
           <div className="md:ps-64 print:ps-0">
             {/* Above the subscription banner: a stale bundle is the one thing that can swallow the
                 work in progress, so it is read before anything else. */}

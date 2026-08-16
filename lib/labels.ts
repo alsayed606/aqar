@@ -150,3 +150,33 @@ export const METER_LEVEL_AR: Record<string, string> = {
   main: "رئيسي",
   unit: "وحدة",
 };
+
+/** Maintenance (0072). The categories are a fixed list in the DB check constraint. */
+export const MAINTENANCE_CATEGORY_AR: Record<string, string> = {
+  plumbing: "سباكة",
+  electrical: "كهرباء",
+  hvac: "تكييف",
+  carpentry: "نجارة",
+  appliance: "أجهزة",
+  other: "أخرى",
+};
+
+export const MAINTENANCE_URGENCY_AR: Record<string, string> = {
+  normal: "عادية",
+  urgent: "عاجلة",
+  emergency: "طارئة",
+};
+
+export const MAINTENANCE_STATUS_AR: Record<string, string> = {
+  open: "مفتوحة",
+  in_progress: "قيد التنفيذ",
+  resolved: "مغلقة",
+  cancelled: "ملغاة",
+};
+
+/** Who bears the cost of the repair — recorded on the request, not posted to any statement. */
+export const MAINTENANCE_BEARER_AR: Record<string, string> = {
+  owner: "المالك",
+  tenant: "المستأجر",
+  office: "المكتب",
+};

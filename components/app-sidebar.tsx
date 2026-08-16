@@ -31,7 +31,7 @@ const I = {
   cog: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.1a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-2.9-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15a2 2 0 1 1 0-4h.2A1.7 1.7 0 0 0 4.3 8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 4.3V4a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 2.9 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.4 1z" /></>,
 };
 
-function groups(unread: number): Group[] {
+function groups(unread: number, openMaintenance: number): Group[] {
   return [
     { items: [{ href: "/app", label: "الرئيسية", icon: I.home }] },
     {
@@ -62,7 +62,9 @@ function groups(unread: number): Group[] {
     },
     {
       title: "الصيانة والطلبات",
-      items: [{ href: "#", label: "طلبات الصيانة", icon: I.wrench, soon: true }],
+      // Live since 0072. The badge counts what is open, because that is the only number the
+      // office acts on — a total including closed jobs would only grow and never call anyone.
+      items: [{ href: "/app/maintenance", label: "طلبات الصيانة", icon: I.wrench, badge: openMaintenance }],
     },
     {
       title: "الإدارة",
@@ -80,9 +82,9 @@ function groups(unread: number): Group[] {
 
 // Only the most specific match lights up. With /app/utilities and /app/utilities/readings both in
 // the nav, a plain startsWith would highlight the parent on the child's page as well.
-function activeHref(pathname: string, unread: number): string | null {
+function activeHref(pathname: string, unread: number, openMaintenance: number): string | null {
   let best: string | null = null;
-  for (const g of groups(unread)) {
+  for (const g of groups(unread, openMaintenance)) {
     for (const it of g.items) {
       if (it.soon) continue;
       const matches = it.href === "/app" ? pathname === "/app" : pathname.startsWith(it.href);
@@ -100,12 +102,12 @@ function Sv({ children }: { children: ReactNode }) {
   );
 }
 
-function NavContent({ unread, onNavigate }: { unread: number; onNavigate?: () => void }) {
+function NavContent({ unread, openMaintenance, onNavigate }: { unread: number; openMaintenance: number; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const current = activeHref(pathname, unread);
+  const current = activeHref(pathname, unread, openMaintenance);
   return (
     <nav className="space-y-5">
-      {groups(unread).map((g, gi) => (
+      {groups(unread, openMaintenance).map((g, gi) => (
         <div key={g.title ?? gi}>
           {g.title && <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{g.title}</p>}
           <ul className="space-y-0.5">
@@ -171,7 +173,7 @@ function SignOut({ full }: { full?: boolean }) {
   );
 }
 
-export function AppSidebar({ orgName, unread }: { orgName: string | null; unread: number }) {
+export function AppSidebar({ orgName, unread, openMaintenance = 0 }: { orgName: string | null; unread: number; openMaintenance?: number }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -183,7 +185,7 @@ export function AppSidebar({ orgName, unread }: { orgName: string | null; unread
           {orgName && <p className="mt-0.5 truncate text-xs text-slate-500">{orgName}</p>}
         </div>
         <div className="flex-1 overflow-y-auto px-3 py-4">
-          <NavContent unread={unread} />
+          <NavContent unread={unread} openMaintenance={openMaintenance} />
         </div>
         <div className="border-t border-slate-100 px-5 py-4 dark:border-slate-800">
           <SignOut full />
@@ -201,7 +203,7 @@ export function AppSidebar({ orgName, unread }: { orgName: string | null; unread
 
       {/* Mobile drawer — shared by the bottom bar's "المزيد" tab */}
       <Drawer open={open} onClose={() => setOpen(false)} title={orgName ?? "القائمة"} footer={<SignOut full />}>
-        <NavContent unread={unread} onNavigate={() => setOpen(false)} />
+        <NavContent unread={unread} openMaintenance={openMaintenance} onNavigate={() => setOpen(false)} />
       </Drawer>
     </>
   );
