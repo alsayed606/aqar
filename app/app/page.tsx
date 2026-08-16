@@ -4,6 +4,7 @@ import { getActiveOrg } from "@/lib/supabase/active-org";
 import { switchOrg } from "./actions";
 import { CreateOrgForm } from "@/components/create-org-form";
 import { Dashboard } from "@/components/dashboard";
+import { SetupChecklist } from "@/components/setup-checklist";
 import { ROLE_AR } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,9 @@ export default async function AppHome() {
 
   return (
     <div className="space-y-6">
+      {/* Above the KPIs on purpose: a half-set-up office reads zeros there and cannot tell an empty
+          month from an empty account. The checklist removes itself once the account is working. */}
+      {activeOrg && <SetupChecklist activeOrg={activeOrg} />}
       {activeOrg && <Dashboard />}
 
       {hasPortalLinks && (
