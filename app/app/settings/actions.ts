@@ -8,6 +8,7 @@ import { normalizeSaudiPhone } from "@/lib/phone";
 import { parseOrgProfile, orgWriteError } from "@/lib/org-profile";
 import { translateAuthError } from "@/lib/auth-errors";
 import { guardAuthAttempt } from "@/lib/rate-limit";
+import { WRITE_REFUSED_AR, writeRefused } from "@/lib/rpc-errors";
 import type { FormState } from "@/lib/form-state";
 
 const LOGO_BUCKET = "org-assets";
@@ -164,10 +165,11 @@ export async function updateMyProfile(
     if (!phone_e164) return { error: "رقم جوال غير صالح (مثال: 05XXXXXXXX)", field: "phone", values: typed };
   }
 
-  const { error } = await supabase
+  const { error, data } = await supabase
     .from("identity")
     .update({ full_name, phone_e164, phone_raw: phoneRaw || null, updated_at: new Date().toISOString() })
-    .eq("id", user.id);
+    .eq("id", user.id)
+    .select("id");
 
   if (error) {
     if (/identity_contact_present/.test(error.message)) {
@@ -178,6 +180,7 @@ export async function updateMyProfile(
     }
     return { error: error.message, values: typed };
   }
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR, values: typed };
 
   revalidatePath("/app/settings");
   return { ok: "حُفظت بياناتك." };

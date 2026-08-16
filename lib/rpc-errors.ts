@@ -23,3 +23,23 @@ export function rpcErrorAr(message: string): string | null {
   }
   return null;
 }
+
+/**
+ * What a write says when row-level security refused it.
+ *
+ * A policy does not raise an error — it matches zero rows. So an UPDATE the reader was never allowed
+ * to make returns `error: null`, and an action that only checks `error` reports success for a write
+ * that never happened. Every UPDATE therefore asks for `.select("id")` and treats an empty result as
+ * this refusal.
+ *
+ * The sentence covers both causes on purpose: the row may be outside the member's property scope, or
+ * it may have been archived by someone else while the form was open. We cannot tell which from here,
+ * and guessing would be worse than naming both.
+ */
+export const WRITE_REFUSED_AR =
+  "لم يُحفَظ التغيير: إمّا أن السجل خارج نطاق صلاحيتك، أو أنه لم يعد موجوداً. حدّث الصفحة وتحقّق.";
+
+/** True when an UPDATE matched nothing — the shape every `.select("id")` write returns. */
+export function writeRefused(rows: { id: string }[] | null): boolean {
+  return !rows || rows.length === 0;
+}

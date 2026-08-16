@@ -9,6 +9,7 @@ import { normalizeSaudiPhone } from "@/lib/phone";
 import { isEstablishment, tenantErrorAr, type EntityType, type PersonIdKind } from "@/lib/tenant-identity";
 import { archiveRecord } from "@/lib/archive";
 import { rpcErrorAr } from "@/lib/rpc-errors";
+import { WRITE_REFUSED_AR, writeRefused } from "@/lib/rpc-errors";
 import type { FormState } from "@/lib/form-state";
 
 export type TenantState = { error?: string; ok?: boolean };
@@ -217,8 +218,13 @@ export async function removeTradeName(_prev: FormState, formData: FormData): Pro
 
   const supabase = await createClient();
   // Soft delete: contracts keep the name they were signed under either way.
-  const { error } = await supabase.from("trade_name").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+  const { error, data } = await supabase
+    .from("trade_name")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id");
   if (error) return { error: error.message };
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR };
   revalidatePath(`/app/tenants/${tenant_id}`);
   return { ok: "أُزيل الاسم التجاري." };
 }
@@ -251,7 +257,7 @@ export async function updateTenant(_prev: FormState, formData: FormData): Promis
   }
 
   const supabase = await createClient();
-  const { error: pErr } = await supabase
+  const { error: pErr, data: pRows } = await supabase
     .from("party")
     .update({
       display_name,
@@ -260,8 +266,10 @@ export async function updateTenant(_prev: FormState, formData: FormData): Promis
       phone_raw: phoneRaw || null,
       ...identity.values,
     })
-    .eq("id", party_id);
+    .eq("id", party_id)
+    .select("id");
   if (pErr) return { error: tenantErrorAr(pErr.message), values: typed };
+  if (writeRefused(pRows)) return { error: WRITE_REFUSED_AR, values: typed };
 
   revalidatePath("/app/tenants");
   revalidatePath(`/app/tenants/${tenant_id}`);

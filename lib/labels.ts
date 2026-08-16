@@ -8,6 +8,13 @@ export const PROPERTY_KIND_AR: Record<string, string> = {
   other: "أخرى",
 };
 
+/** How the office holds the property: its own, managed for a client, or an investment. */
+export const HOLDING_TYPE_AR: Record<string, string> = {
+  owned: "مملوك",
+  managed: "إدارة أملاك",
+  investment: "استثمار",
+};
+
 export const UNIT_STATUS_AR: Record<string, string> = {
   vacant: "شاغرة",
   rented: "مؤجرة",

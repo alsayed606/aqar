@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { normalizeSaudiPhone } from "@/lib/phone";
 import { translateSubscriptionError } from "@/lib/subscription-errors";
+import { WRITE_REFUSED_AR, writeRefused } from "@/lib/rpc-errors";
 import type { FormState } from "@/lib/form-state";
 
 export type InviteState = { error?: string; field?: string; link?: string; role?: string };
@@ -67,12 +68,15 @@ export async function revokeInvitation(_prev: FormState, formData: FormData): Pr
   const invitation_id = String(formData.get("invitation_id") ?? "");
   if (!invitation_id) return { error: "دعوة غير معروفة" };
   const supabase = await createClient();
-  const { error } = await supabase
+  const { error, data } = await supabase
     .from("invitation")
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", invitation_id)
-    .is("accepted_at", null);
+    .is("accepted_at", null)
+    .select("id");
   if (error) return { error: error.message };
+  // Zero rows here also covers the honest race: the invitation was accepted a moment ago.
+  if (writeRefused(data)) return { error: "لم تُلغَ الدعوة: إمّا أنها قُبلت بالفعل، أو لا تملك صلاحية عليها." };
   revalidatePath("/app/team");
   return { ok: "أُلغيت الدعوة." };
 }
@@ -83,7 +87,7 @@ export async function setMemberRole(_prev: FormState, formData: FormData): Promi
   if (!membership_id || !["owner", ...MEMBER_ROLES].includes(role)) return { error: "دور غير صالح" };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("membership").update({ role }).eq("id", membership_id);
+  const { error, data } = await supabase.from("membership").update({ role }).eq("id", membership_id).select("id");
   if (error) {
     return {
       error: /LAST_OWNER/i.test(error.message)
@@ -91,6 +95,9 @@ export async function setMemberRole(_prev: FormState, formData: FormData): Promi
         : error.message,
     };
   }
+  // membership_update is admin-only. A non-admin reaching this action changes nothing and must not
+  // be told the role was saved.
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR };
   revalidatePath("/app/team");
   return { ok: "حُفظ الدور." };
 }
@@ -102,7 +109,7 @@ export async function setMemberStatus(_prev: FormState, formData: FormData): Pro
     return { error: "حالة غير صالحة" };
   }
   const supabase = await createClient();
-  const { error } = await supabase.from("membership").update({ status }).eq("id", membership_id);
+  const { error, data } = await supabase.from("membership").update({ status }).eq("id", membership_id).select("id");
   if (error) {
     return {
       error: /LAST_OWNER|last.owner/i.test(error.message)
@@ -110,6 +117,7 @@ export async function setMemberStatus(_prev: FormState, formData: FormData): Pro
         : error.message,
     };
   }
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR };
   revalidatePath("/app/team");
   return { ok: status === "active" ? "فُعّل العضو." : "أُوقف العضو." };
 }
@@ -133,11 +141,15 @@ export async function setMemberScope(_prev: FormState, formData: FormData): Prom
     .maybeSingle();
   if (!m) redirect("/app/team");
 
-  const { error: uErr } = await supabase
+  const { error: uErr, data: uRows } = await supabase
     .from("membership")
     .update({ scope_all: scopeAll })
-    .eq("id", membership_id);
+    .eq("id", membership_id)
+    .select("id");
   if (uErr) return { error: uErr.message };
+  // Stop before the scope rows are rewritten: writing them after a refused scope_all would leave the
+  // member with grants that no longer match the flag.
+  if (writeRefused(uRows)) return { error: WRITE_REFUSED_AR };
 
   // Rewrite the scope set: clear, then add the chosen properties (only when scoped). The delete
   // error is checked because a silent failure here would leave stale grants and WIDEN the member's

@@ -10,6 +10,7 @@ import { parseArabicNumber } from "@/lib/num";
 import { sarToHalalas } from "@/lib/money";
 import { archiveRecord } from "@/lib/archive";
 import { rpcErrorAr } from "@/lib/rpc-errors";
+import { WRITE_REFUSED_AR, writeRefused } from "@/lib/rpc-errors";
 import type { FormState } from "@/lib/form-state";
 
 export type OwnerState = { error?: string; ok?: boolean };
@@ -157,11 +158,13 @@ export async function setOwnerTaxInfo(_prev: FormState, formData: FormData): Pro
   }
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { error, data } = await supabase
     .from("owner")
     .update({ vat_number, cr_number })
-    .eq("id", owner_id);
+    .eq("id", owner_id)
+    .select("id");
   if (error) return { error: error.message, values: typed };
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR, values: typed };
 
   revalidatePath(`/app/owners/${owner_id}`);
   return { ok: "حُفظت البيانات الضريبية." };

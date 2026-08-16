@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { parseArabicNumber } from "@/lib/num";
 import { sarToHalalas } from "@/lib/money";
+import { WRITE_REFUSED_AR, writeRefused } from "@/lib/rpc-errors";
 import type { FormState } from "@/lib/form-state";
 
 // `ok` used to be a boolean on these three; it is the success sentence now, so the create forms
@@ -94,11 +95,13 @@ export async function setMeterStatus(_prev: FormState, formData: FormData): Prom
       : null;
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { error, data } = await supabase
     .from("utility_meter")
     .update({ status, removed_at })
-    .eq("id", meter_id);
+    .eq("id", meter_id)
+    .select("id");
   if (error) return { error: error.message };
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR };
 
   revalidateMeter(property_id);
   return { ok: "حُدّثت حالة العدّاد." };
@@ -110,11 +113,13 @@ export async function deleteMeter(_prev: FormState, formData: FormData): Promise
   if (!meter_id) return { error: "عدّاد غير معروف" };
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { error, data } = await supabase
     .from("utility_meter")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", meter_id);
+    .eq("id", meter_id)
+    .select("id");
   if (error) return { error: error.message };
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR };
 
   revalidateMeter(property_id);
   return { ok: "حُذف العدّاد." };
@@ -165,11 +170,13 @@ export async function markReadingReset(_prev: FormState, formData: FormData): Pr
   if (!reading_id) return { error: "قراءة غير معروفة" };
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { error, data } = await supabase
     .from("utility_reading")
     .update({ is_reset: true })
-    .eq("id", reading_id);
+    .eq("id", reading_id)
+    .select("id");
   if (error) return { error: error.message };
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR };
 
   revalidatePath("/app/utilities/readings");
   return { ok: "سُجّل تبديل العدّاد." };
@@ -185,11 +192,13 @@ export async function updateReadingValue(_prev: FormState, formData: FormData): 
   if (value == null || value < 0) return { error: "أدخل قراءة صحيحة (رقم غير سالب)", field: "value" };
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { error, data } = await supabase
     .from("utility_reading")
     .update({ value })
-    .eq("id", reading_id);
+    .eq("id", reading_id)
+    .select("id");
   if (error) return { error: error.message };
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR };
 
   revalidatePath("/app/utilities/readings");
   return { ok: "صُحّحت القراءة." };
@@ -200,11 +209,13 @@ export async function deleteReading(_prev: FormState, formData: FormData): Promi
   if (!reading_id) return { error: "قراءة غير معروفة" };
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { error, data } = await supabase
     .from("utility_reading")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", reading_id);
+    .eq("id", reading_id)
+    .select("id");
   if (error) return { error: error.message };
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR };
 
   revalidatePath("/app/utilities/readings");
   return { ok: "حُذفت القراءة." };
@@ -267,8 +278,9 @@ async function writePaidAt(formData: FormData, paid_at: string | null): Promise<
   if (!bill_id) return { error: "فاتورة غير معروفة" };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("utility_bill").update({ paid_at }).eq("id", bill_id);
+  const { error, data } = await supabase.from("utility_bill").update({ paid_at }).eq("id", bill_id).select("id");
   if (error) return { error: error.message };
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR };
 
   revalidatePath("/app/utilities/bills");
   return { ok: paid_at ? "سُجّلت الفاتورة مدفوعة." : "أُلغيت علامة السداد." };
@@ -287,11 +299,13 @@ export async function deleteBill(_prev: FormState, formData: FormData): Promise<
   if (!bill_id) return { error: "فاتورة غير معروفة" };
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { error, data } = await supabase
     .from("utility_bill")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", bill_id);
+    .eq("id", bill_id)
+    .select("id");
   if (error) return { error: error.message };
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR };
 
   revalidatePath("/app/utilities/bills");
   return { ok: "حُذفت الفاتورة." };

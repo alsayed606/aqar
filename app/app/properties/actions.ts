@@ -8,6 +8,7 @@ import { parseArabicNumber, parseArabicInt } from "@/lib/num";
 import { translateSubscriptionError } from "@/lib/subscription-errors";
 import { safeReturnTo } from "@/lib/return-to";
 import { archiveRecord } from "@/lib/archive";
+import { WRITE_REFUSED_AR, writeRefused } from "@/lib/rpc-errors";
 import type { FormState } from "@/lib/form-state";
 
 export type PropState = { error?: string; ok?: boolean };
@@ -109,8 +110,13 @@ export async function changePropertyOwner(_prev: FormState, formData: FormData):
   const owner_id = String(formData.get("owner_id") ?? "");
   if (!property_id || !owner_id) return { error: "اختر المالك" };
   const supabase = await createClient();
-  const { error } = await supabase.from("property").update({ owner_id }).eq("id", property_id);
+  const { error, data } = await supabase
+    .from("property")
+    .update({ owner_id })
+    .eq("id", property_id)
+    .select("id");
   if (error) return { error: error.message };
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR };
   revalidatePath(`/app/properties/${property_id}`);
   return { ok: "غُيّر مالك العقار." };
 }
@@ -180,7 +186,7 @@ export async function updateUnit(_prev: FormState, formData: FormData): Promise<
   };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("unit").update(patch).eq("id", unit_id);
+  const { error, data } = await supabase.from("unit").update(patch).eq("id", unit_id).select("id");
   if (error) {
     const duplicate = /duplicate key|unit_number/i.test(error.message);
     return {
@@ -189,6 +195,10 @@ export async function updateUnit(_prev: FormState, formData: FormData): Promise<
       values: typed,
     };
   }
+  // A member confined to certain properties can open this drawer on a unit outside that scope: the
+  // policy then matches nothing and Postgres reports no error. Without this the drawer would close
+  // on a save that never happened.
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR, values: typed };
   revalidatePath("/app/units");
   return { ok: "حُفظت الوحدة." };
 }

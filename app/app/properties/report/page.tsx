@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { PrintButton } from "@/components/print-button";
 import { halalasToSar } from "@/lib/money";
+import { occupancyLabel } from "@/lib/occupancy";
 
 export const dynamic = "force-dynamic";
 
@@ -83,10 +84,6 @@ export default async function PortfolioReport() {
   const totalVacant = sum((r) => r.vacant);
   const totalRent = sum((r) => r.annualRentHalalas);
 
-  // Occupancy is rented ÷ units, not rented ÷ (rented + vacant): maintenance and out-of-service
-  // units are units the office owns and is not collecting on, and hiding them flatters the number.
-  const occupancy = (rented: number, units: number) => (units === 0 ? "—" : `${Math.round((rented / units) * 100)}%`);
-
   const today = new Date().toISOString().slice(0, 10);
   const th = "px-3 py-2 text-right font-medium";
   const td = "px-3 py-2";
@@ -135,7 +132,7 @@ export default async function PortfolioReport() {
                   <td className={td}>{r.units}</td>
                   <td className={td}>{r.rented}</td>
                   <td className={td}>{r.vacant}</td>
-                  <td className={td}>{occupancy(r.rented, r.units)}</td>
+                  <td className={td}>{occupancyLabel(r.rented, r.units)}</td>
                   <td className={td + " tabular-nums"} dir="ltr">{halalasToSar(r.annualRentHalalas)}</td>
                 </tr>
               ))}
@@ -147,7 +144,7 @@ export default async function PortfolioReport() {
                 <td className={td}>{totalUnits}</td>
                 <td className={td}>{totalRented}</td>
                 <td className={td}>{totalVacant}</td>
-                <td className={td}>{occupancy(totalRented, totalUnits)}</td>
+                <td className={td}>{occupancyLabel(totalRented, totalUnits)}</td>
                 <td className={td + " tabular-nums"} dir="ltr">{halalasToSar(totalRent)}</td>
               </tr>
             </tfoot>

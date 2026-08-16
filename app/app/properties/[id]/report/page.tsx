@@ -5,6 +5,7 @@ import { getActiveOrg } from "@/lib/supabase/active-org";
 import { PrintButton } from "@/components/print-button";
 import { UNIT_STATUS_AR } from "@/lib/labels";
 import { halalasToSar } from "@/lib/money";
+import { occupancyLabel } from "@/lib/occupancy";
 import { first } from "@/lib/rows";
 
 export const dynamic = "force-dynamic";
@@ -157,7 +158,8 @@ export default async function PropertyUnitsReport({ params }: { params: Promise<
                 <td className={td}>{units.length} وحدة</td>
                 <td className={td}>{totalArea > 0 ? totalArea : "—"}</td>
                 <td className={td}>—</td>
-                <td className={td}>{rented} مؤجّرة · {vacant} شاغرة</td>
+                {/* The same occupancy the portfolio sheet states for this property, by the same rule. */}
+                <td className={td}>{rented} مؤجّرة · {vacant} شاغرة · {occupancyLabel(rented, units.length)}</td>
                 <td className={td}>—</td>
                 <td className={td}>—</td>
                 <td className={td + " tabular-nums"} dir="ltr">{halalasToSar(totalRent)}</td>
