@@ -14,6 +14,7 @@ import {
 import { ConfirmButton } from "@/components/confirm-button";
 import { countAr, CONTRACT_AR } from "@/lib/plural-ar";
 import { ErasePartyForm } from "@/components/erase-party-form";
+import { PortalInvitePanel, type InviteState } from "@/components/portal-invite-panel";
 import { EntitySummary } from "@/components/entity-summary";
 import { EntityNotes } from "@/components/entity-notes";
 import { EntityTimeline, type TimelineEvent } from "@/components/entity-timeline";
@@ -91,6 +92,17 @@ export default async function TenantEditPage({
       .eq("tenant_id", id)
       .order("created_at", { ascending: false }),
   ]);
+
+  // Portal access (0074/0075): one call answers "where does this stand", and it degrades to a plain
+  // "no invitation" for a database that has not had 0075 applied yet rather than breaking the page.
+  const [{ data: inviteRows }, { data: orgRow }] = await Promise.all([
+    supabase.rpc("portal_invitation_state", { p_party: p?.id ?? "" }),
+    supabase.from("organization").select("name").eq("id", activeOrg).maybeSingle(),
+  ]);
+  const invite: InviteState = (first(inviteRows as any) as InviteState | undefined) ?? {
+    state: "none", sent_at: null, sent_channel: null, sent_to: null,
+    opened_at: null, expires_at: null, linked: false,
+  };
 
   const contracts = (contractRows ?? []) as any[];
   const payments = (paymentRows ?? []) as any[];
@@ -295,6 +307,21 @@ export default async function TenantEditPage({
           )}
         </section>
       )}
+
+      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+        <div>
+          <h2 className="text-lg font-semibold">بوابة المستأجر</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            يطّلع المستأجر على عقده ودفعاته، ويقدّم طلبات الصيانة. ولا يُقبل الرابط إلا من الحساب الذي أُرسل إليه.
+          </p>
+        </div>
+        <PortalInvitePanel
+          partyId={p?.id ?? ""}
+          orgName={orgRow?.name ?? "المكتب"}
+          invite={invite}
+          canManage={canEdit}
+        />
+      </section>
 
       {/* PDPL erasure (0061). The office is the controller for this person's data, so the request
           is executed here rather than by us. Hidden once already erased — there is nothing left. */}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { acceptPortalInvite } from "../actions";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,13 @@ export default async function PortalJoinPage({
   searchParams: Promise<{ token?: string; error?: string }>;
 }) {
   const { token, error } = await searchParams;
+
+  // Tell the office the link arrived. First open only, and it answers nothing — a function that
+  // reported whether a token is live would be a way to probe tokens without trying to accept one.
+  if (token) {
+    const supabase = await createClient();
+    await supabase.rpc("mark_invitation_opened", { p_token: token });
+  }
 
   return (
     <div className="mx-auto max-w-md space-y-4">

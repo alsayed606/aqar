@@ -2,13 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { normalizeSaudiPhone } from "@/lib/phone";
 import { isEstablishment, tenantErrorAr, type EntityType, type PersonIdKind } from "@/lib/tenant-identity";
 import { archiveRecord } from "@/lib/archive";
-import { rpcErrorAr } from "@/lib/rpc-errors";
 import { WRITE_REFUSED_AR, writeRefused } from "@/lib/rpc-errors";
 import type { FormState } from "@/lib/form-state";
 
@@ -98,29 +96,6 @@ function identityRequirementError(values: Record<string, string | null>): string
     return "رقم الهوية أو الإقامة أو الجواز مطلوب";
   }
   return undefined;
-}
-export type TenantInviteState = { error?: string; link?: string };
-
-// Mint a portal invite for a tenant; the raw token is returned once as a join link (kept out of the URL).
-export async function createTenantInvite(
-  _prev: TenantInviteState,
-  formData: FormData,
-): Promise<TenantInviteState> {
-  const tenant_id = String(formData.get("tenant_id") ?? "");
-  if (!tenant_id) return { error: "مستأجر غير صالح" };
-
-  const supabase = await createClient();
-  const { data: token, error } = await supabase.rpc("create_tenant_invitation", { p_tenant: tenant_id });
-  if (error) {
-    if (/TENANT_NO_CONTACT/i.test(error.message)) return { error: "أضِف جوالاً أو بريداً للمستأجر أولاً" };
-    if (/FORBIDDEN/i.test(error.message)) return { error: "متاح للمدراء فقط" };
-    return { error: rpcErrorAr(error.message) ?? error.message };
-  }
-
-  const h = await headers();
-  const host = h.get("host") ?? "";
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  return { link: `${proto}://${host}/portal/join?token=${token}` };
 }
 
 export async function createTenant(

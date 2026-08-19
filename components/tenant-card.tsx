@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Badge } from "@/components/ui";
-import { TenantPortalInvite } from "@/components/tenant-portal-invite";
 
 export type TenantCardData = {
   id: string;
@@ -126,7 +125,15 @@ export function TenantCard({ tenant }: { tenant: TenantCardData }) {
           <Icon path={<><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></>} />
           عرض التفاصيل
         </Link>
-        <TenantPortalInvite tenantId={tenant.id} />
+        {/* Portal access moved to the tenant's page (0075): sending an invitation now needs an
+            address and produces a real message, and its state belongs beside the record it is
+            about — not behind a button in a list. */}
+        <Link
+          href={`/app/tenants/${tenant.id}#portal`}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+        >
+          البوابة
+        </Link>
       </div>
     </article>
   );

@@ -74,3 +74,46 @@ function escapeHtml(s: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 }
+
+/**
+ * The portal invitation.
+ *
+ * It DOES carry a link, unlike the sign-in code above, because the link is the invitation — there is
+ * nothing to copy and no page the reader could have opened themselves. What makes it survivable is
+ * the other half of the design (0074): the link alone proves nothing. Whoever opens it must sign in
+ * with the address this message was sent to, so a forwarded link is useless to the forwardee.
+ *
+ * The message says that plainly. A reader who knows the rule is a reader who notices when it breaks.
+ */
+export function renderPortalInviteEmail(input: { orgName: string; link: string }): {
+  subject: string;
+  text: string;
+  html: string;
+} {
+  const { orgName, link } = input;
+  const subject = `عقار — دعوة للاطّلاع على ملفك لدى ${orgName}`;
+
+  const text = `دعاك ${orgName} للاطّلاع على ملفك: عقدك ودفعاتك وطلبات الصيانة.
+
+افتح الرابط: ${link}
+
+سجّل الدخول بالبريد الذي وصلتك عليه هذه الرسالة — الدعوة لا تُقبل من بريد آخر.
+والرابط صالح ٣٠ يوماً ولمرّة واحدة.
+
+إن لم تكن تتوقّع هذه الرسالة، تجاهلها ولا تفتح الرابط.
+
+— عقار · ${orgName}`;
+
+  const html = `<div dir="rtl" style="font-family:-apple-system,Segoe UI,Tahoma,Arial,sans-serif;background:#f5f5f5;padding:24px">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e5e5e5;border-radius:16px;padding:24px;color:#171717">
+    <h1 style="margin:0 0 4px;font-size:18px">دعوة للاطّلاع على ملفك</h1>
+    <p style="margin:8px 0 16px;font-size:14px;color:#404040;line-height:1.7">دعاك <b>${escapeHtml(orgName)}</b> للاطّلاع على عقدك ودفعاتك وطلبات الصيانة.</p>
+    <a href="${encodeURI(link)}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:10px;font-size:14px">فتح الدعوة</a>
+    <p style="margin:20px 0 0;font-size:13px;color:#525252;line-height:1.7">سجّل الدخول بالبريد الذي وصلتك عليه هذه الرسالة — <b>الدعوة لا تُقبل من بريد آخر</b>. والرابط صالح ٣٠ يوماً ولمرّة واحدة.</p>
+    <p style="margin:12px 0 0;font-size:12px;color:#a3a3a3">إن لم تكن تتوقّع هذه الرسالة، تجاهلها ولا تفتح الرابط.</p>
+    <p style="margin:24px 0 0;font-size:12px;color:#a3a3a3">عقار · ${escapeHtml(orgName)}</p>
+  </div>
+</div>`;
+
+  return { subject, text, html };
+}
