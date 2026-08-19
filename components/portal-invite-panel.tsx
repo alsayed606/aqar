@@ -145,11 +145,14 @@ export function PortalInvitePanel({
   orgName,
   invite,
   canManage,
+  hasEmail,
 }: {
   partyId: string;
   orgName: string;
   invite: InviteState;
   canManage: boolean;
+  /** The invitation is sent to the record's email and accepted only from it (0074). */
+  hasEmail: boolean;
 }) {
   const { state } = invite;
   const sentDay = day(invite.sent_at);
@@ -179,6 +182,12 @@ export function PortalInvitePanel({
         <div className="flex flex-wrap items-start gap-3">
           {invite.linked ? (
             <UnlinkForm partyId={partyId} />
+          ) : !hasEmail ? (
+            // Offering the button here would be worse than useless: issuing a new invitation retires
+            // the live one first, so a click would kill the existing link and send nothing.
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+              لا يوجد بريد إلكتروني لهذا السجل. أضِفه من «تعديل البيانات» — الدعوة تُرسَل إليه، ولا تُقبل إلا منه.
+            </p>
           ) : (
             <>
               <SendForm

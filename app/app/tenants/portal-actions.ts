@@ -42,6 +42,15 @@ export async function sendPortalInvite(_prev: FormState, formData: FormData): Pr
   if (!partyId) return { error: "سجلّ غير معروف" };
 
   const supabase = await createClient();
+
+  // Checked BEFORE issuing anything. resend_portal_invitation retires the live token as its first
+  // act, so discovering the missing address afterwards would leave the office worse off than before
+  // the click: the old link dead, and no new one sent.
+  const { data: party } = await supabase.from("party").select("email").eq("id", partyId).maybeSingle();
+  if (!party?.email) {
+    return { error: "لا يوجد بريد إلكتروني لهذا السجل. أضِفه من «تعديل البيانات» ثم أرسل الدعوة." };
+  }
+
   const { data: token, error } = await supabase.rpc("resend_portal_invitation", { p_party: partyId });
   if (error) return { error: said(error.message) };
 

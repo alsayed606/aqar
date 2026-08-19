@@ -308,7 +308,9 @@ export default async function TenantEditPage({
         </section>
       )}
 
-      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+      {/* id="portal": the tenant card links straight here. Without it the link lands at the top of a
+          long page and the office hunts for the section it was sent to. */}
+      <section id="portal" className="scroll-mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
         <div>
           <h2 className="text-lg font-semibold">بوابة المستأجر</h2>
           <p className="mt-1 text-sm text-slate-500">
@@ -320,6 +322,7 @@ export default async function TenantEditPage({
           orgName={orgRow?.name ?? "المكتب"}
           invite={invite}
           canManage={canEdit}
+          hasEmail={!!p?.email}
         />
       </section>
 
