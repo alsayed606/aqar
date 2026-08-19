@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from "react";
 import { cx } from "@/lib/cx";
 
-type Tone = "neutral" | "brand" | "success" | "warning" | "danger" | "info";
+export type Tone = "neutral" | "brand" | "success" | "warning" | "danger" | "info";
 
 const tones: Record<Tone, string> = {
   neutral: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",

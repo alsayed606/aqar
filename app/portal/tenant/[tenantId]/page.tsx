@@ -11,6 +11,7 @@ import {
 } from "@/lib/labels";
 import { Badge } from "@/components/ui";
 import { MaintenanceRequestForm, type PortalUnit } from "@/components/maintenance-request-form";
+import { isMaintenanceOpen, maintenanceStatusTone } from "@/lib/maintenance";
 
 export const dynamic = "force-dynamic";
 
@@ -136,7 +137,7 @@ export default async function TenantPortalDashboard({ params }: { params: Promis
   const overdueCount = unsettled.filter((c) => c.is_overdue).length;
 
   const activeContracts = contracts.filter((c) => c.status === "active");
-  const openRequests = requests.filter((r) => r.status === "open" || r.status === "in_progress");
+  const openRequests = requests.filter((r) => isMaintenanceOpen(r.status));
 
   const openUnits: PortalUnit[] = ((unitData ?? []) as PortalUnitRow[]).map((u) => ({
     unit_id: u.unit_id,
@@ -316,11 +317,7 @@ export default async function TenantPortalDashboard({ params }: { params: Promis
                       {r.urgency !== "normal" && <> · {MAINTENANCE_URGENCY_AR[r.urgency] ?? r.urgency}</>}
                     </p>
                   </div>
-                  <Badge
-                    tone={
-                      r.status === "resolved" ? "success" : r.status === "in_progress" ? "info" : r.status === "cancelled" ? "neutral" : "warning"
-                    }
-                  >
+                  <Badge tone={maintenanceStatusTone(r.status)}>
                     {MAINTENANCE_STATUS_AR[r.status] ?? r.status}
                   </Badge>
                 </div>

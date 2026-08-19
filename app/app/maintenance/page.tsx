@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { Badge } from "@/components/ui";
-import { MaintenanceInspector, urgencyTone, type MaintenanceRow } from "@/components/maintenance-inspector";
+import { MaintenanceInspector, type MaintenanceRow } from "@/components/maintenance-inspector";
+import { maintenanceUrgencyTone } from "@/lib/maintenance";
 import { MAINTENANCE_URGENCY_AR, MAINTENANCE_CATEGORY_AR } from "@/lib/labels";
 import { first } from "@/lib/rows";
 
@@ -132,7 +133,7 @@ export default async function MaintenancePage({
                           <span className="text-sm font-medium">
                             {MAINTENANCE_CATEGORY_AR[r.category] ?? r.category} — {r.description.slice(0, 40)}
                           </span>
-                          <Badge tone={urgencyTone(r.urgency)}>{MAINTENANCE_URGENCY_AR[r.urgency] ?? r.urgency}</Badge>
+                          <Badge tone={maintenanceUrgencyTone(r.urgency)}>{MAINTENANCE_URGENCY_AR[r.urgency] ?? r.urgency}</Badge>
                         </div>
                         <p className="mt-1 text-xs text-slate-500">
                           {r.property_name ?? "—"} • وحدة {r.unit_number ?? "—"} · {sinceAr(r.created_at)}

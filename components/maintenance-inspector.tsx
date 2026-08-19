@@ -10,6 +10,7 @@ import {
   MAINTENANCE_STATUS_AR,
   MAINTENANCE_BEARER_AR,
 } from "@/lib/labels";
+import { maintenanceStatusTone, maintenanceUrgencyTone, MAINTENANCE_STATUSES } from "@/lib/maintenance";
 import type { FormState } from "@/lib/form-state";
 
 // The inspector beside the list: a maintenance request is a job being worked, not a page of its own.
@@ -37,19 +38,6 @@ const initial: FormState = {};
 const field = "w-full rounded-lg border border-slate-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-slate-700";
 const bad = "w-full rounded-lg border border-red-400 bg-transparent px-3 py-2 text-sm outline-none dark:border-red-500";
 
-type Tone = "neutral" | "brand" | "success" | "warning" | "danger" | "info";
-
-const URGENCY_TONE: Record<string, Tone> = { emergency: "danger", urgent: "warning", normal: "neutral" };
-const STATUS_TONE: Record<string, Tone> = {
-  open: "warning",
-  in_progress: "info",
-  resolved: "success",
-  cancelled: "neutral",
-};
-
-export const urgencyTone = (urgency: string): Tone => URGENCY_TONE[urgency] ?? "neutral";
-export const statusTone = (status: string): Tone => STATUS_TONE[status] ?? "neutral";
-
 function FieldError({ state, name }: { state: FormState; name: string }) {
   if (state.field !== name || !state.error) return null;
   return <p role="alert" className="mt-1 text-xs font-medium text-red-700 dark:text-red-400">{state.error}</p>;
@@ -75,8 +63,10 @@ function StatusForm({ request }: { request: MaintenanceRow }) {
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-xs text-slate-500" htmlFor="status">الحالة</label>
         <select id="status" name="status" defaultValue={request.status} className={field + " w-auto"}>
-          {Object.entries(MAINTENANCE_STATUS_AR).map(([value, label]) => (
-            <option key={value} value={value}>{label}</option>
+          {/* Driven by the same list the action validates against, so the control can never offer a
+              status the server refuses. */}
+          {MAINTENANCE_STATUSES.map((value) => (
+            <option key={value} value={value}>{MAINTENANCE_STATUS_AR[value] ?? value}</option>
           ))}
         </select>
         <button
@@ -161,8 +151,8 @@ export function MaintenanceInspector({ request }: { request: MaintenanceRow }) {
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-sm font-bold" dir="ltr">{request.request_no ?? "—"}</span>
-          <Badge tone={urgencyTone(request.urgency)}>{MAINTENANCE_URGENCY_AR[request.urgency] ?? request.urgency}</Badge>
-          <Badge tone={statusTone(request.status)}>{MAINTENANCE_STATUS_AR[request.status] ?? request.status}</Badge>
+          <Badge tone={maintenanceUrgencyTone(request.urgency)}>{MAINTENANCE_URGENCY_AR[request.urgency] ?? request.urgency}</Badge>
+          <Badge tone={maintenanceStatusTone(request.status)}>{MAINTENANCE_STATUS_AR[request.status] ?? request.status}</Badge>
           <Badge tone="neutral">{MAINTENANCE_CATEGORY_AR[request.category] ?? request.category}</Badge>
         </div>
         <p className="mt-2 text-sm text-slate-500">

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { daysLeft, type Summary } from "@/lib/subscription";
 import { AppSidebar } from "@/components/app-sidebar";
+import { MAINTENANCE_OPEN_STATUSES } from "@/lib/maintenance";
 import { UpdateBanner } from "@/components/update-banner";
 import { ToastProvider } from "@/components/ui";
 import { signOut } from "./actions";
@@ -44,7 +45,7 @@ export default async function AppLayout({
     const { count: openCount } = await supabase
       .from("maintenance_request")
       .select("id", { count: "exact", head: true })
-      .in("status", ["open", "in_progress"])
+      .in("status", [...MAINTENANCE_OPEN_STATUSES])
       .is("deleted_at", null);
     openMaintenance = openCount ?? 0;
     // Subscription banner: lock notice when inactive, trial countdown in the last week.

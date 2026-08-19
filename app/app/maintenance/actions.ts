@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { sarToHalalas } from "@/lib/money";
 import { WRITE_REFUSED_AR, writeRefused } from "@/lib/rpc-errors";
+import { MAINTENANCE_STATUSES } from "@/lib/maintenance";
 import type { FormState } from "@/lib/form-state";
 
 // The office's side of a maintenance request (0072).
@@ -12,14 +13,13 @@ import type { FormState } from "@/lib/form-state";
 // Both actions write through RLS as the signed-in member, so a member confined to certain properties
 // simply matches no row — which is why each one checks the row count rather than the error alone.
 
-const STATUSES = ["open", "in_progress", "resolved", "cancelled"];
 const BEARERS = ["owner", "tenant", "office"];
 
 /** Move a request along its lifecycle. resolved_at is stamped by the database, not from here. */
 export async function setMaintenanceStatus(_prev: FormState, formData: FormData): Promise<FormState> {
   const id = String(formData.get("request_id") ?? "");
   const status = String(formData.get("status") ?? "");
-  if (!id || !STATUSES.includes(status)) return { error: "حالة غير صالحة" };
+  if (!id || !(MAINTENANCE_STATUSES as readonly string[]).includes(status)) return { error: "حالة غير صالحة" };
 
   const note = String(formData.get("resolution_note") ?? "").trim();
   // Closing without saying how is how a request becomes unanswerable three months later.
