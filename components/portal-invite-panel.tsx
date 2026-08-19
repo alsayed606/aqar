@@ -71,13 +71,12 @@ const STATE_TONE: Record<string, "neutral" | "success" | "warning" | "info" | "d
 const initial: FormState = {};
 const day = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0, 10) : null);
 
-function SendForm({ partyId, orgName, label }: { partyId: string; orgName: string; label: string }) {
+function SendForm({ partyId, label }: { partyId: string; label: string }) {
   const [state, action, pending] = useActionState(sendPortalInvite, initial);
   useSuccessToast(state);
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="party_id" value={partyId} />
-      <input type="hidden" name="org_name" value={orgName} />
       <button
         disabled={pending}
         className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-fg disabled:opacity-60"
@@ -146,13 +145,11 @@ function UnlinkForm({ partyId }: { partyId: string }) {
 
 export function PortalInvitePanel({
   partyId,
-  orgName,
   invite,
   canManage,
   hasEmail,
 }: {
   partyId: string;
-  orgName: string;
   invite: InviteState;
   canManage: boolean;
   /** The invitation is sent to the record's email and accepted only from it (0074). */
@@ -210,11 +207,7 @@ export function PortalInvitePanel({
             </p>
           ) : (
             <>
-              <SendForm
-                partyId={partyId}
-                orgName={orgName}
-                label={isLive ? "إعادة الإرسال" : "إرسال الدعوة"}
-              />
+              <SendForm partyId={partyId} label={isLive ? "إعادة الإرسال" : "إرسال الدعوة"} />
               {isLive && <RevokeForm partyId={partyId} />}
             </>
           )}

@@ -38,7 +38,6 @@ async function origin(): Promise<string> {
  */
 export async function sendPortalInvite(_prev: FormState, formData: FormData): Promise<FormState> {
   const partyId = String(formData.get("party_id") ?? "");
-  const orgName = String(formData.get("org_name") ?? "المكتب");
   if (!partyId) return { error: "سجلّ غير معروف" };
 
   const supabase = await createClient();
@@ -46,7 +45,11 @@ export async function sendPortalInvite(_prev: FormState, formData: FormData): Pr
   // Checked BEFORE issuing anything. resend_portal_invitation retires the live token as its first
   // act, so discovering the missing address afterwards would leave the office worse off than before
   // the click: the old link dead, and no new one sent.
-  const { data: party } = await supabase.from("party").select("email").eq("id", partyId).maybeSingle();
+  const { data: party } = await supabase
+    .from("party")
+    .select("email, org_id")
+    .eq("id", partyId)
+    .maybeSingle();
   if (!party?.email) {
     return { error: "لا يوجد بريد إلكتروني لهذا السجل. أضِفه من «تعديل البيانات» ثم أرسل الدعوة." };
   }
@@ -73,9 +76,27 @@ export async function sendPortalInvite(_prev: FormState, formData: FormData): Pr
     };
   }
 
+  // Read from the database, not from the form: this is the name a stranger sees in their inbox and
+  // the address their reply reaches, and neither should be whatever a page happened to post.
+  const { data: org } = await supabase
+    .from("organization")
+    .select("name, contact_email")
+    .eq("id", (party as { org_id?: string }).org_id ?? "")
+    .maybeSingle();
+  const orgName = org?.name ?? "المكتب";
+
   const link = `${await origin()}/portal/join?token=${token}`;
   const mail = renderPortalInviteEmail({ orgName, link });
-  const sent = await sendEmail({ to: invite.email, ...mail });
+  const sent = await sendEmail({
+    to: invite.email,
+    ...mail,
+    // The tenant has heard of their landlord's office; they have not heard of the platform. The
+    // sending address stays as configured — only a verified domain may send.
+    fromName: `${orgName} عبر عقار`,
+    // Left unset when the office recorded no address: a Reply-To pointing nowhere is worse than
+    // none, because it invites a reply that is silently lost.
+    ...(org?.contact_email ? { replyTo: org.contact_email } : {}),
+  });
   if (!sent.ok) {
     // The invitation exists and is live; only the delivery failed. Saying so plainly beats a generic
     // failure that would push the office to click again and rotate a link that was never sent.

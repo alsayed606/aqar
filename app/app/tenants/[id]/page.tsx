@@ -95,10 +95,7 @@ export default async function TenantEditPage({
 
   // Portal access (0074/0075): one call answers "where does this stand", and it degrades to a plain
   // "no invitation" for a database that has not had 0075 applied yet rather than breaking the page.
-  const [{ data: inviteRows }, { data: orgRow }] = await Promise.all([
-    supabase.rpc("portal_invitation_state", { p_party: p?.id ?? "" }),
-    supabase.from("organization").select("name").eq("id", activeOrg).maybeSingle(),
-  ]);
+  const { data: inviteRows } = await supabase.rpc("portal_invitation_state", { p_party: p?.id ?? "" });
   const invite: InviteState = (first(inviteRows as any) as InviteState | undefined) ?? {
     state: "none", sent_at: null, sent_channel: null, sent_to: null, sent_message_id: null,
     opened_at: null, expires_at: null, linked: false,
@@ -319,7 +316,6 @@ export default async function TenantEditPage({
         </div>
         <PortalInvitePanel
           partyId={p?.id ?? ""}
-          orgName={orgRow?.name ?? "المكتب"}
           invite={invite}
           canManage={canEdit}
           hasEmail={!!p?.email}
