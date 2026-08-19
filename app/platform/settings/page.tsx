@@ -9,12 +9,29 @@ type SettingRow = { key: string; value: unknown; label_ar: string; updated_at: s
 
 const cardCls = "rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900";
 const NUMERIC_KEYS = new Set(["trial_days"]);
+// Settings whose value is one of a fixed set. Rendered as a control that can only produce a value
+// the database accepts — a free-text box for an enum is a support ticket waiting to be filed.
+//
+// SMS has no provider yet (ADR-0001), so the two options that depend on one are offered but refused
+// with the reason. They are listed rather than hidden: the operator should be able to see that the
+// switch exists and what it is waiting for. Whoever contracts a provider enables them here.
+type Choice = { value: string; label: string; unavailable?: string };
+const CHOICES: Record<string, Choice[]> = {
+  portal_identity_channel: [
+    { value: "email", label: "البريد الإلكتروني" },
+    { value: "phone", label: "الجوال", unavailable: "لا يوجد مزوّد رسائل نصّية مُعدّ" },
+    { value: "either", label: "أيّهما (بريد أو جوال)", unavailable: "يتطلّب مزوّد رسائل نصّية" },
+  ],
+};
+
 const HINTS: Record<string, string> = {
   trial_days: "يسري على المكاتب الجديدة فقط — لا يمسّ تجربة قائمة.",
   default_plan: "الخطة التي يبدأ عليها أي مكتب جديد.",
   support_email: "يظهر للعملاء في صفحات النظام.",
   support_phone: "اتركه فارغاً إن لم يكن هناك رقم دعم.",
   broadcast_from: "الاسم الذي يظهر مُرسِلاً في رسائل البثّ.",
+  portal_identity_channel:
+    "بأيّ عنوان يُثبت المستأجر أنه هو: دعوة البوابة لا تُقبل إلا من الحساب الذي تحمل عنوانه.",
 };
 
 // Provider keys are ENVIRONMENT, not settings. A console that could read or write them would turn
@@ -68,6 +85,7 @@ export default async function PlatformSettings({
         <ul className="space-y-4">
           {settings.map((s) => {
             const numeric = NUMERIC_KEYS.has(s.key);
+            const choices = CHOICES[s.key];
             const current = typeof s.value === "string" ? s.value : JSON.stringify(s.value);
             return (
               <li key={s.key} className="border-t border-slate-100 pt-4 first:border-0 first:pt-0 dark:border-slate-800">
@@ -77,13 +95,32 @@ export default async function PlatformSettings({
                   <label className="block flex-1 text-sm">
                     {s.label_ar}
                     <span className="ms-2 text-[11px] text-slate-400" dir="ltr">{s.key}</span>
-                    <input
-                      name="value"
-                      type={numeric ? "number" : "text"}
-                      dir={numeric ? "ltr" : undefined}
-                      defaultValue={current}
-                      className="mt-1 w-full rounded-lg border border-slate-300 bg-transparent px-3 py-2 text-sm dark:border-slate-700"
-                    />
+                    {choices ? (
+                      <select
+                        name="value"
+                        defaultValue={current}
+                        className="mt-1 w-full rounded-lg border border-slate-300 bg-transparent px-3 py-2 text-sm dark:border-slate-700"
+                      >
+                        {choices.map((c) => (
+                          <option
+                            key={c.value}
+                            value={c.value}
+                            disabled={!!c.unavailable && c.value !== current}
+                          >
+                            {c.label}
+                            {c.unavailable && c.value !== current ? ` — ${c.unavailable}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        name="value"
+                        type={numeric ? "number" : "text"}
+                        dir={numeric ? "ltr" : undefined}
+                        defaultValue={current}
+                        className="mt-1 w-full rounded-lg border border-slate-300 bg-transparent px-3 py-2 text-sm dark:border-slate-700"
+                      />
+                    )}
                   </label>
                   <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-fg">حفظ</button>
                 </form>
