@@ -46,6 +46,7 @@ type Charge = {
   is_overdue: boolean;
 };
 type PortalUnitRow = { unit_id: string; unit_number: string; property_name: string };
+type PaymentInfo = { org_name: string; bank_name: string | null; iban: string };
 type MaintenanceLine = {
   id: string;
   request_no: string | null;
@@ -116,13 +117,20 @@ export default async function TenantPortalDashboard({ params }: { params: Promis
   const link = ((linkData ?? []) as TenantLink[]).find((l) => l.tenant_id === tenantId);
   if (!link) redirect("/portal");
 
-  const [{ data: contractData }, { data: chargeData }, { data: payData }, { data: maintData }, { data: unitData }] =
-    await Promise.all([
+  const [
+    { data: contractData },
+    { data: chargeData },
+    { data: payData },
+    { data: maintData },
+    { data: unitData },
+    { data: payInfoData },
+  ] = await Promise.all([
       supabase.rpc("tenant_portal_contracts", { p_tenant: tenantId }),
       supabase.rpc("tenant_portal_charges", { p_tenant: tenantId }),
       supabase.rpc("tenant_portal_payments", { p_tenant: tenantId }),
       supabase.rpc("tenant_portal_maintenance", { p_tenant: tenantId }),
       supabase.rpc("tenant_portal_units", { p_tenant: tenantId }),
+      supabase.rpc("tenant_portal_payment_info", { p_tenant: tenantId }),
     ]);
 
   const contracts = (contractData ?? []) as Contract[];
@@ -138,6 +146,10 @@ export default async function TenantPortalDashboard({ params }: { params: Promis
 
   const activeContracts = contracts.filter((c) => c.status === "active");
   const openRequests = requests.filter((r) => isMaintenanceOpen(r.status));
+
+  // Absent until the office records an IBAN (0076), and absent is how it stays: an empty "how to
+  // pay" card would announce the gap in the office's own voice.
+  const payTo = ((payInfoData ?? []) as PaymentInfo[])[0] ?? null;
 
   const openUnits: PortalUnit[] = ((unitData ?? []) as PortalUnitRow[]).map((u) => ({
     unit_id: u.unit_id,
@@ -203,6 +215,38 @@ export default async function TenantPortalDashboard({ params }: { params: Promis
           سنداتي
         </a>
       </div>
+
+      {payTo && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-white">كيف أدفع</h2>
+          <dl className="mt-2 space-y-1.5 text-sm">
+            <div className="flex justify-between gap-3">
+              <dt className="text-slate-500">باسم</dt>
+              <dd className="font-medium">{payTo.org_name}</dd>
+            </div>
+            {payTo.bank_name && (
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">البنك</dt>
+                <dd className="font-medium">{payTo.bank_name}</dd>
+              </div>
+            )}
+            <div className="flex justify-between gap-3">
+              <dt className="text-slate-500">الآيبان</dt>
+              <dd className="font-mono text-xs font-medium" dir="ltr">{payTo.iban}</dd>
+            </div>
+            {contracts.length > 0 && (
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">اكتب في مرجع الحوالة</dt>
+                <dd className="font-medium" dir="ltr">{contracts[0].contract_number}</dd>
+              </div>
+            )}
+          </dl>
+          {/* Said plainly: a transfer is not a receipt, and the office issues one when it lands. */}
+          <p className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-500 dark:border-slate-800">
+            بعد التحويل يُصدر المكتب سند القبض ويظهر في «سنداتي». وإن تأخّر، أرسل صورة الحوالة للمكتب.
+          </p>
+        </section>
+      )}
 
       {/* Where I live, in one line per contract. */}
       <Section id="units" title={activeContracts.length > 1 ? "وحداتي" : "وحدتي"}>
