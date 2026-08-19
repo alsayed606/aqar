@@ -2,12 +2,26 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { halalasToSar } from "@/lib/money";
-import { CONTRACT_STATUS_AR, PAYMENT_METHOD_AR } from "@/lib/labels";
-import { Card, CardBody, Badge, Tabs } from "@/components/ui";
+import {
+  CONTRACT_STATUS_AR,
+  PAYMENT_METHOD_AR,
+  MAINTENANCE_CATEGORY_AR,
+  MAINTENANCE_URGENCY_AR,
+  MAINTENANCE_STATUS_AR,
+} from "@/lib/labels";
+import { Badge } from "@/components/ui";
 import { MaintenanceRequestForm, type PortalUnit } from "@/components/maintenance-request-form";
-import { MAINTENANCE_CATEGORY_AR, MAINTENANCE_URGENCY_AR, MAINTENANCE_STATUS_AR } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
+
+// The tenant's screen, written for the phone it is read on.
+//
+// It used to open with three tabs of office tables — contracts, payments, maintenance — each one a
+// five-column grid scrolling sideways. But a tenant arrives with one of two questions: "what do I
+// owe and when", or "something is broken". Everything else is reference material they open once.
+//
+// So the page answers those two above the fold and puts the rest below, as rows that stack rather
+// than tables that scroll. Tabs are gone: on a narrow screen they hide two thirds of a short page.
 
 type TenantLink = { tenant_id: string; org_name: string; display_name: string };
 type Contract = {
@@ -50,10 +64,47 @@ type Payment = {
   received_at: string;
 };
 
-function chargeBadge(c: Charge) {
-  if (c.is_settled) return <Badge tone="success">مدفوع</Badge>;
-  if (c.is_overdue) return <Badge tone="danger">متأخر</Badge>;
+const day = (iso: string) => new Date(iso).toISOString().slice(0, 10);
+
+/** Days from today to a due date — negative once it has passed. */
+function daysUntil(dueDate: string): number {
+  const due = new Date(dueDate + "T00:00:00Z").getTime();
+  const today = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00Z").getTime();
+  return Math.round((due - today) / 86_400_000);
+}
+
+/** "متأخرة ٣ أيام" / "بعد ١٢ يوماً" / "اليوم" — the phrase a tenant reads before the number. */
+function whenAr(dueDate: string): string {
+  const days = daysUntil(dueDate);
+  if (days === 0) return "تستحق اليوم";
+  if (days < 0) return `متأخرة ${Math.abs(days)} يوم`;
+  return `بعد ${days} يوم`;
+}
+
+function chargeBadge(charge: Charge) {
+  if (charge.is_settled) return <Badge tone="success">مدفوع</Badge>;
+  if (charge.is_overdue) return <Badge tone="danger">متأخر</Badge>;
   return <Badge tone="warning">غير مدفوع</Badge>;
+}
+
+function Section({ id, title, action, children }: { id: string; title: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section id={id} className="scroll-mt-4 space-y-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-base font-bold text-slate-900 dark:text-white">{title}</h2>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 dark:border-slate-700">
+      {children}
+    </p>
+  );
 }
 
 export default async function TenantPortalDashboard({ params }: { params: Promise<{ tenantId: string }> }) {
@@ -66,181 +117,229 @@ export default async function TenantPortalDashboard({ params }: { params: Promis
 
   const [{ data: contractData }, { data: chargeData }, { data: payData }, { data: maintData }, { data: unitData }] =
     await Promise.all([
-    supabase.rpc("tenant_portal_contracts", { p_tenant: tenantId }),
-    supabase.rpc("tenant_portal_charges", { p_tenant: tenantId }),
-    supabase.rpc("tenant_portal_payments", { p_tenant: tenantId }),
-    supabase.rpc("tenant_portal_maintenance", { p_tenant: tenantId }),
-    supabase.rpc("tenant_portal_units", { p_tenant: tenantId }),
-  ]);
+      supabase.rpc("tenant_portal_contracts", { p_tenant: tenantId }),
+      supabase.rpc("tenant_portal_charges", { p_tenant: tenantId }),
+      supabase.rpc("tenant_portal_payments", { p_tenant: tenantId }),
+      supabase.rpc("tenant_portal_maintenance", { p_tenant: tenantId }),
+      supabase.rpc("tenant_portal_units", { p_tenant: tenantId }),
+    ]);
 
   const contracts = (contractData ?? []) as Contract[];
   const charges = (chargeData ?? []) as Charge[];
   const payments = (payData ?? []) as Payment[];
-
   const requests = (maintData ?? []) as MaintenanceLine[];
-  const totalDue = charges.reduce((s, c) => s + Number(c.balance_halalas), 0);
 
-  // Active contracts only (0073) — the same rule submit_maintenance_request enforces. Offering a
-  // wider list would only produce refusals the tenant cannot act on.
+  const totalDue = charges.reduce((sum, c) => sum + Number(c.balance_halalas), 0);
+  const unsettled = charges.filter((c) => !c.is_settled).sort((a, b) => (a.due_date < b.due_date ? -1 : 1));
+  // The nearest unpaid instalment — overdue ones sort first because they are dated earlier.
+  const next = unsettled[0] ?? null;
+  const overdueCount = unsettled.filter((c) => c.is_overdue).length;
+
+  const activeContracts = contracts.filter((c) => c.status === "active");
+  const openRequests = requests.filter((r) => r.status === "open" || r.status === "in_progress");
+
   const openUnits: PortalUnit[] = ((unitData ?? []) as PortalUnitRow[]).map((u) => ({
     unit_id: u.unit_id,
     label: `${u.property_name} — وحدة ${u.unit_number}`,
   }));
 
-  const contractsTab =
-    contracts.length === 0 ? (
-      <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-slate-500 dark:border-slate-700">لا توجد عقود مسجّلة.</p>
-    ) : (
-      <div className="space-y-5">
-        {contracts.map((ct) => {
-          const rows = charges.filter((c) => c.contract_id === ct.id);
-          return (
-            <Card key={ct.id}>
-              <CardBody className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-                      <span dir="ltr">{ct.contract_number}</span>
-                      <span className="mr-2 text-sm font-normal text-slate-500">{ct.property_name} · وحدة {ct.unit_number}</span>
-                    </h3>
-                    <p className="text-xs text-slate-500" dir="ltr">{ct.start_date} → {ct.end_date}</p>
-                  </div>
-                  <Badge tone={ct.status === "active" ? "success" : "neutral"}>{CONTRACT_STATUS_AR[ct.status] ?? ct.status}</Badge>
-                </div>
-
-                {rows.length > 0 && (
-                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-                    <table className="w-full text-sm">
-                      <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900/60">
-                        <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
-                          <th>الاستحقاق</th>
-                          <th>المبلغ (ر.س)</th>
-                          <th>المسدّد</th>
-                          <th>المتبقّي</th>
-                          <th>الحالة</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {rows.map((c) => (
-                          <tr key={c.charge_id} className="[&>td]:px-3 [&>td]:py-2">
-                            <td dir="ltr">{c.due_date}</td>
-                            <td>{halalasToSar(c.gross_halalas)}</td>
-                            <td className="text-slate-600 dark:text-slate-300">{halalasToSar(c.allocated_halalas)}</td>
-                            <td className="font-medium">{halalasToSar(c.balance_halalas)}</td>
-                            <td>{chargeBadge(c)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardBody>
-            </Card>
-          );
-        })}
-      </div>
-    );
-
-  const paymentsTab =
-    payments.length === 0 ? (
-      <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-slate-500 dark:border-slate-700">لا توجد دفعات مسجّلة بعد.</p>
-    ) : (
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900/60">
-            <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
-              <th>رقم السند</th>
-              <th>التاريخ</th>
-              <th>المبلغ (ر.س)</th>
-              <th>الطريقة</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {payments.map((p) => (
-              <tr key={p.id} className="[&>td]:px-4 [&>td]:py-2">
-                <td className="font-mono" dir="ltr">{p.receipt_no ?? "—"}</td>
-                <td dir="ltr">{new Date(p.received_at).toISOString().slice(0, 10)}</td>
-                <td className="font-medium">{halalasToSar(p.amount_halalas)}</td>
-                <td className="text-slate-600 dark:text-slate-300">{PAYMENT_METHOD_AR[p.method] ?? p.method}</td>
-                <td><Link href={`/portal/tenant/${tenantId}/receipt/${p.id}`} className="text-brand hover:underline">السند / طباعة ←</Link></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-
-  const maintenanceTab = (
-    <div className="space-y-5">
-      <Card>
-        <CardBody className="space-y-3">
-          <h3 className="text-base font-semibold text-slate-900 dark:text-white">طلب صيانة جديد</h3>
-          <MaintenanceRequestForm tenantId={tenantId} units={openUnits} />
-        </CardBody>
-      </Card>
-
-      {requests.length > 0 && (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900/60">
-              <tr className="[&>th]:px-4 [&>th]:py-2 [&>th]:text-right [&>th]:font-medium">
-                <th>الرقم</th>
-                <th>الوحدة</th>
-                <th>النوع</th>
-                <th>الأهمية</th>
-                <th>الحالة</th>
-                <th>التاريخ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {requests.map((r) => (
-                <tr key={r.id} className="[&>td]:px-4 [&>td]:py-2">
-                  <td className="font-mono" dir="ltr">{r.request_no ?? "—"}</td>
-                  <td>{r.unit_number ?? "—"}</td>
-                  <td className="text-slate-600 dark:text-slate-300">{MAINTENANCE_CATEGORY_AR[r.category] ?? r.category}</td>
-                  <td className="text-slate-600 dark:text-slate-300">{MAINTENANCE_URGENCY_AR[r.urgency] ?? r.urgency}</td>
-                  <td>
-                    <Badge tone={r.status === "resolved" ? "success" : r.status === "in_progress" ? "info" : r.status === "cancelled" ? "neutral" : "warning"}>
-                      {MAINTENANCE_STATUS_AR[r.status] ?? r.status}
-                    </Badge>
-                  </td>
-                  <td dir="ltr">{new Date(r.created_at).toISOString().slice(0, 10)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm text-slate-500">{link.org_name}</p>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white">{link.display_name}</h1>
-        </div>
-        <Card>
-          <CardBody className="p-4 text-center">
-            <p className="text-xs text-slate-500">إجمالي المتبقّي عليك (ر.س)</p>
-            <p className={`mt-1 text-xl font-bold ${totalDue > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}>
-              {halalasToSar(totalDue)}
-            </p>
-          </CardBody>
-        </Card>
+      <header>
+        <p className="text-sm text-slate-500">{link.org_name}</p>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-white">{link.display_name}</h1>
       </header>
 
-      <Tabs
-        items={[
-          { id: "contracts", label: `العقود والاستحقاقات (${contracts.length})`, content: contractsTab },
-          { id: "payments", label: `دفعاتي (${payments.length})`, content: paymentsTab },
-          { id: "maintenance", label: `طلبات الصيانة (${requests.length})`, content: maintenanceTab },
-        ]}
-      />
+      {/* The one thing the tenant came for. Everything else on this page is reference. */}
+      <section
+        className={
+          "rounded-2xl border p-5 " +
+          (next
+            ? next.is_overdue
+              ? "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-900/20"
+              : "border-brand/30 bg-brand/5 dark:border-brand/40 dark:bg-brand/10"
+            : "border-emerald-300 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-900/20")
+        }
+      >
+        {next ? (
+          <>
+            <p className="text-xs font-medium text-slate-600 dark:text-slate-300">الدفعة القادمة</p>
+            <p className="mt-1 flex items-baseline gap-2">
+              <span className="text-3xl font-extrabold tabular-nums" dir="ltr">{halalasToSar(next.balance_halalas)}</span>
+              <span className="text-sm text-slate-600 dark:text-slate-300">ر.س</span>
+            </p>
+            <p className={"mt-1 text-sm font-medium " + (next.is_overdue ? "text-red-700 dark:text-red-300" : "text-slate-600 dark:text-slate-300")}>
+              {whenAr(next.due_date)} — <span dir="ltr">{next.due_date}</span>
+            </p>
+            {(totalDue !== Number(next.balance_halalas) || overdueCount > 0) && (
+              <p className="mt-3 border-t border-black/5 pt-2 text-xs text-slate-600 dark:border-white/10 dark:text-slate-300">
+                إجمالي المتبقّي عليك <b dir="ltr">{halalasToSar(totalDue)}</b> ر.س
+                {overdueCount > 0 && <> · منها <b>{overdueCount}</b> دفعة متأخرة</>}
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-base font-bold text-emerald-800 dark:text-emerald-300">لا يوجد مستحق عليك.</p>
+            <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-400">كل ما استُحقّ حتى الآن مسدَّد.</p>
+          </>
+        )}
+      </section>
 
-      <p className="text-center text-[11px] text-slate-400">
+      {/* Reporting a fault is the second reason a tenant opens this page, so it is a button — not a
+          tab, and not a form they must scroll past their contract to find. */}
+      <div className="flex flex-wrap gap-2">
+        <a
+          href="#maintenance"
+          className="flex-1 rounded-xl bg-brand px-4 py-3 text-center text-sm font-medium text-white hover:bg-brand-fg"
+        >
+          طلب صيانة
+        </a>
+        <a
+          href="#payments"
+          className="flex-1 rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+        >
+          سنداتي
+        </a>
+      </div>
+
+      {/* Where I live, in one line per contract. */}
+      <Section id="units" title={activeContracts.length > 1 ? "وحداتي" : "وحدتي"}>
+        {contracts.length === 0 ? (
+          <Empty>لا توجد عقود مسجّلة.</Empty>
+        ) : (
+          <ul className="space-y-2">
+            {contracts.map((ct) => (
+              <li
+                key={ct.id}
+                className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-slate-900 dark:text-white">
+                      {ct.property_name} — وحدة {ct.unit_number}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      عقد <span dir="ltr">{ct.contract_number}</span> · <span dir="ltr">{ct.start_date} → {ct.end_date}</span>
+                    </p>
+                  </div>
+                  <Badge tone={ct.status === "active" ? "success" : "neutral"}>
+                    {CONTRACT_STATUS_AR[ct.status] ?? ct.status}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  الإيجار السنوي <b dir="ltr">{halalasToSar(ct.annual_rent_halalas)}</b> ر.س
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      {/* Instalments as stacked rows: a five-column table on a phone is a table nobody reads. */}
+      <Section id="charges" title="جدول الاستحقاقات">
+        {charges.length === 0 ? (
+          <Empty>لا توجد استحقاقات بعد.</Empty>
+        ) : (
+          <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+            {charges.map((c) => (
+              <li key={c.charge_id} className="flex items-center justify-between gap-3 bg-white px-4 py-3 dark:bg-slate-900">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium" dir="ltr">{c.due_date}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {c.is_settled ? (
+                      <>سُدّد بالكامل</>
+                    ) : (
+                      <>
+                        المتبقّي <b dir="ltr">{halalasToSar(c.balance_halalas)}</b> من{" "}
+                        <span dir="ltr">{halalasToSar(c.gross_halalas)}</span> ر.س
+                      </>
+                    )}
+                  </p>
+                </div>
+                {chargeBadge(c)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <Section id="payments" title="سنداتي">
+        {payments.length === 0 ? (
+          <Empty>لا توجد دفعات مسجّلة بعد.</Empty>
+        ) : (
+          <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+            {payments.map((p) => (
+              <li key={p.id} className="flex items-center justify-between gap-3 bg-white px-4 py-3 dark:bg-slate-900">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    <span dir="ltr">{halalasToSar(p.amount_halalas)}</span> ر.س
+                    <span className="mr-2 text-xs font-normal text-slate-500">
+                      {PAYMENT_METHOD_AR[p.method] ?? p.method}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    <span dir="ltr">{day(p.received_at)}</span>
+                    {p.receipt_no && <> · سند <span dir="ltr" className="font-mono">{p.receipt_no}</span></>}
+                  </p>
+                </div>
+                <Link
+                  href={`/portal/tenant/${tenantId}/receipt/${p.id}`}
+                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                >
+                  السند
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <Section
+        id="maintenance"
+        title="طلبات الصيانة"
+        action={openRequests.length > 0 ? <span className="text-xs text-slate-500">{openRequests.length} قيد المتابعة</span> : null}
+      >
+        {requests.length > 0 && (
+          <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+            {requests.map((r) => (
+              <li key={r.id} className="bg-white px-4 py-3 dark:bg-slate-900">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {MAINTENANCE_CATEGORY_AR[r.category] ?? r.category}
+                      {r.unit_number && <span className="mr-2 text-xs font-normal text-slate-500">وحدة {r.unit_number}</span>}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">{r.description}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      <span dir="ltr">{r.request_no ?? "—"}</span> · <span dir="ltr">{day(r.created_at)}</span>
+                      {r.urgency !== "normal" && <> · {MAINTENANCE_URGENCY_AR[r.urgency] ?? r.urgency}</>}
+                    </p>
+                  </div>
+                  <Badge
+                    tone={
+                      r.status === "resolved" ? "success" : r.status === "in_progress" ? "info" : r.status === "cancelled" ? "neutral" : "warning"
+                    }
+                  >
+                    {MAINTENANCE_STATUS_AR[r.status] ?? r.status}
+                  </Badge>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <details className="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900" open={requests.length === 0}>
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-brand">
+            + طلب صيانة جديد
+          </summary>
+          <div className="border-t border-slate-100 p-4 dark:border-slate-800">
+            <MaintenanceRequestForm tenantId={tenantId} units={openUnits} />
+          </div>
+        </details>
+      </Section>
+
+      <p className="pt-2 text-center text-[11px] text-slate-400">
         <Link href="/portal" className="hover:text-brand">← بوابتك</Link>
       </p>
     </div>
