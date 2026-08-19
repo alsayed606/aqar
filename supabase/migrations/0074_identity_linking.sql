@@ -62,8 +62,10 @@ begin
   if v_before is null then
     raise exception 'UNKNOWN_SETTING' using errcode = 'raise_exception';
   end if;
+  -- Floor of 1, not 0: a zero-day trial provisions an office that is locked out the moment it is
+  -- created (0055). Rewriting this function is how that fix nearly got lost.
   if p_key = 'trial_days' and (jsonb_typeof(p_value) <> 'number'
-       or (p_value)::text::int < 0 or (p_value)::text::int > 365) then
+       or (p_value)::text::int < 1 or (p_value)::text::int > 365) then
     raise exception 'INVALID_SETTING' using errcode = 'raise_exception';
   end if;
   if p_key = 'default_plan' and not exists (select 1 from app.plan where code = p_value #>> '{}') then
