@@ -143,23 +143,89 @@ try {
       q("insert into app.property(org_id,owner_id,name) values($1,$2,'nope')", [org1, own1])));
   await client.query("update app.membership set status='active' where identity_id=$1 and org_id=$2", [idC, org1]);
 
-  // ================= 10. No auto-link Party<->Identity by phone =================
+  // ================= 10. Party ↔ Identity linking (0074) =================
   await expectThrow('10 setting party.identity_id without invitation is blocked', () =>
     q("update app.party set identity_id=$1 where id=$2", [idA, tParty]), 'PARTY_LINK_FORBIDDEN');
-  // sanctioned path works: create an invitation and link via RPC
-  const tok = 'invite-token-123';
-  await q(`insert into app.invitation(org_id,phone_e164,role,token_hash,expires_at)
-           values($1,'+966500000009','viewer', encode(extensions.digest($2,'sha256'),'hex'), now()+interval '7 days')`, [org1, tok]);
-  // sanctioned link must persist, so commit this one (runAs rolls back by design)
+
+  // The back door removed by 0074: it took a caller-chosen party id and ANY live token in the org.
+  const backDoor = await one(`select count(*)::int as n from pg_proc pr
+     join pg_namespace ns on ns.oid = pr.pronamespace
+     where ns.nspname = 'app' and pr.proname = 'link_party_identity'`);
+  ok('10 link_party_identity no longer exists', backDoor.n === 0);
+
+  // Accept as a given login, with the contact claims the auth provider would have verified.
+  // Committed rather than rolled back: later assertions read the link that acceptance wrote.
+  const acceptAs = async (sub, claims, token) => {
+    await client.query('begin');
+    try {
+      await client.query("select set_config('request.jwt.claims', $1, true)",
+        [JSON.stringify({ sub, role: 'authenticated', ...claims })]);
+      await client.query('set local role authenticated');
+      const r = await client.query('select app.accept_portal_invitation($1) as party', [token]);
+      await client.query('reset role');
+      await client.query('commit');
+      return r.rows[0].party;
+    } catch (e) {
+      await client.query('rollback');
+      throw e;
+    }
+  };
+  const mkInvite = async (token, extra) => {
+    await q(`insert into app.invitation(org_id, party_id, kind, email, phone_e164, token_hash, expires_at)
+             values($1, $2, $3, $4, $5, encode(extensions.digest($6,'sha256'),'hex'), now() + interval '7 days')`,
+      [org1, extra.party ?? tParty, extra.kind ?? 'tenant_portal', extra.email ?? null,
+       extra.phone ?? null, token]);
+  };
+
+  // A membership invitation is not a portal invitation, whoever holds it.
+  await q(`insert into app.invitation(org_id, phone_e164, role, token_hash, expires_at)
+           values($1,'+966500000009','viewer', encode(extensions.digest('team-tok','sha256'),'hex'), now()+interval '7 days')`,
+    [org1]);
+  await expectThrow('10 a membership token cannot claim a portal profile',
+    () => acceptAs(idA, { email: 'a@example.com' }, 'team-tok'), 'INVITATION_INVALID');
+
+  // The invitation is addressed to one mailbox. Another account holding the link is not that person.
+  await mkInvite('tenant-tok', { email: 'tenant@example.com' });
+  await expectThrow('10 an account with a different email cannot accept',
+    () => acceptAs(idA, { email: 'someone.else@example.com' }, 'tenant-tok'), 'CONTACT_MISMATCH');
+  await expectThrow('10 an account with no email claim cannot accept',
+    () => acceptAs(idA, {}, 'tenant-tok'), 'CONTACT_MISMATCH');
+  ok('10 the party is still unlinked after both refusals',
+    (await one("select identity_id from app.party where id=$1", [tParty])).identity_id === null);
+
+  // The invited mailbox links, and repeating it is idempotent rather than an error.
+  const linkedParty = await acceptAs(idA, { email: 'Tenant@Example.com' }, 'tenant-tok');
+  ok('10 the invited account links (email compared case-insensitively)', linkedParty === tParty);
+  ok('10 the link is recorded on the party',
+    (await one("select identity_id from app.party where id=$1", [tParty])).identity_id === idA);
+
+  // A second, still-live invitation to the same party cannot hand it to somebody else.
+  await mkInvite('takeover-tok', { email: 'other@example.com' });
+  await expectThrow('10 a linked profile cannot be taken over by another login',
+    () => acceptAs(idB, { email: 'other@example.com' }, 'takeover-tok'), 'ALREADY_LINKED');
+
+  // Unlinking is an office action, gated and explained.
+  await expectThrow('10 unlink requires a reason', () =>
+    runAs(client, idA, org1, () => q("select app.unlink_party_identity($1, '')", [tParty])), 'REASON_REQUIRED');
+  await expectThrow('10 a non-admin cannot unlink', () =>
+    runAs(client, idS, org1, () => q("select app.unlink_party_identity($1, 'wrong account')", [tParty])), 'FORBIDDEN');
   await client.query('begin');
   await client.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: idA, role: 'authenticated' })]);
   await client.query("select set_config('request.headers', $1, true)", [JSON.stringify({ 'x-active-org': org1 })]);
   await client.query('set local role authenticated');
-  await client.query('select app.link_party_identity($1,$2)', [tParty, tok]);
+  await client.query("select app.unlink_party_identity($1, 'tenant used the wrong mailbox')", [tParty]);
   await client.query('reset role');
   await client.query('commit');
-  const linked = (await one("select identity_id from app.party where id=$1", [tParty])).identity_id;
-  ok('10 sanctioned link via valid invitation token succeeds', linked === idA);
+  ok('10 an admin can unlink, and the profile becomes free again',
+    (await one("select identity_id from app.party where id=$1", [tParty])).identity_id === null);
+  ok('10 the unlink is written to the audit log',
+    (await one("select count(*)::int as n from app.audit_log where action='portal.unlink' and entity_id=$1", [tParty])).n === 1);
+
+  // Which is what makes re-inviting possible at all.
+  const relinked = await acceptAs(idB, { email: 'other@example.com' }, 'takeover-tok');
+  ok('10 after unlinking, a fresh invitation links the new account', relinked === tParty);
+
+  // The rest of the suite only uses this party for payments, so it is left linked as it stands.
 
   // ================= 11. UPDATE on active contract rejected =================
   await expectThrow('11 UPDATE on active contract is rejected', () =>
