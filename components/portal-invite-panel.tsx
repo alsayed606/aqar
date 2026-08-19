@@ -22,6 +22,8 @@ export type InviteState = {
   sent_at: string | null;
   sent_channel: string | null;
   sent_to: string | null;
+  /** The provider's id for the message it accepted (0077) — evidence, not proof of arrival. */
+  sent_message_id: string | null;
   opened_at: string | null;
   expires_at: string | null;
   linked: boolean;
@@ -43,7 +45,9 @@ const STATE_AR: Record<string, string> = {
 const STATE_HINT: Record<string, string> = {
   none: "أرسِل الدعوة ليطّلع المستأجر على عقده ودفعاته ويقدّم طلبات الصيانة.",
   pending: "الرمز موجود ولم تخرج رسالة. اضغط «إرسال» ليصل.",
-  sent: "وصلت الرسالة إلى البريد. ننتظر أن يفتحها.",
+  // Deliberately not "وصلت": what we know is that the provider took the message, and telling the
+  // office more than we know is what turns "لم يصلني شيء" into an argument nobody can settle.
+  sent: "سلّمنا الرسالة لمزوّد البريد وقبِلها. ننتظر أن يفتحها المستأجر.",
   opened: "فُتح الرابط ولم يكتمل الربط بعد — قد يكون سجّل الدخول ببريد آخر.",
   accepted: "قُبلت الدعوة.",
   linked: "يستطيع المستأجر الدخول إلى بوابته الآن.",
@@ -177,6 +181,22 @@ export function PortalInvitePanel({
       </div>
 
       <p className="text-sm text-slate-600 dark:text-slate-400">{STATE_HINT[state] ?? ""}</p>
+
+      {canManage && invite.sent_message_id && (
+        // Folded away: it matters on the one day the tenant says nothing arrived, and is noise on
+        // every other day.
+        <details className="text-xs text-slate-500">
+          <summary className="cursor-pointer">لم تصل الرسالة؟</summary>
+          <p className="mt-1">
+            معرّف الرسالة لدى مزوّد البريد:{" "}
+            <span dir="ltr" className="font-mono select-all">{invite.sent_message_id}</span>
+          </p>
+          <p className="mt-1">
+            ابحث عنه في سجلّ المزوّد ليقول لك: سُلّمت، أم ارتدّت، أم صُنّفت مزعجة. ونحن لا نرى ذلك من
+            هنا — نعرف فقط أنه قبِلها.
+          </p>
+        </details>
+      )}
 
       {canManage && (
         <div className="flex flex-wrap items-start gap-3">

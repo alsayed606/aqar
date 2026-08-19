@@ -83,10 +83,14 @@ export async function sendPortalInvite(_prev: FormState, formData: FormData): Pr
     return { error: "أُنشئت الدعوة ولم يتمكّن النظام من إرسالها. حاول «إعادة الإرسال» بعد قليل." };
   }
 
+  // The provider's id is kept (0077), not discarded. "أُرسلت" means Resend accepted the message —
+  // usually the same thing as delivered, occasionally not, and this is the only thread from our row
+  // to the provider's log when a tenant says nothing arrived.
   const { error: markError } = await supabase.rpc("mark_invitation_sent", {
     p_invitation: invite.id,
     p_channel: "email",
     p_to: invite.email,
+    p_message_id: sent.id,
   });
   if (markError) console.error("[portal-invite] mark_sent", markError.message);
 

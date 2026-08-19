@@ -100,7 +100,7 @@ export default async function TenantEditPage({
     supabase.from("organization").select("name").eq("id", activeOrg).maybeSingle(),
   ]);
   const invite: InviteState = (first(inviteRows as any) as InviteState | undefined) ?? {
-    state: "none", sent_at: null, sent_channel: null, sent_to: null,
+    state: "none", sent_at: null, sent_channel: null, sent_to: null, sent_message_id: null,
     opened_at: null, expires_at: null, linked: false,
   };
 

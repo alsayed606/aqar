@@ -78,11 +78,20 @@ try {
   ok("a fresh invitation reads as 'pending'", (await stateOf()).state === "pending");
 
   const inv1 = (await one("select id from app.invitation where party_id=$1 order by created_at desc limit 1", [party])).id;
-  await asUser(admin, org, {}, () => q("select app.mark_invitation_sent($1,'email','nora@example.com')", [inv1]));
+  await asUser(admin, org, {}, () =>
+    q("select app.mark_invitation_sent($1,'email','nora@example.com','re_abc123')", [inv1]));
   const sent = await stateOf();
   ok("after sending it reads as 'sent'", sent.state === "sent");
   ok("the address it went to is recorded", sent.sent_to === "nora@example.com");
   ok("the channel is recorded", sent.sent_channel === "email");
+  // 0077: without it, "لم تصل الرسالة" has no thread back to the provider's log.
+  ok("the provider's message id is kept", sent.sent_message_id === "re_abc123");
+  ok(
+    "the message id reaches the audit line too",
+    (await one(
+      `select detail->>'message_id' as mid from app.audit_log
+        where action='portal.invite_sent' order by created_at desc limit 1`)).mid === "re_abc123",
+  );
 
   await asUser(tenantLogin, null, { email: "nora@example.com" }, () =>
     q("select app.mark_invitation_opened($1)", [token1]));
