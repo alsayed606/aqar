@@ -36,7 +36,22 @@ async function origin(): Promise<string> {
  * more than one live link per profile. The send is recorded only if the provider accepted it —
  * "sent" must mean sent, or the office reads a state that never happened.
  */
-export async function sendPortalInvite(_prev: FormState, formData: FormData): Promise<FormState> {
+export type InviteFormState = FormState & {
+  /**
+   * The link just issued, handed back so the office can carry it by hand when email fails.
+   *
+   * Returned once, from the call that created it, and never afterwards: `portal_invitation_state`
+   * does not return the token, and this action is the only place it exists outside the database.
+   * Safe to show only because 0074 made the link insufficient on its own — acceptance still requires
+   * the signed-in address to match the invited one, so whoever picks it up cannot use it.
+   */
+  link?: string;
+};
+
+export async function sendPortalInvite(
+  _prev: InviteFormState,
+  formData: FormData,
+): Promise<InviteFormState> {
   const partyId = String(formData.get("party_id") ?? "");
   if (!partyId) return { error: "سجلّ غير معروف" };
 
@@ -101,7 +116,13 @@ export async function sendPortalInvite(_prev: FormState, formData: FormData): Pr
     // The invitation exists and is live; only the delivery failed. Saying so plainly beats a generic
     // failure that would push the office to click again and rotate a link that was never sent.
     console.error("[portal-invite]", sent.error);
-    return { error: "أُنشئت الدعوة ولم يتمكّن النظام من إرسالها. حاول «إعادة الإرسال» بعد قليل." };
+    // The link goes back with the failure. This is the case that needs it most: the invitation is
+    // live and nothing carried it, and telling the office to click again only rotates a token that
+    // was never delivered either.
+    return {
+      error: "أُنشئت الدعوة ولم يتمكّن النظام من إرسالها. انسخ الرابط وأرسله بنفسك، أو أعد المحاولة.",
+      link,
+    };
   }
 
   // The provider's id is kept (0077), not discarded. "أُرسلت" means Resend accepted the message —
@@ -116,7 +137,7 @@ export async function sendPortalInvite(_prev: FormState, formData: FormData): Pr
   if (markError) console.error("[portal-invite] mark_sent", markError.message);
 
   revalidatePath("/app/tenants");
-  return { ok: `أُرسلت الدعوة إلى ${invite.email}` };
+  return { ok: `أُرسلت الدعوة إلى ${invite.email}`, link };
 }
 
 export async function revokePortalInvite(_prev: FormState, formData: FormData): Promise<FormState> {

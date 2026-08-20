@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Badge } from "@/components/ui";
 import { ConfirmButton } from "@/components/confirm-button";
 import { useSuccessToast } from "@/components/form-field";
@@ -9,6 +9,7 @@ import {
   revokePortalInvite,
   unlinkPortalAccount,
 } from "@/app/app/tenants/portal-actions";
+import type { InviteFormState } from "@/app/app/tenants/portal-actions";
 import type { FormState } from "@/lib/form-state";
 
 // Where the office's portal invitation stands, and what can still be done about it.
@@ -71,11 +72,53 @@ const STATE_TONE: Record<string, "neutral" | "success" | "warning" | "info" | "d
 const initial: FormState = {};
 const day = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0, 10) : null);
 
-function SendForm({ partyId, label }: { partyId: string; label: string }) {
-  const [state, action, pending] = useActionState(sendPortalInvite, initial);
-  useSuccessToast(state);
+/**
+ * The link, shown once, right where it was issued.
+ *
+ * A mailbox can swallow the message — a filter, a forward, a rule nobody remembers writing — and
+ * before this the office's only move was to send again into the same wall. The link is never stored
+ * on the screen and `portal_invitation_state` never returns it: whoever misses the copy issues a new
+ * one. Showing it is safe only because 0074 made the link insufficient by itself — acceptance still
+ * demands that the signed-in address match the invited one.
+ */
+function IssuedLink({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false);
   return (
-    <form action={action} className="space-y-2">
+    <div className="rounded-lg border border-brand/30 bg-brand/5 p-3 text-sm">
+      <p className="font-medium">الرابط — انسخه الآن إن أردت إرساله بنفسك</p>
+      <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+        لن يظهر مرّة أخرى. ومن فاته النسخ يُصدر دعوة جديدة.
+      </p>
+      <div className="mt-2 flex items-center gap-2">
+        <code dir="ltr" className="flex-1 overflow-x-auto rounded bg-white px-2 py-1 text-xs select-all dark:bg-slate-900">
+          {link}
+        </code>
+        <button
+          type="button"
+          onClick={() => {
+            navigator.clipboard.writeText(link).then(
+              () => setCopied(true),
+              // Clipboard access can be refused; the code above stays selectable either way, so the
+              // office is never left without a way to take the link.
+              () => setCopied(false),
+            );
+          }}
+          className="shrink-0 rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+        >
+          {copied ? "نُسخ ✓" : "نسخ"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SendForm({ partyId, label }: { partyId: string; label: string }) {
+  const [state, action, pending] = useActionState<InviteFormState, FormData>(sendPortalInvite, initial);
+  useSuccessToast(state);
+  // grow + min-w-0: the link box is wide and sits inside a flex row, and without these it would
+  // either squeeze the code to nothing or push the row sideways.
+  return (
+    <form action={action} className="min-w-0 grow space-y-2">
       <input type="hidden" name="party_id" value={partyId} />
       <button
         disabled={pending}
@@ -88,6 +131,7 @@ function SendForm({ partyId, label }: { partyId: string; label: string }) {
           {state.error}
         </p>
       )}
+      {state.link && <IssuedLink link={state.link} />}
     </form>
   );
 }
