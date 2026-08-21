@@ -4,6 +4,14 @@
 
 مشروع Supabase: `hiuhvgykuovrbuiqcqvi` · المستودع: `alsayed606/aqar` (فرع `main`) · الاستضافة: Vercel.
 
+**الإنتاج: <https://aqar-eta.vercel.app>**
+
+| بعد كل نشر، بهذا الترتيب | |
+|---|---|
+| [`/api/version`](https://aqar-eta.vercel.app/api/version) | **يطابق `git rev-parse HEAD`؟** إن لم يطابق فما تراه نسخة أقدم — **ولا تُصحّح كوداً لم يُنشر** |
+| [`/api/health`](https://aqar-eta.vercel.app/api/health) | الاتصال بالقاعدة |
+| `/platform/health` | **الهجرات: كم من كم** — يقرأها من القاعدة. **افتحها بعد كل تطبيق هجرة، وقبل إضافة أي مكتب** |
+
 ---
 
 ## 1) تطبيق الهجرتين الجديدتين على قاعدة البيانات — `بيانات`

@@ -5,6 +5,14 @@ A Saudi property-management SaaS — a live Next.js app over Supabase (Postgres 
 
 ## الحالة | Status
 **قيد التطوير النشط — التطبيق حيّ** على Vercel فوق PostgreSQL 17 (Supabase).
+
+| | |
+|---|---|
+| **الإنتاج** | **<https://aqar-eta.vercel.app>** |
+| **حالة النشر** | [`/api/version`](https://aqar-eta.vercel.app/api/version) يُعيد الـcommit المنشور · [`/api/health`](https://aqar-eta.vercel.app/api/health) يفحص الاتصال بالقاعدة |
+| **الهجرات المطبَّقة** | `/platform/health` (للمشغّل فقط) — يقرأها من القاعدة، لا من قائمة مكتوبة بيد |
+
+> **`/api/version` هو أداة الفحص البصري الأولى:** إن لم يطابق `git rev-parse HEAD` فأنت تنظر إلى نسخة أقدم — **وقد أُهدر وقتٌ على تصحيح كودٍ لم يُنشر بعد.**
 المرجع الأعلى للمشروع هو **[ميثاق المشروع](docs/foundation/07-project-charter.md)** ووثائق التأسيس في [`docs/foundation/`](docs/foundation/).
 
 > **عدد الهجرات لا يُكتب هنا.** كُتب مرّة («٣١ هجرة») وبقي بينما صارت ٦٨. المصدر الحيّ هو مجلّد [`supabase/migrations/`](supabase/migrations/)، **وأيّها مطبَّق فعلاً** تقوله `/platform/health` من القاعدة نفسها (سجلّ الهجرات، `0068`).
