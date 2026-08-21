@@ -81,6 +81,24 @@ export function MaintenanceRequestForm({ tenantId, units }: { tenantId: string; 
         )}
       </label>
 
+      <label className="block text-sm sm:col-span-2">
+        <span className="mb-1 block text-xs text-slate-500">صورة العطل — اختيارية</span>
+        {/* capture="environment" opens the back camera straight away on a phone, which is where this
+            screen is read and where the fault is. accept keeps the picker to images on desktop. */}
+        <input
+          type="file"
+          name="photo"
+          accept="image/jpeg,image/png,image/webp"
+          capture="environment"
+          className="w-full rounded-lg border border-slate-300 bg-transparent px-3 py-2 text-sm file:me-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm dark:border-slate-700 dark:file:bg-slate-800"
+        />
+        {/* Said plainly because the tenant is about to photograph their own home: the office sees
+            this, and nobody else does. */}
+        <span className="mt-1 block text-xs text-slate-500">
+          صورةٌ واحدة تغني عن زيارة. يراها المكتب فقط، ولا يراها المالك. الحد ٥ ميغابايت.
+        </span>
+      </label>
+
       <div className="sm:col-span-2 space-y-2">
         {state.error && !state.field && (
           <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">

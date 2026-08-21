@@ -55,6 +55,7 @@ type MaintenanceLine = {
   status: string;
   description: string;
   unit_number: string | null;
+  has_photo: boolean;
   created_at: string;
   resolved_at: string | null;
 };
@@ -360,6 +361,18 @@ export default async function TenantPortalDashboard({ params }: { params: Promis
                       <span dir="ltr">{r.request_no ?? "—"}</span> · <span dir="ltr">{day(r.created_at)}</span>
                       {r.urgency !== "normal" && <> · {MAINTENANCE_URGENCY_AR[r.urgency] ?? r.urgency}</>}
                     </p>
+                    {/* Confirmation, not decoration: without it the tenant has no way to know the
+                        photo arrived, and sends it again by WhatsApp. */}
+                    {r.has_photo && (
+                      <a
+                        href={`/api/maintenance/photo/${r.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-block text-xs text-brand underline"
+                      >
+                        الصورة المرفقة ←
+                      </a>
+                    )}
                   </div>
                   <Badge tone={maintenanceStatusTone(r.status)}>
                     {MAINTENANCE_STATUS_AR[r.status] ?? r.status}

@@ -13,6 +13,14 @@ const ok = (name, cond, extra = "") => {
   if (cond) { pass++; console.log("  PASS  " + name); }
   else { fail++; console.log("  FAIL  " + name + (extra ? "  -> " + extra : "")); }
 };
+async function expectThrow(name, fn, needle) {
+  try { await fn(); fail++; console.log("  FAIL  " + name + "  -> expected error, none thrown"); }
+  catch (e) {
+    const good = !needle || (e.message && e.message.includes(needle));
+    if (good) { pass++; console.log("  PASS  " + name); }
+    else { fail++; console.log("  FAIL  " + name + "  -> got: " + e.message); }
+  }
+}
 
 const { client, stop } = await bootWithMigrations(54365);
 const q = (sql, params) => client.query(sql, params);
@@ -185,6 +193,44 @@ try {
     `select count(*)::int as n from app.notification
       where org_id = $1 and read_at is null and recipient_party_id is null`, [org])).n;
   ok("the unread gauge counts office work only", unread === officeUnread, `${unread} vs ${officeUnread}`);
+
+  // ---------------- 7. Photos (0079) ----------------
+  // The storage half is skipped on bare Postgres — there is no storage schema — so what is provable
+  // here is the pair of functions the application calls, which is where the rules live anyway.
+  const folder = await asUser(tenantLogin, null, async () =>
+    (await one("select app.maintenance_photo_folder($1) as f", [tenant])).f);
+  ok("the folder is the tenant's own org and party", folder === `${org}/${party}`);
+
+  await expectThrow(
+    "another tenant cannot ask for that folder",
+    () => asUser(otherLogin, null, () => q("select app.maintenance_photo_folder($1)", [tenant])),
+    "FORBIDDEN",
+  );
+
+  const photoReq = await mkRequest();
+  const path = `${folder}/${photoReq}.jpg`;
+  await asUser(tenantLogin, null, () => q("select app.attach_maintenance_photo($1,$2)", [photoReq, path]));
+  ok("the tenant attaches a photo to their own request",
+    (await one("select photo_path from app.maintenance_request where id=$1", [photoReq])).photo_path === path);
+
+  // Evidence, not a draft. The person with the most reason to swap it holds this door.
+  await expectThrow(
+    "a photo cannot be replaced once set",
+    () => asUser(tenantLogin, null, () => q("select app.attach_maintenance_photo($1,$2)", [photoReq, path + "x"])),
+    "PHOTO_ALREADY_SET",
+  );
+
+  const strangerReq = await mkRequest();
+  await expectThrow(
+    "a stranger cannot attach a photo to someone else's request",
+    () => asUser(otherLogin, null, () => q("select app.attach_maintenance_photo($1,$2)", [strangerReq, path])),
+    "FORBIDDEN",
+  );
+
+  const line = await asUser(tenantLogin, null, async () =>
+    (await q("select * from app.tenant_portal_maintenance($1) where id = $2", [tenant, photoReq])).rows[0]);
+  ok("the tenant sees that a photo is attached", line.has_photo === true);
+  ok("but never the path itself", !("photo_path" in line));
 } catch (e) {
   // Without this the finally's process.exit(0) swallows a setup failure and the run reports
   // "0 passed, 0 failed" — a green-looking suite that never ran.

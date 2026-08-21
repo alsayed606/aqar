@@ -46,7 +46,7 @@ export default async function MaintenancePage({
   const { data, error } = await supabase
     .from("maintenance_request")
     .select(
-      "id, request_no, status, urgency, category, description, assignee_name, vendor_name, estimated_cost_halalas, cost_bearer, resolution_note, created_at, unit:unit_id(unit_number), property:property_id(name), reporter:reported_by_party_id(display_name)",
+      "id, request_no, status, urgency, category, description, assignee_name, vendor_name, estimated_cost_halalas, cost_bearer, resolution_note, photo_path, created_at, unit:unit_id(unit_number), property:property_id(name), reporter:reported_by_party_id(display_name)",
     )
     .is("deleted_at", null)
     // Emergency first, then urgent, then by age: the queue is read top-down under pressure.
@@ -68,6 +68,7 @@ export default async function MaintenancePage({
     estimated_cost_halalas: r.estimated_cost_halalas,
     cost_bearer: r.cost_bearer,
     resolution_note: r.resolution_note,
+    photo_path: r.photo_path,
     created_at: r.created_at,
   }));
 

@@ -83,4 +83,5 @@ export const EXPECTED_MIGRATIONS: ExpectedMigration[] = [
   { version: "0076", name: "0076_tenant_payment_info" },
   { version: "0077", name: "0077_invitation_provider_receipt" },
   { version: "0078", name: "0078_tenant_notifications" },
+  { version: "0079", name: "0079_maintenance_photos" },
 ];

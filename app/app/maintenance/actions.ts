@@ -44,6 +44,39 @@ export async function setMaintenanceStatus(_prev: FormState, formData: FormData)
   return { ok: "حُدِّثت حالة الطلب." };
 }
 
+/**
+ * Remove the tenant's photograph from a request (0079).
+ *
+ * Two reasons it exists: junk, and a data-subject request. PDPL erasure (0061) is SQL and cannot
+ * delete a storage object, so until a sweep exists this button is how a photograph of someone's home
+ * actually leaves the system. Admins only — the bucket's delete policy says so as well.
+ */
+export async function deleteMaintenancePhoto(_prev: FormState, formData: FormData): Promise<FormState> {
+  const id = String(formData.get("request_id") ?? "");
+  const path = String(formData.get("photo_path") ?? "");
+  if (!id || !path) return { error: "طلب غير معروف" };
+
+  const supabase = await createClient();
+  // The row is cleared first on purpose: if the object delete fails, the screen stops offering a
+  // photo it can no longer fetch, rather than keeping a link to a file that may or may not be gone.
+  const { error, data } = await supabase
+    .from("maintenance_request")
+    .update({ photo_path: null })
+    .eq("id", id)
+    .select("id");
+  if (error) return { error: error.message };
+  if (writeRefused(data)) return { error: WRITE_REFUSED_AR };
+
+  const { error: removeError } = await supabase.storage.from("maintenance-photos").remove([path]);
+  if (removeError) {
+    console.error("[maintenance-photo] remove", removeError.message);
+    return { error: "أُزيلت الصورة من الطلب، ولم تُحذف من التخزين. حذفها متاح لمدراء المنشأة." };
+  }
+
+  revalidatePath("/app/maintenance");
+  return { ok: "حُذفت الصورة." };
+}
+
 /** Who is doing the work, what it is expected to cost, and who carries that cost. */
 export async function saveMaintenanceAssignment(_prev: FormState, formData: FormData): Promise<FormState> {
   const activeOrg = await getActiveOrg();

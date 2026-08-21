@@ -3,7 +3,12 @@
 import { useActionState } from "react";
 import { Badge } from "@/components/ui";
 import { useSuccessToast } from "@/components/form-field";
-import { setMaintenanceStatus, saveMaintenanceAssignment } from "@/app/app/maintenance/actions";
+import { ConfirmButton } from "@/components/confirm-button";
+import {
+  setMaintenanceStatus,
+  saveMaintenanceAssignment,
+  deleteMaintenancePhoto,
+} from "@/app/app/maintenance/actions";
 import {
   MAINTENANCE_CATEGORY_AR,
   MAINTENANCE_URGENCY_AR,
@@ -31,10 +36,55 @@ export type MaintenanceRow = {
   estimated_cost_halalas: number | null;
   cost_bearer: string | null;
   resolution_note: string | null;
+  /** Set once by the tenant (0079). The path itself is never rendered — the photo is fetched by id. */
+  photo_path: string | null;
   created_at: string;
 };
 
 const initial: FormState = {};
+
+/**
+ * The tenant's photograph, and the only way it leaves the system.
+ *
+ * PDPL erasure (0061) is SQL and cannot delete a storage object, so a picture of someone's kitchen
+ * outlives the erasure of the person who sent it unless somebody removes it here.
+ */
+function PhotoPanel({ request }: { request: MaintenanceRow }) {
+  const [state, action, pending] = useActionState(deleteMaintenancePhoto, initial);
+  useSuccessToast(state);
+  const src = `/api/maintenance/photo/${request.id}`;
+  return (
+    <div className="space-y-2">
+      {/* Opened in a new tab rather than a lightbox: the office wants it big, and the browser's own
+          image view zooms and rotates better than anything worth building here. */}
+      <a
+        href={src}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- streamed from our own route, no
+            known dimensions, and next/image would proxy a private file through its optimiser. */}
+        <img
+          src={src}
+          alt="صورة العطل كما أرسلها المستأجر"
+          className="max-h-72 w-full bg-slate-100 object-contain dark:bg-slate-900"
+        />
+      </a>
+      <form action={action} className="flex items-center gap-3">
+        <input type="hidden" name="request_id" value={request.id} />
+        <input type="hidden" name="photo_path" value={request.photo_path ?? ""} />
+        <ConfirmButton
+          message="حذف الصورة؟ لا يمكن التراجع، والمستأجر لن يستطيع إرسالها على الطلب نفسه."
+          className="text-xs text-red-700 underline hover:no-underline dark:text-red-400"
+        >
+          {pending ? "…" : "حذف الصورة"}
+        </ConfirmButton>
+        {state.error && <span role="alert" className="text-xs text-red-700 dark:text-red-400">{state.error}</span>}
+      </form>
+    </div>
+  );
+}
 const field = "w-full rounded-lg border border-slate-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-slate-700";
 const bad = "w-full rounded-lg border border-red-400 bg-transparent px-3 py-2 text-sm outline-none dark:border-red-500";
 
@@ -163,6 +213,8 @@ export function MaintenanceInspector({ request }: { request: MaintenanceRow }) {
 
       {/* The tenant's own words, not summarised: the office reads them to decide who to send. */}
       <p className="rounded-xl bg-slate-50 p-3 text-sm leading-7 dark:bg-slate-800/50">{request.description}</p>
+
+      {request.photo_path && <PhotoPanel request={request} />}
 
       <StatusForm request={request} />
       <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
