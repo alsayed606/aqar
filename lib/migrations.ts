@@ -76,4 +76,11 @@ export const EXPECTED_MIGRATIONS: ExpectedMigration[] = [
   { version: "0069", name: "0069_email_mfa" },
   { version: "0070", name: "0070_email_backlog_expiry" },
   { version: "0071", name: "0071_mfa_recovery" },
+  { version: "0072", name: "0072_maintenance" },
+  { version: "0073", name: "0073_tenant_portal_units" },
+  { version: "0074", name: "0074_identity_linking" },
+  { version: "0075", name: "0075_invitation_lifecycle" },
+  { version: "0076", name: "0076_tenant_payment_info" },
+  { version: "0077", name: "0077_invitation_provider_receipt" },
+  { version: "0078", name: "0078_tenant_notifications" },
 ];

@@ -76,7 +76,7 @@ export async function GET(request: Request) {
   const notifIds = [...new Set(rows.map((r) => r.notification_id))];
   const orgIds = [...new Set(rows.map((r) => r.org_id))];
   const [{ data: notifs }, { data: orgs }] = await Promise.all([
-    admin.from("notification").select("id, title, body").in("id", notifIds),
+    admin.from("notification").select("id, title, body, link_path").in("id", notifIds),
     admin.from("organization").select("id, name").in("id", orgIds),
   ]);
   const notifById = new Map((notifs ?? []).map((n) => [n.id, n]));
@@ -96,7 +96,9 @@ export async function GET(request: Request) {
       orgName: orgNameById.get(row.org_id) ?? "عقار",
       title: n.title as string,
       body: (n.body as string | null) ?? null,
-      link: `${origin}/app/notifications`,
+      // The destination comes from the notification (0078). It used to be this staff page for every
+      // message, which is a wall to a tenant being told their request was closed.
+      link: `${origin}${(n.link_path as string | null) ?? "/app/notifications"}`,
     });
 
     const result = await sendEmail({ to: row.target, subject, text, html });

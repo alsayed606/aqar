@@ -11398,3 +11398,1455 @@ grant execute on function app.mfa_recovery_finish()                to authentica
 grant execute on function app.mfa_proved()                         to service_role;
 
 select app.record_migration('0071', '0071_mfa_recovery');
+
+-- ================================================================
+-- 0072_maintenance.sql
+-- ================================================================
+-- 0072_maintenance.sql
+-- طلبات الصيانة — the first thing in this product a TENANT may write.
+--
+-- Until now the tenant portal was read-only: a tenant could see their contracts, charges and
+-- receipts, and nothing they did changed a row. A maintenance request breaks that, so the entry
+-- point is deliberately narrow — ONE security-definer function that proves the tenant has an active
+-- contract on the unit before it inserts. There is no `for insert` policy for tenants on the table
+-- itself, because a policy is a door that a later, looser policy can widen by accident.
+--
+-- What this file does NOT do, on purpose:
+--   * No vendor table. "شركة الصفا للصيانة" is text. A vendor table drags in their contracts,
+--     price lists and ratings — a second module inside the first — and it should be extracted from
+--     real names later, not guessed at now.
+--   * cost_bearer records WHO pays; it posts nothing. Charging an owner for a repair touches the
+--     management fee and the owner statement, and that is an accounting decision of its own.
+--   * The owner portal is untouched. Owners do not see these rows (decision, 14 Aug 2026): their
+--     portal answers about money, and opening it onto maintenance opens "why isn't it fixed yet".
+--
+-- A request is never deleted. `cancelled` carries a reason, because the row is the record of a
+-- tenant's complaint and deleting it erases what the office may later be asked about.
+
+-- ---------------------------------------------------------------------------
+-- 1. Types
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'maintenance_status' and typnamespace = 'app'::regnamespace) then
+    create type app.maintenance_status as enum ('open', 'in_progress', 'resolved', 'cancelled');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'maintenance_urgency' and typnamespace = 'app'::regnamespace) then
+    create type app.maintenance_urgency as enum ('normal', 'urgent', 'emergency');
+  end if;
+  -- Who bears the cost. Recorded, not posted.
+  if not exists (select 1 from pg_type where typname = 'maintenance_cost_bearer' and typnamespace = 'app'::regnamespace) then
+    create type app.maintenance_cost_bearer as enum ('owner', 'tenant', 'office');
+  end if;
+end
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 2. The table
+-- ---------------------------------------------------------------------------
+-- unit_id is NOT NULL: a fault happens in a unit, and the unit names its property. A request
+-- floating at property level would have no tenant to answer and no scope to be filtered by.
+create table if not exists app.maintenance_request (
+  id                     uuid primary key default gen_random_uuid(),
+  org_id                 uuid not null references app.organization(id) on delete cascade,
+  property_id            uuid not null references app.property(id)     on delete cascade,
+  unit_id                uuid not null references app.unit(id)         on delete cascade,
+  request_no             text,                                   -- MR-YYYY-NNNNN, assigned by trigger
+  request_seq            bigint,
+
+  -- Who reported it. A tenant usually; an employee when the office spots it first, and then the
+  -- party is null rather than invented.
+  reported_by_party_id   uuid references app.party(id) on delete set null,
+  reported_by_identity   uuid,                                   -- the signed-in user, tenant or staff
+
+  category               text not null default 'other'
+                           check (category in ('plumbing','electrical','hvac','carpentry','appliance','other')),
+  urgency                app.maintenance_urgency not null default 'normal',
+  status                 app.maintenance_status  not null default 'open',
+  description            text not null check (btrim(description) <> ''),
+
+  -- Free text on purpose (see the header). Both may be empty while the request is still unassigned.
+  assignee_name          text,
+  vendor_name            text,
+
+  estimated_cost_halalas bigint check (estimated_cost_halalas is null or estimated_cost_halalas >= 0),
+  actual_cost_halalas    bigint check (actual_cost_halalas    is null or actual_cost_halalas    >= 0),
+  cost_bearer            app.maintenance_cost_bearer,
+
+  -- Optional (decision, 14 Aug 2026): a fault reported without a photo beats a fault not reported.
+  photo_path             text,                                   -- object key inside the org-assets bucket
+
+  resolved_at            timestamptz,
+  resolution_note        text,
+  cancelled_reason       text,
+
+  created_at             timestamptz not null default now(),
+  updated_at             timestamptz not null default now(),
+  deleted_at             timestamptz,
+  deleted_by             uuid,
+  deleted_reason         text,
+
+  unique (org_id, request_no)
+);
+
+create index if not exists maintenance_org_open_idx
+  on app.maintenance_request (org_id, created_at desc)
+  where status in ('open', 'in_progress') and deleted_at is null;
+create index if not exists maintenance_property_idx on app.maintenance_request (property_id);
+create index if not exists maintenance_unit_idx     on app.maintenance_request (unit_id);
+create index if not exists maintenance_party_idx    on app.maintenance_request (reported_by_party_id);
+
+-- ---------------------------------------------------------------------------
+-- 3. Numbering — MR-YYYY-NNNNN, the same gapless per-(org, year) counter as CT/INV/RV/RM
+-- ---------------------------------------------------------------------------
+create or replace function app.tg_assign_maintenance_no()
+returns trigger
+language plpgsql
+set search_path = app, pg_temp
+as $$
+declare
+  v_year text;
+begin
+  if new.request_no is null or btrim(new.request_no) = '' then
+    v_year          := to_char(now() at time zone 'Asia/Riyadh', 'YYYY');
+    new.request_seq := app.next_counter(new.org_id, 'maintenance:' || v_year);
+    new.request_no  := 'MR-' || v_year || '-' || lpad(new.request_seq::text, 5, '0');
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists maintenance_assign_no on app.maintenance_request;
+create trigger maintenance_assign_no
+  before insert on app.maintenance_request
+  for each row execute function app.tg_assign_maintenance_no();
+
+-- resolved_at is stamped by the database, not by the caller: "when did this close" must not depend
+-- on a client clock or on an update remembering to set two columns at once.
+create or replace function app.tg_maintenance_touch()
+returns trigger
+language plpgsql
+set search_path = app, pg_temp
+as $$
+begin
+  new.updated_at := now();
+  if new.status = 'resolved' and old.status is distinct from 'resolved' then
+    new.resolved_at := coalesce(new.resolved_at, now());
+  elsif new.status <> 'resolved' then
+    new.resolved_at := null;   -- reopened: the closing time is no longer true
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists maintenance_touch on app.maintenance_request;
+create trigger maintenance_touch
+  before update on app.maintenance_request
+  for each row execute function app.tg_maintenance_touch();
+
+-- ---------------------------------------------------------------------------
+-- 4. RLS
+-- ---------------------------------------------------------------------------
+alter table app.maintenance_request enable row level security;
+
+-- The office: exactly the gate the units use, so a member confined to certain properties sees the
+-- requests of those properties and no others — without this file knowing anything about scoping.
+drop policy if exists maintenance_office_all on app.maintenance_request;
+create policy maintenance_office_all on app.maintenance_request for all
+  using (app.has_property_access(org_id, property_id))
+  with check (app.has_property_access(org_id, property_id));
+
+-- The tenant: reads their own requests through the portal. Read only — every tenant write goes
+-- through submit_maintenance_request below.
+drop policy if exists maintenance_tenant_select on app.maintenance_request;
+create policy maintenance_tenant_select on app.maintenance_request for select
+  using (
+    exists (
+      select 1 from app.party p
+      where p.id = maintenance_request.reported_by_party_id
+        and p.identity_id = auth.uid()
+    )
+  );
+
+-- ---------------------------------------------------------------------------
+-- 5. The tenant's one write
+-- ---------------------------------------------------------------------------
+-- Proves three things before inserting, and says which one failed:
+--   * the caller is the party they claim to be,
+--   * that party has an ACTIVE contract on the unit today,
+--   * they have not already filed more than the daily allowance.
+--
+-- The rate limit is not about abuse alone: without it the form becomes a channel for the same
+-- complaint five times, and the office triage queue stops being readable.
+create or replace function app.submit_maintenance_request(
+  p_unit        uuid,
+  p_category    text,
+  p_urgency     text,
+  p_description text,
+  p_photo_path  text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = app, pg_temp
+as $$
+declare
+  v_party    uuid;
+  v_org      uuid;
+  v_property uuid;
+  v_today    date := (now() at time zone 'Asia/Riyadh')::date;
+  v_count    int;
+  v_id       uuid;
+  v_note     uuid;
+begin
+  if btrim(coalesce(p_description, '')) = '' then
+    raise exception 'DESCRIPTION_REQUIRED' using errcode = 'raise_exception';
+  end if;
+
+  -- The active contract is the authorization. A former tenant cannot open requests on a unit they
+  -- left, and a tenant of unit A cannot open one on unit B.
+  select c.org_id, c.property_id, t.party_id
+    into v_org, v_property, v_party
+  from app.contract c
+  join app.tenant   t on t.id = c.tenant_id
+  join app.party    p on p.id = t.party_id
+  where c.unit_id = p_unit
+    and c.status = 'active'
+    and c.deleted_at is null
+    and p.identity_id = auth.uid()
+  limit 1;
+
+  if v_party is null then
+    raise exception 'NO_ACTIVE_CONTRACT' using errcode = 'raise_exception';
+  end if;
+
+  select count(*) into v_count
+  from app.maintenance_request r
+  where r.reported_by_party_id = v_party
+    and (r.created_at at time zone 'Asia/Riyadh')::date = v_today
+    and r.deleted_at is null;
+
+  if v_count >= 5 then
+    raise exception 'DAILY_LIMIT' using errcode = 'raise_exception';
+  end if;
+
+  insert into app.maintenance_request (
+    org_id, property_id, unit_id, reported_by_party_id, reported_by_identity,
+    category, urgency, description, photo_path
+  )
+  values (
+    v_org, v_property, p_unit, v_party, auth.uid(),
+    coalesce(nullif(btrim(p_category), ''), 'other'),
+    coalesce(nullif(btrim(p_urgency), ''), 'normal')::app.maintenance_urgency,
+    btrim(p_description),
+    nullif(btrim(p_photo_path), '')
+  )
+  returning id into v_id;
+
+  -- An urgent or emergency fault must reach a person, not a tab. Normal requests do not notify:
+  -- a notification for everything is a notification for nothing.
+  if (coalesce(nullif(btrim(p_urgency), ''), 'normal'))::app.maintenance_urgency <> 'normal' then
+    insert into app.notification (org_id, property_id, kind, entity_type, entity_id, title, body)
+    select v_org, v_property, 'maintenance_urgent', 'maintenance_request', v_id,
+           'طلب صيانة عاجل',
+           'وحدة ' || u.unit_number || ' — ' || left(btrim(p_description), 140)
+    from app.unit u where u.id = p_unit
+    on conflict do nothing
+    returning id into v_note;
+
+    -- Decision, 14 Aug 2026: yes, email the office. The channel works as of 11 Aug.
+    if v_note is not null then
+      perform app.enqueue_notification_email(v_note);
+    end if;
+  end if;
+
+  perform app.write_audit(v_org, 'maintenance.submit', 'maintenance_request', v_id,
+                          jsonb_build_object('unit', p_unit, 'urgency', p_urgency));
+  return v_id;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 6. What the tenant reads back
+-- ---------------------------------------------------------------------------
+-- The office's internal columns are not in this list: cost, bearer, assignee and vendor are how the
+-- office runs the job, not what the tenant is owed. Status and dates are.
+create or replace function app.tenant_portal_maintenance(p_tenant uuid)
+returns table (
+  id uuid, request_no text, category text, urgency app.maintenance_urgency,
+  status app.maintenance_status, description text, unit_number text,
+  created_at timestamptz, resolved_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = app, pg_temp
+as $$
+begin
+  if not app.tenant_is_mine(p_tenant) then
+    raise exception 'FORBIDDEN' using errcode = 'raise_exception';
+  end if;
+  return query
+    select r.id, r.request_no, r.category, r.urgency, r.status, r.description,
+           u.unit_number, r.created_at, r.resolved_at
+    from app.maintenance_request r
+    join app.unit   u on u.id = r.unit_id
+    join app.tenant t on t.party_id = r.reported_by_party_id and t.id = p_tenant
+    where r.deleted_at is null
+    order by r.created_at desc;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 7. Grants — the 0053 rule: 0001 granted execute to anon/authenticated by default privilege, so a
+-- `revoke from public` would close nothing. Revoke by name, then grant back deliberately.
+-- ---------------------------------------------------------------------------
+revoke all on function app.submit_maintenance_request(uuid, text, text, text, text) from public, anon, authenticated;
+grant execute on function app.submit_maintenance_request(uuid, text, text, text, text) to authenticated;
+
+revoke all on function app.tenant_portal_maintenance(uuid) from public, anon, authenticated;
+grant execute on function app.tenant_portal_maintenance(uuid) to authenticated;
+
+-- next_counter is already revoked from public (0022); the trigger runs as definer of its own.
+grant select, insert, update on app.maintenance_request to authenticated;
+
+select app.record_migration('0072', 'maintenance');
+
+-- ================================================================
+-- 0073_tenant_portal_units.sql
+-- ================================================================
+-- 0073_tenant_portal_units.sql
+-- One missing read, found while building the portal's maintenance form.
+--
+-- app.submit_maintenance_request (0072) takes a unit id, and the tenant portal had no way to learn
+-- one: tenant_portal_contracts returns the unit NUMBER for display, and RLS on app.unit — rightly —
+-- shows a tenant nothing. So the form could name the unit but not identify it.
+--
+-- This is additive on purpose. Adding a column to tenant_portal_contracts would mean dropping and
+-- recreating a function three screens already call, to fix a need only one of them has.
+--
+-- Active contracts only, which is the same rule submit_maintenance_request enforces: offering a
+-- tenant a unit the database will then refuse is a form that exists to be rejected.
+create or replace function app.tenant_portal_units(p_tenant uuid)
+returns table (unit_id uuid, unit_number text, property_name text)
+language plpgsql
+stable
+security definer
+set search_path = app, pg_temp
+as $$
+begin
+  if not app.tenant_is_mine(p_tenant) then
+    raise exception 'FORBIDDEN' using errcode = 'raise_exception';
+  end if;
+  return query
+    select distinct u.id, u.unit_number, p.name
+    from app.contract c
+    join app.unit     u on u.id = c.unit_id
+    join app.property p on p.id = c.property_id
+    where c.tenant_id = p_tenant
+      and c.status = 'active'
+      and c.deleted_at is null
+    order by p.name, u.unit_number;
+end;
+$$;
+
+-- 0053 rule: 0001 grants execute to anon/authenticated by default privilege, so a bare
+-- `revoke from public` would close nothing. Revoke by name, then grant back deliberately.
+revoke all on function app.tenant_portal_units(uuid) from public, anon, authenticated;
+grant execute on function app.tenant_portal_units(uuid) to authenticated;
+
+select app.record_migration('0073', 'tenant_portal_units');
+
+-- ================================================================
+-- 0074_identity_linking.sql
+-- ================================================================
+-- 0074_identity_linking.sql
+-- Who is allowed to become a party — and nothing else. Scope is deliberately narrow: this file
+-- closes an open door. The invitation lifecycle (sent / opened / superseded, resend, revoke) is
+-- 0075's job and is not touched here.
+--
+-- WHY NOW: the tenant portal started accepting writes on 14 Aug (0072). Until then a wrong link
+-- leaked reads; now it also writes maintenance requests in someone else's name.
+--
+-- ---------------------------------------------------------------------------
+-- 1. Remove app.link_party_identity — an open path to any party in an org
+-- ---------------------------------------------------------------------------
+-- It was granted to `authenticated` (0013) and accepted a caller-chosen p_party_id, matching ANY
+-- live invitation in that org: it never checked the invitation's kind, never checked that the
+-- invitation was addressed to that party, and never checked that the party was still unlinked.
+-- So any holder of any live token for an org could bind their login to any owner or tenant in it —
+-- and could take over a profile that already belonged to somebody else.
+--
+-- It is dropped rather than repaired: nothing in the product has ever called it (the only caller
+-- was one line in the local test suite, updated with this migration), and
+-- app.accept_portal_invitation covers its stated purpose under real checks.
+drop function if exists app.link_party_identity(uuid, text);
+
+-- ---------------------------------------------------------------------------
+-- 2. The identity channel — an operator setting, not a deployment
+-- ---------------------------------------------------------------------------
+-- Today the product authenticates tenants by email; SMS has no provider yet (ADR-0001). When one
+-- is contracted, the switch must be a value change in the platform console, not a release. So the
+-- rule that acceptance is matched against lives here as data.
+--
+--   email  — the signed-in account's email must equal the invitation's email
+--   phone  — the account's phone must equal the invitation's phone
+--   either — whichever of the two matches is enough
+insert into app.platform_setting (key, value, label_ar) values
+  ('portal_identity_channel', '"email"'::jsonb, 'قناة إثبات هوية البوابة (بريد / جوال / أيّهما)')
+on conflict (key) do nothing;   -- never reset a value the operator has already chosen
+
+create or replace function app.portal_identity_channel()
+returns text
+language sql
+stable
+security definer
+set search_path = app, pg_temp
+as $$
+  select coalesce(app.setting('portal_identity_channel', '"email"'::jsonb) #>> '{}', 'email');
+$$;
+
+-- Known keys only, and known values for this one. An unvalidated setting is how a typo locks every
+-- tenant out of the portal.
+--
+-- NOTE: whether an SMS provider is actually configured cannot be seen from inside the database —
+-- it lives in the deployment's environment. The console is where that check belongs, and it is
+-- part of 0075's work; this function only refuses values that are not one of the three.
+create or replace function app.operator_set_setting(p_key text, p_value jsonb) returns void
+language plpgsql security definer set search_path = app, pg_temp as $$
+declare
+  v_before jsonb;
+begin
+  if not app.is_platform_operator() then
+    raise exception 'FORBIDDEN' using errcode = 'raise_exception';
+  end if;
+  select value into v_before from app.platform_setting where key = p_key;
+  if v_before is null then
+    raise exception 'UNKNOWN_SETTING' using errcode = 'raise_exception';
+  end if;
+  -- Floor of 1, not 0: a zero-day trial provisions an office that is locked out the moment it is
+  -- created (0055). Rewriting this function is how that fix nearly got lost.
+  if p_key = 'trial_days' and (jsonb_typeof(p_value) <> 'number'
+       or (p_value)::text::int < 1 or (p_value)::text::int > 365) then
+    raise exception 'INVALID_SETTING' using errcode = 'raise_exception';
+  end if;
+  if p_key = 'default_plan' and not exists (select 1 from app.plan where code = p_value #>> '{}') then
+    raise exception 'PLAN_NOT_FOUND' using errcode = 'raise_exception';
+  end if;
+  if p_key = 'portal_identity_channel' and coalesce(p_value #>> '{}', '') not in ('email', 'phone', 'either') then
+    raise exception 'INVALID_SETTING' using errcode = 'raise_exception';
+  end if;
+
+  update app.platform_setting
+     set value = p_value, updated_at = now(), updated_by = auth.uid()
+   where key = p_key;
+
+  perform app.write_audit(null, 'platform.setting_update', 'platform_setting', null,
+    jsonb_build_object('key', p_key, 'before', v_before, 'after', p_value));
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 3. Acceptance, under four conditions
+-- ---------------------------------------------------------------------------
+-- The contact comparison reads the JWT, not app.identity: an email-only sign-up has no identity
+-- row at all (app.identity requires a KSA mobile, so the auth.users trigger skips it). The JWT is
+-- what the auth provider actually verified about this session, which is precisely the claim we
+-- want to test.
+--
+-- Both portal kinds stay in one function. Owner links run through here too, and narrowing it to
+-- tenant_portal would silently break them — the tightening applies to both, which is what the
+-- owner portal deserves anyway.
+create or replace function app.accept_portal_invitation(p_token text)
+returns uuid
+language plpgsql
+security definer
+set search_path = app, extensions, pg_temp
+as $$
+declare
+  v_me      uuid := auth.uid();
+  v_inv     app.invitation;
+  v_cur     uuid;
+  v_channel text := app.portal_identity_channel();
+  -- The claims are read straight from request.jwt.claims rather than through auth.jwt(), which is
+  -- the convention this schema already uses (0003, 0069, 0071) and keeps the function testable
+  -- outside a Supabase instance.
+  v_claims  jsonb := coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb);
+  v_email   text := lower(nullif(btrim(coalesce(v_claims ->> 'email', '')), ''));
+  v_phone   text := app.normalize_phone_e164(nullif(btrim(coalesce(v_claims ->> 'phone', '')), ''));
+  v_inv_mail text;
+  v_ok_mail boolean;
+  v_ok_sms  boolean;
+begin
+  if v_me is null then
+    raise exception 'AUTH_REQUIRED' using errcode = 'raise_exception';
+  end if;
+
+  -- (1) a live PORTAL invitation, and (2) one that names a party.
+  select * into v_inv from app.invitation
+  where token_hash = encode(digest(p_token, 'sha256'), 'hex')
+    and kind in ('owner_portal', 'tenant_portal')
+    and accepted_at is null and revoked_at is null and expires_at > now()
+  limit 1;
+  if v_inv.id is null or v_inv.party_id is null then
+    raise exception 'INVITATION_INVALID: token not found, expired, or already used' using errcode = 'raise_exception';
+  end if;
+
+  -- (3) the party must still be free. Re-linking is not acceptance — it is a takeover, and undoing
+  -- a link is an office action (app.unlink_party_identity below), never a visitor's.
+  select identity_id into v_cur from app.party where id = v_inv.party_id;
+  if v_cur is not null then
+    if v_cur = v_me then
+      return v_inv.party_id;   -- already mine: idempotent, the second tab is not an error
+    end if;
+    raise exception 'ALREADY_LINKED: this profile is already linked to another login' using errcode = 'raise_exception';
+  end if;
+
+  -- (4) the account must be the one that was invited.
+  v_inv_mail := lower(nullif(btrim(coalesce(v_inv.email, '')), ''));
+  v_ok_mail  := v_inv_mail is not null and v_email is not null and v_email = v_inv_mail;
+  v_ok_sms   := v_inv.phone_e164 is not null and v_phone is not null and v_phone = v_inv.phone_e164;
+
+  -- A refusal that cannot be acted on is worse than none, so the two causes are named apart: the
+  -- invitation carries no address on this channel (the office must fix the record and re-invite),
+  -- or it does and this account is not it.
+  if v_channel = 'email' and v_inv_mail is null then
+    raise exception 'INVITE_CONTACT_MISSING: invitation has no email address' using errcode = 'raise_exception';
+  end if;
+  if v_channel = 'phone' and v_inv.phone_e164 is null then
+    raise exception 'INVITE_CONTACT_MISSING: invitation has no phone number' using errcode = 'raise_exception';
+  end if;
+  if v_channel = 'either' and v_inv_mail is null and v_inv.phone_e164 is null then
+    raise exception 'INVITE_CONTACT_MISSING: invitation has no contact' using errcode = 'raise_exception';
+  end if;
+
+  if not (
+    (v_channel = 'email'  and v_ok_mail)
+    or (v_channel = 'phone'  and v_ok_sms)
+    or (v_channel = 'either' and (v_ok_mail or v_ok_sms))
+  ) then
+    -- Recorded because a mismatch is the signature of a forwarded link, and the office should be
+    -- able to see that it happened.
+    perform app.write_audit(v_inv.org_id, 'portal.link_refused', 'party', v_inv.party_id,
+                            jsonb_build_object('kind', v_inv.kind, 'channel', v_channel));
+    raise exception 'CONTACT_MISMATCH: sign in with the account this invitation was sent to'
+      using errcode = 'raise_exception';
+  end if;
+
+  perform set_config('app.allow_party_link', 'on', true);
+  update app.party set identity_id = v_me where id = v_inv.party_id;
+  perform set_config('app.allow_party_link', '', true);
+
+  update app.invitation set accepted_at = now(), accepted_by = v_me where id = v_inv.id;
+  perform app.write_audit(v_inv.org_id, 'portal.link', 'party', v_inv.party_id,
+                          jsonb_build_object('kind', v_inv.kind, 'channel', v_channel));
+  return v_inv.party_id;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 4. Unlinking — the missing office action
+-- ---------------------------------------------------------------------------
+-- Without this, a profile linked to the wrong account (or to one its owner has lost) can never be
+-- re-invited: acceptance refuses a linked party, and nothing in the product could clear the link.
+-- Admins only, and the reason is required — an unlink is how a profile changes hands, and "who did
+-- this and why" is the whole value of recording it.
+create or replace function app.unlink_party_identity(p_party uuid, p_reason text)
+returns void
+language plpgsql
+security definer
+set search_path = app, pg_temp
+as $$
+declare
+  v_org  uuid;
+  v_prev uuid;
+begin
+  if btrim(coalesce(p_reason, '')) = '' then
+    raise exception 'REASON_REQUIRED' using errcode = 'raise_exception';
+  end if;
+
+  select org_id, identity_id into v_org, v_prev from app.party where id = p_party;
+  if v_org is null then
+    raise exception 'PARTY_NOT_FOUND' using errcode = 'raise_exception';
+  end if;
+  if not app.is_org_admin(v_org) then
+    raise exception 'FORBIDDEN' using errcode = 'raise_exception';
+  end if;
+  if v_prev is null then
+    return;   -- already unlinked: nothing to undo, and no reason to fail the caller
+  end if;
+
+  -- Clearing to NULL is allowed by tg_party_identity_guard, which only gates NULL → value.
+  update app.party set identity_id = null where id = p_party;
+
+  perform app.write_audit(v_org, 'portal.unlink', 'party', p_party,
+                          jsonb_build_object('previous_identity', v_prev, 'reason', btrim(p_reason)));
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 5. Grants — 0053 rule: 0001 grants execute to anon/authenticated by default privilege, so a bare
+-- `revoke from public` closes nothing. Revoke by name, then grant back deliberately.
+-- ---------------------------------------------------------------------------
+revoke all on function app.unlink_party_identity(uuid, text) from public, anon, authenticated;
+grant execute on function app.unlink_party_identity(uuid, text) to authenticated;
+
+revoke all on function app.portal_identity_channel() from public, anon;
+grant execute on function app.portal_identity_channel() to authenticated, service_role;
+
+-- accept_portal_invitation keeps the grants it already had (authenticated): the gate is inside it.
+
+select app.record_migration('0074', 'identity_linking');
+
+-- ================================================================
+-- 0075_invitation_lifecycle.sql
+-- ================================================================
+-- 0075_invitation_lifecycle.sql
+-- The portal invitation stops being a token and becomes a thing with a state.
+--
+-- Before this file the office could create an invitation and then knew nothing: not whether it was
+-- sent, not whether it was opened, not whether it still pointed at an address the tenant still uses.
+-- The only two facts recorded were "accepted" and "revoked", and both were written by someone else.
+--
+--   pending ──► sent ──► opened ──► accepted
+--      │         │         │
+--      └─────────┴─────────┴──► expired  (by date)
+--                │
+--                ├──► revoked     (the office withdrew it)
+--                └──► superseded  (the tenant's email or phone changed)
+--
+-- 0074 decided WHO may accept. This decides WHAT the office can see and do about it. Sending the
+-- message itself is the application's job — this file only records that it happened.
+
+-- ---------------------------------------------------------------------------
+-- 1. The state a token carries
+-- ---------------------------------------------------------------------------
+alter table app.invitation
+  add column if not exists sent_at         timestamptz,
+  add column if not exists sent_channel    text check (sent_channel is null or sent_channel in ('email', 'sms')),
+  -- The address it actually went to, kept apart from invitation.email: the office record may be
+  -- edited afterwards, and "where did we send it" must not change when it is.
+  add column if not exists sent_to         text,
+  add column if not exists opened_at       timestamptz,
+  add column if not exists superseded_at   timestamptz,
+  add column if not exists superseded_reason text;
+
+-- ---------------------------------------------------------------------------
+-- 1b. Retire the duplicates that already exist
+-- ---------------------------------------------------------------------------
+-- Before this migration nothing stopped a second "رابط البوابة" click from minting another live
+-- token, and production has profiles carrying several. The invariant below cannot be declared over
+-- data that already breaks it, and the honest repair is the one the new rule implies: the newest
+-- token stands, the older ones are retired as superseded.
+--
+-- Retiring rather than deleting, and superseded rather than revoked: nobody withdrew these — they
+-- were replaced. And a token that reaches the office's inbox later should read as "replaced by a
+-- newer link", which is what actually happened.
+with ranked as (
+  select id,
+         row_number() over (partition by party_id, kind order by created_at desc, id desc) as rn
+  from app.invitation
+  where party_id is not null
+    and kind in ('owner_portal', 'tenant_portal')
+    and accepted_at is null
+    and revoked_at is null
+    and superseded_at is null
+)
+update app.invitation i
+   set superseded_at = now(),
+       superseded_reason = 'replaced_by_newer_invite'
+  from ranked r
+ where i.id = r.id and r.rn > 1;
+
+-- One live portal invitation per party and kind. Two live tokens double the attack surface for a
+-- convenience nobody asked for — resending rotates rather than accumulates.
+create unique index if not exists invitation_one_live_portal
+  on app.invitation (party_id, kind)
+  where party_id is not null
+    and kind in ('owner_portal', 'tenant_portal')
+    and accepted_at is null
+    and revoked_at is null
+    and superseded_at is null;
+
+-- ---------------------------------------------------------------------------
+-- 2. Changing the contact retires the invitation
+-- ---------------------------------------------------------------------------
+-- An invitation is addressed to one mailbox or one number. If the office corrects the tenant's email
+-- after sending it, the old address still holds a live token — and that address may now belong to
+-- somebody else entirely, or may have been the typo that prompted the correction.
+--
+-- Only PENDING portal invitations are touched. An accepted one is history, and history is not edited.
+create or replace function app.tg_party_contact_supersedes_invites()
+returns trigger
+language plpgsql
+set search_path = app, pg_temp
+as $$
+begin
+  if new.email is distinct from old.email or new.phone_e164 is distinct from old.phone_e164 then
+    update app.invitation
+       set superseded_at = now(),
+           superseded_reason = 'contact_changed'
+     where party_id = new.id
+       and kind in ('owner_portal', 'tenant_portal')
+       and accepted_at is null
+       and revoked_at is null
+       and superseded_at is null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists party_contact_supersedes_invites on app.party;
+create trigger party_contact_supersedes_invites
+  after update on app.party
+  for each row execute function app.tg_party_contact_supersedes_invites();
+
+-- Acceptance must refuse a superseded token too. 0074 already checks accepted/revoked/expired; this
+-- adds the fourth retirement reason without touching anything else in that function.
+create or replace function app.accept_portal_invitation(p_token text)
+returns uuid
+language plpgsql
+security definer
+set search_path = app, extensions, pg_temp
+as $$
+declare
+  v_me      uuid := auth.uid();
+  v_inv     app.invitation;
+  v_cur     uuid;
+  v_channel text := app.portal_identity_channel();
+  v_claims  jsonb := coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb);
+  v_email   text := lower(nullif(btrim(coalesce(v_claims ->> 'email', '')), ''));
+  v_phone   text := app.normalize_phone_e164(nullif(btrim(coalesce(v_claims ->> 'phone', '')), ''));
+  v_inv_mail text;
+  v_ok_mail boolean;
+  v_ok_sms  boolean;
+begin
+  if v_me is null then
+    raise exception 'AUTH_REQUIRED' using errcode = 'raise_exception';
+  end if;
+
+  select * into v_inv from app.invitation
+  where token_hash = encode(digest(p_token, 'sha256'), 'hex')
+    and kind in ('owner_portal', 'tenant_portal')
+    and accepted_at is null and revoked_at is null and superseded_at is null and expires_at > now()
+  limit 1;
+  if v_inv.id is null or v_inv.party_id is null then
+    raise exception 'INVITATION_INVALID: token not found, expired, or already used' using errcode = 'raise_exception';
+  end if;
+
+  select identity_id into v_cur from app.party where id = v_inv.party_id;
+  if v_cur is not null then
+    if v_cur = v_me then
+      return v_inv.party_id;
+    end if;
+    raise exception 'ALREADY_LINKED: this profile is already linked to another login' using errcode = 'raise_exception';
+  end if;
+
+  v_inv_mail := lower(nullif(btrim(coalesce(v_inv.email, '')), ''));
+  v_ok_mail  := v_inv_mail is not null and v_email is not null and v_email = v_inv_mail;
+  v_ok_sms   := v_inv.phone_e164 is not null and v_phone is not null and v_phone = v_inv.phone_e164;
+
+  if v_channel = 'email' and v_inv_mail is null then
+    raise exception 'INVITE_CONTACT_MISSING: invitation has no email address' using errcode = 'raise_exception';
+  end if;
+  if v_channel = 'phone' and v_inv.phone_e164 is null then
+    raise exception 'INVITE_CONTACT_MISSING: invitation has no phone number' using errcode = 'raise_exception';
+  end if;
+  if v_channel = 'either' and v_inv_mail is null and v_inv.phone_e164 is null then
+    raise exception 'INVITE_CONTACT_MISSING: invitation has no contact' using errcode = 'raise_exception';
+  end if;
+
+  if not (
+    (v_channel = 'email'  and v_ok_mail)
+    or (v_channel = 'phone'  and v_ok_sms)
+    or (v_channel = 'either' and (v_ok_mail or v_ok_sms))
+  ) then
+    perform app.write_audit(v_inv.org_id, 'portal.link_refused', 'party', v_inv.party_id,
+                            jsonb_build_object('kind', v_inv.kind, 'channel', v_channel));
+    raise exception 'CONTACT_MISMATCH: sign in with the account this invitation was sent to'
+      using errcode = 'raise_exception';
+  end if;
+
+  perform set_config('app.allow_party_link', 'on', true);
+  update app.party set identity_id = v_me where id = v_inv.party_id;
+  perform set_config('app.allow_party_link', '', true);
+
+  update app.invitation set accepted_at = now(), accepted_by = v_me where id = v_inv.id;
+  perform app.write_audit(v_inv.org_id, 'portal.link', 'party', v_inv.party_id,
+                          jsonb_build_object('kind', v_inv.kind, 'channel', v_channel));
+  return v_inv.party_id;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 3. Sent / opened — the two facts the office was missing
+-- ---------------------------------------------------------------------------
+-- Called by the application right after the message leaves. Deliberately not "mark as sent, hope for
+-- the best": the address is stored as it was used, so a later edit of the tenant record cannot
+-- rewrite where the message actually went.
+create or replace function app.mark_invitation_sent(p_invitation uuid, p_channel text, p_to text)
+returns void
+language plpgsql
+security definer
+set search_path = app, pg_temp
+as $$
+declare
+  v_org uuid;
+begin
+  if coalesce(p_channel, '') not in ('email', 'sms') then
+    raise exception 'INVALID_CHANNEL' using errcode = 'raise_exception';
+  end if;
+  select org_id into v_org from app.invitation where id = p_invitation;
+  if v_org is null then
+    raise exception 'INVITATION_NOT_FOUND' using errcode = 'raise_exception';
+  end if;
+  if not app.is_org_admin(v_org) then
+    raise exception 'FORBIDDEN' using errcode = 'raise_exception';
+  end if;
+
+  update app.invitation
+     set sent_at = now(), sent_channel = p_channel, sent_to = nullif(btrim(coalesce(p_to, '')), '')
+   where id = p_invitation;
+
+  perform app.write_audit(v_org, 'portal.invite_sent', 'invitation', p_invitation,
+                          jsonb_build_object('channel', p_channel));
+end;
+$$;
+
+-- Stamped when the join page is opened with a live token. First open only: the office wants to know
+-- "did it arrive", not how many times the page was refreshed.
+--
+-- It returns nothing on purpose. A visitor holding a token learns whether it is live from trying to
+-- accept it, and this function must not become a way to probe tokens for information.
+create or replace function app.mark_invitation_opened(p_token text)
+returns void
+language plpgsql
+security definer
+set search_path = app, extensions, pg_temp
+as $$
+begin
+  update app.invitation
+     set opened_at = coalesce(opened_at, now())
+   where token_hash = encode(digest(p_token, 'sha256'), 'hex')
+     and kind in ('owner_portal', 'tenant_portal')
+     and accepted_at is null and revoked_at is null and superseded_at is null and expires_at > now();
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 4. Resend and revoke
+-- ---------------------------------------------------------------------------
+-- Resending rotates: the live token is retired and a new one issued. Two live tokens for one profile
+-- is a wider door for no gain, and "which link did I send you?" is a support call nobody needs.
+create or replace function app.resend_portal_invitation(p_party uuid)
+returns text
+language plpgsql
+security definer
+set search_path = app, extensions, pg_temp
+as $$
+declare
+  v_org   uuid;
+  v_kind  text;
+  v_phone text;
+  v_email text;
+  v_token text;
+  v_id    uuid;
+begin
+  select p.org_id, p.phone_e164, p.email into v_org, v_phone, v_email
+  from app.party p where p.id = p_party;
+  if v_org is null then
+    raise exception 'PARTY_NOT_FOUND' using errcode = 'raise_exception';
+  end if;
+  if not app.is_org_admin(v_org) then
+    raise exception 'FORBIDDEN' using errcode = 'raise_exception';
+  end if;
+  if v_phone is null and v_email is null then
+    raise exception 'NO_CONTACT: add a phone or email to the record first' using errcode = 'raise_exception';
+  end if;
+  if exists (select 1 from app.party where id = p_party and identity_id is not null) then
+    raise exception 'ALREADY_LINKED: unlink the profile before inviting again' using errcode = 'raise_exception';
+  end if;
+
+  -- The kind follows what the party already is, so a resend cannot quietly turn an owner invitation
+  -- into a tenant one.
+  select case when exists (select 1 from app.tenant t where t.party_id = p_party and t.deleted_at is null)
+              then 'tenant_portal' else 'owner_portal' end into v_kind;
+
+  update app.invitation
+     set revoked_at = now(), revoked_by = auth.uid()
+   where party_id = p_party
+     and kind in ('owner_portal', 'tenant_portal')
+     and accepted_at is null and revoked_at is null and superseded_at is null;
+
+  v_token := encode(gen_random_bytes(24), 'hex');
+  insert into app.invitation (org_id, party_id, kind, phone_e164, email, token_hash, expires_at, created_by)
+  values (v_org, p_party, v_kind, v_phone, v_email,
+          encode(digest(v_token, 'sha256'), 'hex'), now() + interval '30 days', auth.uid())
+  returning id into v_id;
+
+  perform app.write_audit(v_org, 'portal.invite_resend', 'party', p_party,
+                          jsonb_build_object('invitation', v_id, 'kind', v_kind));
+  return v_token;
+end;
+$$;
+
+create or replace function app.revoke_portal_invitation(p_party uuid, p_reason text default null)
+returns int
+language plpgsql
+security definer
+set search_path = app, pg_temp
+as $$
+declare
+  v_org uuid;
+  v_n   int;
+begin
+  select org_id into v_org from app.party where id = p_party;
+  if v_org is null then
+    raise exception 'PARTY_NOT_FOUND' using errcode = 'raise_exception';
+  end if;
+  if not app.is_org_admin(v_org) then
+    raise exception 'FORBIDDEN' using errcode = 'raise_exception';
+  end if;
+
+  update app.invitation
+     set revoked_at = now(), revoked_by = auth.uid()
+   where party_id = p_party
+     and kind in ('owner_portal', 'tenant_portal')
+     and accepted_at is null and revoked_at is null and superseded_at is null;
+  get diagnostics v_n = row_count;
+
+  if v_n > 0 then
+    perform app.write_audit(v_org, 'portal.invite_revoke', 'party', p_party,
+                            jsonb_build_object('count', v_n, 'reason', nullif(btrim(coalesce(p_reason, '')), '')));
+  end if;
+  return v_n;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 5. What the office sees
+-- ---------------------------------------------------------------------------
+-- One row per party: the state of its portal access, in the order the office reads it.
+--
+-- The token is never returned — not its hash either. This answers "where does this stand", and the
+-- link itself is shown once, at the moment it is created.
+create or replace function app.portal_invitation_state(p_party uuid)
+returns table (
+  state       text,     -- linked | accepted | pending | sent | opened | revoked | superseded | expired | none
+  sent_at     timestamptz,
+  sent_channel text,
+  sent_to     text,
+  opened_at   timestamptz,
+  expires_at  timestamptz,
+  linked      boolean
+)
+language plpgsql
+stable
+security definer
+set search_path = app, pg_temp
+as $$
+declare
+  v_org    uuid;
+  v_linked boolean;
+begin
+  select p.org_id, p.identity_id is not null into v_org, v_linked from app.party p where p.id = p_party;
+  if v_org is null then
+    raise exception 'PARTY_NOT_FOUND' using errcode = 'raise_exception';
+  end if;
+  if not app.has_org_access(v_org) then
+    raise exception 'FORBIDDEN' using errcode = 'raise_exception';
+  end if;
+
+  return query
+    with latest as (
+      select i.* from app.invitation i
+      where i.party_id = p_party and i.kind in ('owner_portal', 'tenant_portal')
+      order by i.created_at desc
+      limit 1
+    )
+    select
+      case
+        -- The link is the fact that matters; how it was obtained is history.
+        when v_linked                       then 'linked'
+        when l.id is null                   then 'none'
+        when l.accepted_at   is not null    then 'accepted'
+        when l.revoked_at    is not null    then 'revoked'
+        when l.superseded_at is not null    then 'superseded'
+        when l.expires_at    <= now()       then 'expired'
+        when l.opened_at     is not null    then 'opened'
+        when l.sent_at       is not null    then 'sent'
+        else 'pending'
+      end,
+      l.sent_at, l.sent_channel, l.sent_to, l.opened_at, l.expires_at, v_linked
+    from (select 1) one left join latest l on true;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 6. Grants — 0053 rule: revoke by name, then grant back deliberately.
+-- ---------------------------------------------------------------------------
+revoke all on function app.mark_invitation_sent(uuid, text, text)   from public, anon, authenticated;
+revoke all on function app.mark_invitation_opened(text)             from public, anon, authenticated;
+revoke all on function app.resend_portal_invitation(uuid)           from public, anon, authenticated;
+revoke all on function app.revoke_portal_invitation(uuid, text)     from public, anon, authenticated;
+revoke all on function app.portal_invitation_state(uuid)            from public, anon, authenticated;
+
+grant execute on function app.mark_invitation_sent(uuid, text, text)   to authenticated;
+grant execute on function app.mark_invitation_opened(text)             to authenticated;
+grant execute on function app.resend_portal_invitation(uuid)           to authenticated;
+grant execute on function app.revoke_portal_invitation(uuid, text)     to authenticated;
+grant execute on function app.portal_invitation_state(uuid)            to authenticated;
+
+select app.record_migration('0075', 'invitation_lifecycle');
+
+-- ================================================================
+-- 0076_tenant_payment_info.sql
+-- ================================================================
+-- 0076_tenant_payment_info.sql
+-- Where to send the money.
+--
+-- The tenant portal has always been able to say what is owed and when. It could not say how to pay
+-- it: the office's bank details live on app.organization, and RLS — rightly — shows a tenant nothing
+-- of that table. So the screen ended at "٩٬٠٠٠ ر.س، متأخرة ٣ أيام" and the tenant phoned to ask for
+-- an IBAN that the office had already recorded.
+--
+-- Three fields and no more: the account name, the bank, and the IBAN. Not the CR number, not the VAT
+-- number, not the address or the licence — a tenant paying rent needs none of them, and a portal
+-- read is a read by someone outside the office.
+create or replace function app.tenant_portal_payment_info(p_tenant uuid)
+returns table (org_name text, bank_name text, iban text)
+language plpgsql
+stable
+security definer
+set search_path = app, pg_temp
+as $$
+begin
+  if not app.tenant_is_mine(p_tenant) then
+    raise exception 'FORBIDDEN' using errcode = 'raise_exception';
+  end if;
+
+  -- Returns a row only when there is something to act on. A card headed "كيف أدفع" over three
+  -- dashes is worse than no card: it tells the tenant the office forgot, in the office's voice.
+  return query
+    select o.name, o.bank_name, o.iban
+    from app.tenant t
+    join app.organization o on o.id = t.org_id
+    where t.id = p_tenant
+      and o.iban is not null
+      and o.deleted_at is null;
+end;
+$$;
+
+-- 0053 rule: 0001 grants execute to anon/authenticated by default privilege, so a bare
+-- `revoke from public` closes nothing. Revoke by name, then grant back deliberately.
+revoke all on function app.tenant_portal_payment_info(uuid) from public, anon, authenticated;
+grant execute on function app.tenant_portal_payment_info(uuid) to authenticated;
+
+select app.record_migration('0076', 'tenant_payment_info');
+
+-- ================================================================
+-- 0077_invitation_provider_receipt.sql
+-- ================================================================
+-- 0077_invitation_provider_receipt.sql
+-- The receipt the provider hands back, kept instead of thrown away.
+--
+-- 0075 taught the office to read "أُرسلت". It did not teach it what that word means: the application
+-- writes it when Resend answers 2xx, which is "accepted for delivery", not "in the tenant's inbox".
+-- Those two are usually the same and occasionally are not, and the gap is exactly where a tenant says
+-- "لم يصلني شيء" while the screen says it was sent.
+--
+-- Resend answers with a message id and we were discarding it. Keeping it costs one column and turns
+-- that argument into a lookup: paste the id into the provider's log and read delivered / bounced /
+-- complained. This migration does not make a message arrive — it makes its absence answerable.
+alter table app.invitation
+  add column if not exists sent_message_id text;
+
+comment on column app.invitation.sent_message_id is
+  'The email provider''s id for the message, as returned when it accepted it. Evidence, not state: it
+   says the message was handed over, never that it was read.';
+
+-- ---------------------------------------------------------------------------
+-- mark_invitation_sent — now records the receipt too
+-- ---------------------------------------------------------------------------
+-- The 3-argument form is dropped rather than kept alongside: two overloads separated only by a
+-- defaulted trailing argument are ambiguous to call, and PostgREST would have to guess.
+drop function if exists app.mark_invitation_sent(uuid, text, text);
+
+create or replace function app.mark_invitation_sent(
+  p_invitation uuid,
+  p_channel    text,
+  p_to         text,
+  p_message_id text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = app, pg_temp
+as $$
+declare
+  v_org uuid;
+begin
+  select i.org_id into v_org from app.invitation i where i.id = p_invitation;
+  if v_org is null then
+    raise exception 'INVITATION_NOT_FOUND' using errcode = 'raise_exception';
+  end if;
+  if not app.is_org_admin(v_org) then
+    raise exception 'FORBIDDEN' using errcode = 'raise_exception';
+  end if;
+
+  update app.invitation
+     set sent_at         = now(),
+         sent_channel    = p_channel,
+         sent_to         = nullif(btrim(coalesce(p_to, '')), ''),
+         sent_message_id = nullif(btrim(coalesce(p_message_id, '')), '')
+   where id = p_invitation;
+
+  -- The id goes into the audit line as well: the invitation row keeps only the latest send, and a
+  -- question about a message sent three rotations ago has nowhere else to be answered from.
+  perform app.write_audit(v_org, 'portal.invite_sent', 'invitation', p_invitation,
+                          jsonb_build_object('channel', p_channel, 'message_id', p_message_id));
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- portal_invitation_state — one more column, so the office never opens a table to find it
+-- ---------------------------------------------------------------------------
+-- Adding a column to a returns-table demands a drop; create-or-replace cannot change the shape.
+drop function if exists app.portal_invitation_state(uuid);
+
+create or replace function app.portal_invitation_state(p_party uuid)
+returns table (
+  state           text,   -- linked | accepted | pending | sent | opened | revoked | superseded | expired | none
+  sent_at         timestamptz,
+  sent_channel    text,
+  sent_to         text,
+  sent_message_id text,
+  opened_at       timestamptz,
+  expires_at      timestamptz,
+  linked          boolean
+)
+language plpgsql
+stable
+security definer
+set search_path = app, pg_temp
+as $$
+declare
+  v_org    uuid;
+  v_linked boolean;
+begin
+  select p.org_id, p.identity_id is not null into v_org, v_linked from app.party p where p.id = p_party;
+  if v_org is null then
+    raise exception 'PARTY_NOT_FOUND' using errcode = 'raise_exception';
+  end if;
+  if not app.has_org_access(v_org) then
+    raise exception 'FORBIDDEN' using errcode = 'raise_exception';
+  end if;
+
+  return query
+    with latest as (
+      select i.* from app.invitation i
+      where i.party_id = p_party and i.kind in ('owner_portal', 'tenant_portal')
+      order by i.created_at desc
+      limit 1
+    )
+    select
+      case
+        -- The link is the fact that matters; how it was obtained is history.
+        when v_linked                       then 'linked'
+        when l.id is null                   then 'none'
+        when l.accepted_at   is not null    then 'accepted'
+        when l.revoked_at    is not null    then 'revoked'
+        when l.superseded_at is not null    then 'superseded'
+        when l.expires_at    <= now()       then 'expired'
+        when l.opened_at     is not null    then 'opened'
+        when l.sent_at       is not null    then 'sent'
+        else 'pending'
+      end,
+      l.sent_at, l.sent_channel, l.sent_to, l.sent_message_id, l.opened_at, l.expires_at, v_linked
+    from (select 1) one left join latest l on true;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Grants — 0053 rule: 0001 grants execute by default privilege, so a bare `revoke from public`
+-- closes nothing. Revoke by name, then grant back deliberately.
+-- ---------------------------------------------------------------------------
+revoke all on function app.mark_invitation_sent(uuid, text, text, text) from public, anon, authenticated;
+revoke all on function app.portal_invitation_state(uuid)                from public, anon, authenticated;
+
+grant execute on function app.mark_invitation_sent(uuid, text, text, text) to authenticated;
+grant execute on function app.portal_invitation_state(uuid)                to authenticated;
+
+select app.record_migration('0077', 'invitation_provider_receipt');
+
+-- ================================================================
+-- 0078_tenant_notifications.sql
+-- ================================================================
+-- 0078_tenant_notifications.sql
+-- The other half of a maintenance request: telling the person who opened it what happened.
+--
+-- 0072 gave the tenant a way to report a fault and gave the office a way to work it. Between those
+-- two the tenant heard nothing — not when the work started, not when it was closed, not when it was
+-- refused. So they reopen the portal each day to check, or they phone the office: the two things the
+-- module exists to prevent.
+--
+-- Everything needed to send is already here — an outbox with idempotency and backoff (0038), a
+-- drainer (0059), a provider (8 Aug). What was missing is that a notification has always been an
+-- OFFICE object: app.notification is read through has_property_access, and a tenant is not a member,
+-- so no row in that table has ever been readable by one. This file makes a notification able to name
+-- a person instead of an office, and leaves every existing row exactly as it was.
+
+-- ---------------------------------------------------------------------------
+-- 1. Two columns
+-- ---------------------------------------------------------------------------
+alter table app.notification
+  -- NULL means what every row means today: this belongs to the office. Not null means it is addressed
+  -- to that party, and the office does not see it — the office is the sender, and its bell should not
+  -- ring with its own outgoing mail.
+  add column if not exists recipient_party_id uuid references app.party(id) on delete cascade,
+  -- Where the message points. The drainer used to hardcode /app/notifications, which is a staff page:
+  -- a tenant sent there meets a wall. The producer knows the destination; the drainer should not have
+  -- to learn about parties and portals to find it.
+  add column if not exists link_path text;
+
+create index if not exists notification_recipient_idx
+  on app.notification (recipient_party_id, created_at desc)
+  where recipient_party_id is not null;
+
+-- The dedupe index is what makes generation idempotent. It must now separate rows by addressee, or
+-- one person's notice would silently suppress another's for the same entity and kind.
+drop index if exists app.notification_dedupe;
+create unique index if not exists notification_dedupe on app.notification
+  (org_id, kind,
+   coalesce(entity_id, '00000000-0000-0000-0000-000000000000'::uuid),
+   coalesce(due_date, '0001-01-01'::date),
+   coalesce(recipient_party_id, '00000000-0000-0000-0000-000000000000'::uuid));
+
+-- ---------------------------------------------------------------------------
+-- 2. Who reads what
+-- ---------------------------------------------------------------------------
+-- The office keeps exactly the reach it had, minus rows addressed to someone else.
+drop policy if exists notification_select on app.notification;
+create policy notification_select on app.notification for select
+  using (recipient_party_id is null and app.has_property_access(org_id, property_id));
+
+-- SECURITY DEFINER for the same reason app.tenant_is_mine is (0029): a policy predicate runs as the
+-- querying user, and app.party is readable only by members of its org. A tenant asking "is this row
+-- mine?" through a plain EXISTS would be answered "no" by a policy hiding their own record — the
+-- notice would be addressed to them and invisible to them.
+create or replace function app.party_is_mine(p_party uuid)
+returns boolean
+language sql stable security definer set search_path = app, pg_temp as $$
+  select exists (
+    select 1 from app.party p
+    where p.id = p_party and p.deleted_at is null and p.identity_id = auth.uid()
+  );
+$$;
+
+-- And the addressee reads their own, through the same identity link the portal already trusts.
+drop policy if exists notification_recipient_select on app.notification;
+create policy notification_recipient_select on app.notification for select
+  using (recipient_party_id is not null and app.party_is_mine(recipient_party_id));
+
+-- ---------------------------------------------------------------------------
+-- 3. Enqueue learns the second shape
+-- ---------------------------------------------------------------------------
+-- One function, one call site, two audiences. Splitting it into enqueue_office_email and
+-- enqueue_party_email would mean every future producer has to know which one it is talking to; the
+-- notification already says.
+create or replace function app.enqueue_notification_email(p_notification_id uuid) returns void
+language plpgsql security definer set search_path = app, pg_temp as $$
+declare
+  v_party uuid;
+begin
+  select n.recipient_party_id into v_party from app.notification n where n.id = p_notification_id;
+
+  if v_party is not null then
+    -- A party with no email simply gets no row. Silence beats a delivery aimed at nothing, which
+    -- would burn three attempts and land in the failure count as if the provider were at fault.
+    insert into app.notification_delivery (org_id, notification_id, channel, target)
+    select n.org_id, n.id, 'email', p.email
+    from app.notification n
+    join app.party p on p.id = n.recipient_party_id
+    where n.id = p_notification_id
+      and p.email is not null
+      and btrim(p.email) <> ''
+      and p.deleted_at is null
+    on conflict (notification_id, channel, target) do nothing;
+    return;
+  end if;
+
+  insert into app.notification_delivery (org_id, notification_id, channel, target)
+  select n.org_id, n.id, 'email', i.email
+  from app.notification n
+  join app.membership m on m.org_id = n.org_id and m.status = 'active' and m.deleted_at is null
+  join app.identity   i on i.id = m.identity_id and i.email is not null and i.status = 'active'
+  where n.id = p_notification_id
+  on conflict (notification_id, channel, target) do nothing;
+end;
+$$;
+
+-- The bulk sibling has the same blind spot, and it is the dangerous one: it sweeps every unread
+-- notification in the org and mails it to every member. Left alone, the office would receive a copy
+-- of every message written to a tenant — signed by the office, addressed to the office.
+--
+-- Only the `_for` twin is redeclared here. 0059 made the gated names thin wrappers that delegate to
+-- these; rewriting a wrapper to hold the query again would silently undo that delegation, which is
+-- exactly how 0074 reintroduced a bug by copying from schema_all.sql. The migrations are the source.
+create or replace function app.enqueue_email_deliveries_for(p_org uuid) returns int
+language plpgsql security definer set search_path = app, pg_temp as $$
+declare v_count int;
+begin
+  insert into app.notification_delivery (org_id, notification_id, channel, target)
+  select n.org_id, n.id, 'email', i.email
+  from app.notification n
+  join app.membership m on m.org_id = n.org_id and m.status = 'active' and m.deleted_at is null
+  join app.identity   i on i.id = m.identity_id and i.email is not null and i.status = 'active'
+  where n.org_id = p_org and n.read_at is null and n.recipient_party_id is null
+  on conflict (notification_id, channel, target) do nothing;
+
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+-- And the unread figure the sweep reports to the health page. The three inserts below are 0059's,
+-- unchanged; only the closing count is. An operator gauge that counts messages written TO tenants as
+-- office work waiting to be done is a gauge that lies — the same objection 0070 raised about a queue
+-- depth padded with rows nobody would ever send.
+create or replace function app.generate_notifications_for(p_org uuid) returns int
+language plpgsql security definer set search_path = app, pg_temp as $$
+begin
+  -- Charges due within 7 days, not yet settled.
+  insert into app.notification (org_id, property_id, kind, entity_type, entity_id, title, body, due_date)
+  select c.org_id, c.property_id, 'charge_due_soon', 'charge', c.id,
+         'استحقاق قريب', 'دفعة تستحق بتاريخ ' || c.due_date, c.due_date
+  from app.charge c join app.charge_balance cb on cb.charge_id = c.id
+  where c.org_id = p_org and c.deleted_at is null and not cb.is_settled
+    and c.due_date >= current_date and c.due_date <= current_date + 7
+  on conflict do nothing;
+
+  -- Overdue unsettled charges.
+  insert into app.notification (org_id, property_id, kind, entity_type, entity_id, title, body, due_date)
+  select c.org_id, c.property_id, 'charge_overdue', 'charge', c.id,
+         'دفعة متأخرة', 'دفعة متأخرة استحقّت بتاريخ ' || c.due_date, c.due_date
+  from app.charge c join app.charge_balance cb on cb.charge_id = c.id
+  where c.org_id = p_org and c.deleted_at is null and cb.is_overdue and not cb.is_settled
+  on conflict do nothing;
+
+  -- Active contracts ending within 30 days with no successor renewal yet.
+  insert into app.notification (org_id, property_id, kind, entity_type, entity_id, title, body, due_date)
+  select ct.org_id, ct.property_id, 'contract_expiring', 'contract', ct.id,
+         'عقد ينتهي قريباً', 'العقد ' || ct.contract_number || ' ينتهي بتاريخ ' || ct.end_date, ct.end_date
+  from app.contract ct
+  where ct.org_id = p_org and ct.status = 'active' and ct.deleted_at is null
+    and ct.end_date >= current_date and ct.end_date <= current_date + 30
+    and not exists (
+      select 1 from app.contract r
+      where r.renewed_from_contract_id = ct.id and r.deleted_at is null and r.status <> 'cancelled')
+  on conflict do nothing;
+
+  return (select count(*)::int from app.notification
+           where org_id = p_org and read_at is null and recipient_party_id is null);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 4. The trigger
+-- ---------------------------------------------------------------------------
+-- A trigger rather than a line inside the office's action: the status is changed by a plain UPDATE
+-- through RLS, so there is no single function to amend, and any future path — an import, a bulk
+-- close, a screen not yet written — would have to remember. This cannot be forgotten.
+--
+-- The resolution note is deliberately NOT sent (decision, 20 Aug 2026). The office has been writing
+-- it since 0072 knowing the tenant cannot see it — tenant_portal_maintenance does not return it — so
+-- it may well carry what was never written to be read. Publishing it now would change the meaning of
+-- a field already filled in confidence.
+create or replace function app.tg_maintenance_notify_tenant() returns trigger
+language plpgsql security definer set search_path = app, pg_temp as $$
+declare
+  v_note   uuid;
+  v_tenant uuid;
+  v_unit   text;
+  v_title  text;
+  v_body   text;
+begin
+  -- Nobody to tell: reported by staff, or the party record was erased under PDPL.
+  if new.reported_by_party_id is null then
+    return new;
+  end if;
+
+  select
+    case new.status
+      when 'in_progress' then 'بدأ العمل على طلبك'
+      when 'resolved'    then 'أُغلق طلبك'
+      when 'cancelled'   then 'لم يُقبل طلبك'
+    end
+  into v_title;
+
+  -- Back to 'open' is an administrative correction, not news. Saying nothing is the right amount.
+  if v_title is null then
+    return new;
+  end if;
+
+  select u.unit_number into v_unit from app.unit u where u.id = new.unit_id;
+
+  -- The portal is addressed by tenant, not by party. A party that is not a tenant of this org has no
+  -- portal to point at, and the message goes without a link rather than to a broken one.
+  select t.id into v_tenant
+  from app.tenant t
+  where t.party_id = new.reported_by_party_id
+    and t.org_id = new.org_id
+    and t.deleted_at is null
+  limit 1;
+
+  v_body := 'طلب الصيانة ' || coalesce(new.request_no, '') || ' — وحدة ' || coalesce(v_unit, '')
+         || case new.status
+              when 'resolved'  then '. إن لم يُعالَج فعلاً فأبلغ المكتب.'
+              when 'cancelled' then '. للاستفسار تواصل مع المكتب.'
+              else '.'
+            end;
+
+  insert into app.notification (
+    org_id, property_id, kind, entity_type, entity_id, title, body,
+    recipient_party_id, link_path
+  )
+  values (
+    new.org_id, new.property_id, 'maintenance_' || new.status::text,
+    'maintenance_request', new.id, v_title, v_body,
+    new.reported_by_party_id,
+    case when v_tenant is not null then '/portal/tenant/' || v_tenant::text end
+  )
+  on conflict do nothing
+  returning id into v_note;
+
+  -- Null when the same transition was already announced: dedupe did its job, and re-enqueueing would
+  -- be a second copy of a message already sent.
+  if v_note is not null then
+    perform app.enqueue_notification_email(v_note);
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists maintenance_notify_tenant on app.maintenance_request;
+create trigger maintenance_notify_tenant
+  after update of status on app.maintenance_request
+  for each row
+  when (old.status is distinct from new.status)
+  execute function app.tg_maintenance_notify_tenant();
+
+-- ---------------------------------------------------------------------------
+-- 5. Grants — 0053 rule: 0001 grants execute by default privilege, so a bare `revoke from public`
+-- closes nothing. Revoke by name, then grant back deliberately.
+-- ---------------------------------------------------------------------------
+-- enqueue stays service_role-only exactly as 0053 left it; the trigger reaches it as DEFINER.
+revoke all on function app.enqueue_notification_email(uuid)      from public, anon, authenticated;
+revoke all on function app.tg_maintenance_notify_tenant()        from public, anon, authenticated;
+revoke all on function app.party_is_mine(uuid)                   from public, anon, authenticated;
+grant execute on function app.enqueue_notification_email(uuid)   to service_role;
+-- The policy calls it as the querying user, so authenticated must be able to.
+grant execute on function app.party_is_mine(uuid)                to authenticated, service_role;
+
+select app.record_migration('0078', 'tenant_notifications');
