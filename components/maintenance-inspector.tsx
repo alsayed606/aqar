@@ -73,7 +73,6 @@ function PhotoPanel({ request }: { request: MaintenanceRow }) {
       </a>
       <form action={action} className="flex items-center gap-3">
         <input type="hidden" name="request_id" value={request.id} />
-        <input type="hidden" name="photo_path" value={request.photo_path ?? ""} />
         <ConfirmButton
           message="حذف الصورة؟ لا يمكن التراجع، والمستأجر لن يستطيع إرسالها على الطلب نفسه."
           className="text-xs text-red-700 underline hover:no-underline dark:text-red-400"

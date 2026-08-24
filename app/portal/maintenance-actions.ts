@@ -27,9 +27,12 @@ const PHOTO_TYPES: Record<string, string> = {
 /**
  * Put the photo where the request can find it (0079).
  *
- * Runs AFTER the request exists, and returns a sentence when it fails rather than throwing: the
- * fault is already reported by then, and telling the tenant their report was lost because a picture
- * would not upload is both untrue and the surest way to stop them reporting the next one.
+ * Runs AFTER the request exists, and reports failure by returning rather than throwing: the fault is
+ * already reported by then, and telling the tenant their report was lost because a picture would not
+ * upload is both untrue and the surest way to stop them reporting the next one.
+ *
+ * What comes back is a FRAGMENT, not a sentence — the caller reads it after «لكن», and a fragment
+ * that begins with its own verb ("رُفعت الصورة…") breaks the Arabic it lands in.
  */
 async function attachPhoto(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -38,32 +41,38 @@ async function attachPhoto(
   photo: File,
 ): Promise<string | null> {
   const ext = PHOTO_TYPES[photo.type];
-  if (!ext) return "الصورة بصيغة غير مدعومة. استخدم JPG أو PNG.";
-  if (photo.size > PHOTO_MAX_BYTES) return "الصورة أكبر من ٥ ميغابايت.";
+  if (!ext) return "صيغة الصورة غير مدعومة";
+  if (photo.size > PHOTO_MAX_BYTES) return "الصورة أكبر من ٥ ميغابايت";
 
   // The path prefix comes from the database: a tenant cannot read their own party row, so the app
   // has no way to build it, and guessing would just fail the bucket's write policy.
   const { data: folder, error: folderError } = await supabase.rpc("maintenance_photo_folder", {
     p_tenant: tenantId,
   });
-  if (folderError || !folder) return "تعذّر رفع الصورة.";
+  if (folderError || !folder) {
+    console.error("[maintenance-photo] folder", folderError?.message ?? "empty");
+    return "تعذّر رفع الصورة";
+  }
 
+  const path = `${folder}/${requestId}.${ext}`;
   const { error: uploadError } = await supabase.storage
     .from(PHOTO_BUCKET)
-    .upload(`${folder}/${requestId}.${ext}`, photo, { contentType: photo.type });
+    .upload(path, photo, { contentType: photo.type });
   if (uploadError) {
-    if (/Bucket not found/i.test(uploadError.message)) return "لم تُنشأ مساحة الصور بعد — طبّق الهجرة 0079";
-    console.error("[maintenance-photo]", uploadError.message);
-    return "تعذّر رفع الصورة.";
+    // Every cause reads the same to a tenant, and every cure is the office's: a missing bucket, a
+    // policy, a provider outage. Telling them to apply a migration — as the logo action tells an
+    // admin — would be an instruction they cannot act on, from a screen that is not theirs to fix.
+    console.error("[maintenance-photo] upload", uploadError.message);
+    return "تعذّر رفع الصورة";
   }
 
   const { error: attachError } = await supabase.rpc("attach_maintenance_photo", {
     p_request: requestId,
-    p_path: `${folder}/${requestId}.${ext}`,
+    p_path: path,
   });
   if (attachError) {
     console.error("[maintenance-photo] attach", attachError.message);
-    return "رُفعت الصورة ولم تُربط بالطلب.";
+    return "الصورة رُفعت ولم تُربط بالطلب";
   }
   return null;
 }
@@ -107,7 +116,7 @@ export async function submitMaintenanceRequest(_prev: FormState, formData: FormD
   // a toast that vanishes leaves them wondering whether the button worked at all.
   return {
     ok: photoProblem
-      ? `وصل طلبك إلى المكتب — لكن ${photoProblem} يمكنك إرسالها للمكتب مباشرة.`
+      ? `وصل طلبك إلى المكتب — لكن ${photoProblem}. أرسِلها للمكتب مباشرة.`
       : "وصل طلبك إلى المكتب. ستجده في قائمة طلباتك بحالته.",
   };
 }

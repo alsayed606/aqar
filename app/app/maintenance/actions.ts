@@ -53,10 +53,21 @@ export async function setMaintenanceStatus(_prev: FormState, formData: FormData)
  */
 export async function deleteMaintenancePhoto(_prev: FormState, formData: FormData): Promise<FormState> {
   const id = String(formData.get("request_id") ?? "");
-  const path = String(formData.get("photo_path") ?? "");
-  if (!id || !path) return { error: "طلب غير معروف" };
+  if (!id) return { error: "طلب غير معروف" };
 
   const supabase = await createClient();
+  // Read through RLS rather than taking the path from the form, for the reason /api/org/logo states
+  // about its own: a path the client supplies is a path the client chose. The bucket policy would
+  // still confine it to this org, but "confined to your own office's files" is not the same as
+  // "this request's file", and there is nothing to gain by asking the browser.
+  const { data: row } = await supabase
+    .from("maintenance_request")
+    .select("photo_path")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row?.photo_path) return { error: "لا توجد صورة على هذا الطلب." };
+  const path = row.photo_path as string;
+
   // The row is cleared first on purpose: if the object delete fails, the screen stops offering a
   // photo it can no longer fetch, rather than keeping a link to a file that may or may not be gone.
   const { error, data } = await supabase
