@@ -139,6 +139,12 @@ export function ContractDraftForm({
       <div>
         <label className="mb-1 block text-sm font-medium">اسم المحل التجاري</label>
         <input name="trade_name" defaultValue={held("trade_name", contract.trade_name)} className={ok} />
+        {/* The catalogue link is chosen when the contract is created and cannot be re-chosen here, so
+            the office is told rather than left to discover it from a detail page that stopped
+            matching. Editing the name unlinks it — see updateDraftContract. */}
+        <p className="mt-1 text-xs text-neutral-500">
+          تعديله هنا يفكّ ارتباطه بالاسم المسجَّل للمستأجر. لاختياره من قائمته، أنشئ العقد من جديد.
+        </p>
       </div>
 
       <div>

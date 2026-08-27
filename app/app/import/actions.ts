@@ -46,18 +46,29 @@ export async function startImport(
     .single();
   if (bErr) return { error: bErr.message };
 
+  // The batch has to exist before its rows can point at it, so from here on every failure leaves one
+  // behind. An empty, never-validated batch is not harmless: it appears in the office's import list
+  // looking like work in progress, and nothing in the product removes it.
+  const abandon = async (error: string): Promise<ImportState> => {
+    const { error: cleanupError } = await supabase.from("import_batch").delete().eq("id", batch.id);
+    if (cleanupError) console.error("[import] orphan batch", batch.id, cleanupError.message);
+    return { error };
+  };
+
   const headers = HEADERS[kind];
   const staged = rows.map((r, i) => {
     const raw: Record<string, string> = {};
     for (const h of headers) raw[h] = String(r[h] ?? "").trim();
+    // +2 because the sheet's first row is the header and spreadsheets count from 1 — the number in
+    // an error message has to be the number the office sees in Excel.
     return { batch_id: batch.id, org_id: activeOrg, row_number: i + 2, raw };
   });
 
   const { error: rErr } = await supabase.from("import_row").insert(staged);
-  if (rErr) return { error: rErr.message };
+  if (rErr) return abandon(rErr.message);
 
   const { error: vErr } = await supabase.rpc("import_validate", { p_batch: batch.id });
-  if (vErr) return { error: vErr.message };
+  if (vErr) return abandon(vErr.message);
 
   redirect(`/app/import/${batch.id}`);
 }

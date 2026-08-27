@@ -152,6 +152,22 @@ export async function updateDraftContract(_prev: FormState, formData: FormData):
   const { data: unit } = await supabase.from("unit").select("property_id").eq("id", unit_id).maybeSingle();
   if (!unit) return bad("الوحدة غير موجودة", "unit_id");
 
+  // trade_name and trade_name_id are one fact in two columns, and this form only carries the first.
+  // createContract picks the name out of the tenant's catalogue and stores both; editing typed over
+  // the name and left the id pointing at whatever was chosen before — so the contract read "مطعم أ"
+  // while its link still said "مطعم ب".
+  //
+  // A hand-typed name has no catalogue entry behind it, so the link goes when the name changes. Only
+  // when it changes: this form posts every field on every save, and clearing the link because the
+  // office corrected the rent would be losing data it never touched.
+  const typedTradeName = String(formData.get("trade_name") ?? "").trim() || null;
+  const { data: stored } = await supabase
+    .from("contract")
+    .select("trade_name")
+    .eq("id", contract_id)
+    .maybeSingle();
+  const tradeNameChanged = (stored?.trade_name ?? null) !== typedTradeName;
+
   // contract_number is system-assigned (0045) and never edited by hand.
   const ejarExtra = String(formData.get("ejar_has_extra_terms") ?? "").trim();
   const { error, data } = await supabase
@@ -168,7 +184,8 @@ export async function updateDraftContract(_prev: FormState, formData: FormData):
       deposit_halalas: sarToHalalas(String(formData.get("deposit") ?? "")) ?? 0,
       service_fees_halalas: sarToHalalas(String(formData.get("service_fees") ?? "")) ?? 0,
       deed_number: String(formData.get("deed_number") ?? "").trim() || null,
-      trade_name: String(formData.get("trade_name") ?? "").trim() || null,
+      trade_name: typedTradeName,
+      ...(tradeNameChanged ? { trade_name_id: null } : {}),
       representative_name: String(formData.get("representative_name") ?? "").trim() || null,
       representative_capacity: String(formData.get("representative_capacity") ?? "").trim() || null,
       representative_id: String(formData.get("representative_id") ?? "").trim() || null,
@@ -289,7 +306,6 @@ export async function renewContract(_prev: FormState, formData: FormData): Promi
   const start = String(formData.get("start_date") ?? "").trim();
   const end = String(formData.get("end_date") ?? "").trim();
   const newAnnualRaw = String(formData.get("new_annual") ?? "");
-  const number = String(formData.get("contract_number") ?? "").trim() || null;
   const values = { start_date: start, end_date: end, new_annual: newAnnualRaw };
   const bad = (error: string, field?: string): FormState => ({ error, field, values });
   if (!source_id) return bad("عقد غير معروف");
@@ -300,12 +316,15 @@ export async function renewContract(_prev: FormState, formData: FormData): Promi
   if (newAnnual == null || newAnnual < 0) return bad("أدخل الإيجار السنوي الجديد", "new_annual");
 
   const supabase = await createClient();
+  // p_number is left to its default. It was being passed from a `contract_number` field that exists
+  // in no form in the product, so it was always null — and offering it at all would contradict 0045,
+  // which assigns CT-YYYY-NNNNN from one gapless per-(org, year) sequence precisely so that no hand
+  // can choose a number.
   const { data, error } = await supabase.rpc("renew_contract", {
     p_source: source_id,
     p_start: start,
     p_end: end,
     p_new_annual: newAnnual,
-    p_number: number,
   });
   if (error) return bad(translateSubscriptionError(error.message) ?? renewError(error.message));
   // The renewal draft is a destination: it was created to be reviewed, so we open it.
