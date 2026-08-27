@@ -14,15 +14,16 @@ const JOB = "drain-notifications";
  * One at a time, and each confirmed separately, because a batch that half-succeeds must leave the
  * files it could not remove still nominated — a row cleared for a file that is still in the bucket
  * would be the erasure lying about itself, which is worse than the erasure being a day late.
+ *
+ * `error` is returned rather than logged and forgotten: a failure to even ASK which photos are due
+ * is indistinguishable from "none were due" once it becomes a zero, and this file exists on the
+ * premise that those two must never look alike.
  */
 async function purgeErasedPhotos(
   admin: ReturnType<typeof createAdminClient>,
-): Promise<{ deleted: number; failed: number }> {
+): Promise<{ deleted: number; failed: number; error?: string }> {
   const { data, error } = await admin.rpc("claim_erased_photos", { p_max: 100 });
-  if (error) {
-    console.error("[photo-purge] claim", error.message);
-    return { deleted: 0, failed: 0 };
-  }
+  if (error) return { deleted: 0, failed: 0, error: error.message };
 
   const rows = (data ?? []) as Array<{ request_id: string; photo_path: string }>;
   let deleted = 0;
@@ -36,7 +37,14 @@ async function purgeErasedPhotos(
       failed++;
       continue;
     }
-    await admin.rpc("mark_photo_purged", { p_request: row.request_id });
+    // Counted deleted only once the column is cleared too. Without this check the run would report
+    // an erasure it did not finish, and the row would come back tomorrow as if nothing happened.
+    const { error: markError } = await admin.rpc("mark_photo_purged", { p_request: row.request_id });
+    if (markError) {
+      console.error("[photo-purge] mark", row.request_id, markError.message);
+      failed++;
+      continue;
+    }
     deleted++;
   }
   return { deleted, failed };
@@ -84,17 +92,23 @@ export async function GET(request: Request) {
   // grows under attack from growing forever.
   await admin.rpc("rate_limit_sweep");
 
-  // 0b-bis. Photographs belonging to people whose data was erased (0080). This is the half of PDPL
-  // erasure that SQL cannot perform: erase_party nulls the name, the ID and the phone, and leaves a
-  // picture of the person's kitchen in a bucket. The column is cleared only after the object is
-  // actually gone — clearing it first would lose the only pointer to the file.
-  const purged = await purgeErasedPhotos(admin);
-  if (purged.failed > 0) await record(false, { stage: "photos", ...purged }, "some photos not deleted");
-
   // 0c. And spent sign-in codes plus step-up records for sessions that can no longer exist (0069).
   // Note the codes themselves never travel this route: they are sent the moment they are asked for,
   // because a sign-in code that waits for tomorrow's 06:00 drain is not a sign-in code.
   await admin.rpc("mfa_sweep");
+
+  // 0d. Photographs belonging to people whose data was erased (0080). This is the half of PDPL
+  // erasure that SQL cannot perform: erase_party nulls the name, the ID and the phone, and leaves a
+  // picture of the person's kitchen in a bucket. The column is cleared only after the object is
+  // actually gone — clearing it first would lose the only pointer to the file.
+  const purged = await purgeErasedPhotos(admin);
+  if (purged.error || purged.failed > 0) {
+    await record(
+      false,
+      { stage: "photos", deleted: purged.deleted, failed: purged.failed },
+      purged.error ?? "some photos not deleted",
+    );
+  }
 
   // 1. Claim a batch of eligible email deliveries (attempts incremented, next_attempt_at leased).
   const { data: claimed, error: claimErr } = await admin.rpc("claim_email_deliveries", { p_max: 50 });
