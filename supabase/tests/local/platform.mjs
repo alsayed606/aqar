@@ -146,6 +146,21 @@ try {
   const activity = await callAs(idOwner, org1, "select * from app.platform_org_activity()");
   ok("platform_org_activity degrades to empty without auth.users instead of raising", Array.isArray(activity));
 
+  // 0081: the scoped twins the 360 view uses. Same contract as their platform-wide siblings — the
+  // guard first, then the graceful empty — because a detail page for one office has no business
+  // scanning every office to find it.
+  const scopedForbidden = await asRole(idStaff, org1, () =>
+    client.query("select * from app.platform_org_activity($1)", [org1]));
+  ok("scoped platform_org_activity FORBIDDEN for a non-operator",
+    scopedForbidden.ok === false && /FORBIDDEN/i.test(scopedForbidden.error || ""));
+  const scopedIdForbidden = await asRole(idStaff, org1, () =>
+    client.query("select * from app.platform_identity_activity($1)", [org1]));
+  ok("scoped platform_identity_activity FORBIDDEN for a non-operator",
+    scopedIdForbidden.ok === false && /FORBIDDEN/i.test(scopedIdForbidden.error || ""));
+
+  const scoped = await callAs(idOwner, org1, "select * from app.platform_org_activity($1)", [org1]);
+  ok("scoped platform_org_activity degrades to empty without auth.users too", Array.isArray(scoped));
+
   // The trigger must capture the change made by operator_set_subscription above (org2 → pro/active).
   const evs = await callAs(idOwner, org1, "select * from app.platform_subscription_history($1)", [org2]);
   const changed = evs.find((e) => e.kind === "plan_changed");
