@@ -331,6 +331,13 @@ export default async function TenantEditPage({
             عند طلب صاحب البيانات: يُحذف الاسم والهوية والجوال والبريد وبيانات الممثل نهائياً، ويبقى العقد بشروطه
             المالية و<b>الفواتير الضريبية</b> لأن الأنظمة تُلزم بحفظها. لا يمكن التراجع.
           </p>
+          {/* Said here because this is where the office promises it to the person asking. The photos
+              go on the next daily sweep, not now — the deletion needs the storage API, which this
+              database call cannot reach (0080). A day's delay stated beats a promise implied. */}
+          <p className="text-sm text-neutral-600 dark:text-neutral-400">
+            و<b>صور طلبات الصيانة</b> تُحذف تلقائياً خلال ٢٤ ساعة. ولحذفها فوراً: افتح الطلب من{" "}
+            <b>طلبات الصيانة</b> واضغط «حذف الصورة».
+          </p>
           <ErasePartyForm tenantId={tenant.id} partyId={p?.id ?? ""} />
         </section>
       )}

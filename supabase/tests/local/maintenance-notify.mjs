@@ -231,6 +231,27 @@ try {
     (await q("select * from app.tenant_portal_maintenance($1) where id = $2", [tenant, photoReq])).rows[0]);
   ok("the tenant sees that a photo is attached", line.has_photo === true);
   ok("but never the path itself", !("photo_path" in line));
+
+  // ---------------- 8. Erasure reaches the photo (0080) ----------------
+  // The storage delete itself belongs to the drain; what the database owes is an honest nomination
+  // and a confirmation that clears the column only after the file is gone.
+  ok("a photo of a living party is not nominated",
+    (await q("select 1 from app.claim_erased_photos(100) where request_id = $1", [photoReq])).rows.length === 0);
+
+  await q("update app.party set erased_at = now(), erased_reason = 'طلب صاحب البيانات' where id = $1", [party]);
+  const claimed = (await q("select * from app.claim_erased_photos(100)")).rows;
+  ok("an erased party's photo is nominated with its path",
+    claimed.length === 1 && claimed[0].request_id === photoReq && claimed[0].photo_path === path);
+
+  await q("select app.mark_photo_purged($1)", [photoReq]);
+  ok("confirming clears the column",
+    (await one("select photo_path from app.maintenance_request where id=$1", [photoReq])).photo_path === null);
+  ok("and it is not nominated twice",
+    (await q("select 1 from app.claim_erased_photos(100)")).rows.length === 0);
+  ok("the completed erasure is audited",
+    (await one(
+      `select count(*)::int as n from app.audit_log
+        where action = 'maintenance.photo_purged' and entity_id = $1`, [photoReq])).n === 1);
 } catch (e) {
   // Without this the finally's process.exit(0) swallows a setup failure and the run reports
   // "0 passed, 0 failed" — a green-looking suite that never ran.

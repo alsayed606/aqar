@@ -72,7 +72,12 @@ async function attachPhoto(
   });
   if (attachError) {
     console.error("[maintenance-photo] attach", attachError.message);
-    return "الصورة رُفعت ولم تُربط بالطلب";
+    // Clean up after ourselves. Until 0080 the tenant was forbidden to delete anything here, so this
+    // branch left a file in the bucket that nobody was allowed to remove; the delete policy now
+    // admits the owner of a file no request references — which is exactly this one.
+    const { error: removeError } = await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+    if (removeError) console.error("[maintenance-photo] rollback", removeError.message);
+    return "الصورة لم تُربط بالطلب";
   }
   return null;
 }

@@ -8,6 +8,40 @@ export const dynamic = "force-dynamic";
 
 const JOB = "drain-notifications";
 
+/**
+ * Delete the photographs of erased parties, one file at a time (0080).
+ *
+ * One at a time, and each confirmed separately, because a batch that half-succeeds must leave the
+ * files it could not remove still nominated — a row cleared for a file that is still in the bucket
+ * would be the erasure lying about itself, which is worse than the erasure being a day late.
+ */
+async function purgeErasedPhotos(
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<{ deleted: number; failed: number }> {
+  const { data, error } = await admin.rpc("claim_erased_photos", { p_max: 100 });
+  if (error) {
+    console.error("[photo-purge] claim", error.message);
+    return { deleted: 0, failed: 0 };
+  }
+
+  const rows = (data ?? []) as Array<{ request_id: string; photo_path: string }>;
+  let deleted = 0;
+  let failed = 0;
+  for (const row of rows) {
+    const { error: removeError } = await admin.storage
+      .from("maintenance-photos")
+      .remove([row.photo_path]);
+    if (removeError) {
+      console.error("[photo-purge]", row.request_id, removeError.message);
+      failed++;
+      continue;
+    }
+    await admin.rpc("mark_photo_purged", { p_request: row.request_id });
+    deleted++;
+  }
+  return { deleted, failed };
+}
+
 // Vercel Cron drainer for the notification email outbox (0038). Idempotent + concurrency-safe:
 // claim_email_deliveries atomically leases rows (SKIP LOCKED) so overlapping runs never double-send;
 // each row is then sent once and marked sent/failed. service_role is used ONLY here.
@@ -50,6 +84,13 @@ export async function GET(request: Request) {
   // grows under attack from growing forever.
   await admin.rpc("rate_limit_sweep");
 
+  // 0b-bis. Photographs belonging to people whose data was erased (0080). This is the half of PDPL
+  // erasure that SQL cannot perform: erase_party nulls the name, the ID and the phone, and leaves a
+  // picture of the person's kitchen in a bucket. The column is cleared only after the object is
+  // actually gone — clearing it first would lose the only pointer to the file.
+  const purged = await purgeErasedPhotos(admin);
+  if (purged.failed > 0) await record(false, { stage: "photos", ...purged }, "some photos not deleted");
+
   // 0c. And spent sign-in codes plus step-up records for sessions that can no longer exist (0069).
   // Note the codes themselves never travel this route: they are sent the moment they are asked for,
   // because a sign-in code that waits for tomorrow's 06:00 drain is not a sign-in code.
@@ -68,8 +109,8 @@ export async function GET(request: Request) {
     target: string;
   }>;
   if (rows.length === 0) {
-    await record(true, { sweep, claimed: 0, sent: 0, failed: 0 });
-    return NextResponse.json({ sweep, claimed: 0, sent: 0, failed: 0 });
+    await record(true, { sweep, purged, claimed: 0, sent: 0, failed: 0 });
+    return NextResponse.json({ sweep, purged, claimed: 0, sent: 0, failed: 0 });
   }
 
   // 2. Fetch the content (notification title/body) and org names for the claimed set.
@@ -120,6 +161,6 @@ export async function GET(request: Request) {
   }
 
   // The run itself succeeded even when individual messages did not — those are counted, not raised.
-  await record(true, { sweep, claimed: rows.length, sent, failed });
-  return NextResponse.json({ sweep, claimed: rows.length, sent, failed });
+  await record(true, { sweep, purged, claimed: rows.length, sent, failed });
+  return NextResponse.json({ sweep, purged, claimed: rows.length, sent, failed });
 }
