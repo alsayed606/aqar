@@ -4,7 +4,7 @@ import { getActiveOrg } from "@/lib/supabase/active-org";
 import { getCapabilities } from "@/lib/capabilities";
 import { halalasToSar } from "@/lib/money";
 import { fmtDate, type Summary, type SubscriptionStatus } from "@/lib/subscription";
-import { startSubscriptionCheckout, setAutoRenew, removeCard } from "./actions";
+import { AutoRenewToggle, RemoveCardButton, PlansCheckoutForm } from "@/components/subscription-card-actions";
 import { OfflinePaymentPanel } from "@/components/offline-payment-panel";
 
 export const dynamic = "force-dynamic";
@@ -28,11 +28,14 @@ const RESOURCES: Array<{ key: keyof Summary["usage"]; label: string }> = [
 export default async function SubscriptionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; checkout?: string; ok?: string }>;
+  // `checkout=return` is the only parameter left: Moyasar sends the office back here after its hosted
+  // page, and that one genuinely arrives in the URL. The `error` and `ok` flashes are gone with the
+  // redirects that wrote them — the actions answer beside their own buttons now.
+  searchParams: Promise<{ checkout?: string }>;
 }) {
   const activeOrg = await getActiveOrg();
   if (!activeOrg) redirect("/app");
-  const { error: flashError, checkout, ok: flashOk } = await searchParams;
+  const { checkout } = await searchParams;
   const caps = await getCapabilities(activeOrg);
   const canBill = caps.has("manage_billing");
 
@@ -64,18 +67,6 @@ export default async function SubscriptionPage({
           شكراً لك. إذا اكتمل الدفع، سيُفعَّل اشتراكك خلال لحظات. حدّث الصفحة إن لم تظهر الحالة الجديدة بعد.
         </p>
       )}
-      {flashError && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
-          {flashError}
-        </p>
-      )}
-
-      {flashOk && (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
-          {flashOk}
-        </p>
-      )}
-
       {/* Pre-migration graceful state, and the (unexpected) no-row state. */}
       {error ? (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
@@ -178,17 +169,8 @@ export default async function SubscriptionPage({
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <form action={setAutoRenew}>
-                    <input type="hidden" name="on" value={s.auto_renew ? "0" : "1"} />
-                    <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
-                      {s.auto_renew ? "إيقاف" : "تفعيل"}
-                    </button>
-                  </form>
-                  <form action={removeCard}>
-                    <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-neutral-700 dark:hover:bg-red-900/20">
-                      إزالة البطاقة
-                    </button>
-                  </form>
+                  <AutoRenewToggle on={s.auto_renew} />
+                  <RemoveCardButton />
                 </div>
               </div>
             ) : (
@@ -201,10 +183,7 @@ export default async function SubscriptionPage({
 
           {/* Plans + automated payment (Moyasar hosted checkout). One form; the button clicked sets `plan`. */}
           {canBill && plans.length > 0 && (
-            <form
-              action={startSubscriptionCheckout}
-              className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900"
-            >
+            <PlansCheckoutForm>
               <h2 className="mb-1 font-semibold">الخطط والدفع</h2>
               <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
                 اختر خطة وادفع بأمان (مدى / Apple Pay / بطاقة). يُفعَّل اشتراكك فور اكتمال الدفع.
@@ -241,7 +220,7 @@ export default async function SubscriptionPage({
               <p className="mt-2 text-xs text-neutral-500">
                 الدفع متاح لمدير المنشأة. تُدار البطاقة على صفحة مزوّد الدفع الآمنة — لا نحفظ بياناتها.
               </p>
-            </form>
+            </PlansCheckoutForm>
           )}
 
           {/* Bank transfer / cash (0062). Kept beside card payment rather than replacing it: the two

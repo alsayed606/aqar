@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { halalasToSar } from "@/lib/money";
+import { useSuccessToast } from "@/components/form-field";
 import { declareOfflinePayment, cancelOfflinePayment } from "@/app/app/subscription/actions";
+import type { FormState } from "@/lib/form-state";
 
 type Plan = { code: string; name_ar: string; price_halalas: number };
 type Bank = { bank_name?: string; bank_account_name?: string; bank_iban?: string; note?: string } | null;
@@ -29,7 +31,30 @@ function Row({ label, value }: { label: string; value?: string }) {
   );
 }
 
+const initial: FormState = {};
+
+/** Cancelling has no field of its own, so it answers in a toast beside the button that was pressed. */
+function CancelRequestButton() {
+  const [state, action, pending] = useActionState(cancelOfflinePayment, initial);
+  useSuccessToast(state);
+  return (
+    <form action={action} className="mt-3">
+      <button
+        disabled={pending}
+        className="rounded-lg border border-amber-400 bg-white px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-60 dark:bg-neutral-900 dark:text-amber-200"
+      >
+        {pending ? "…" : "إلغاء الطلب"}
+      </button>
+      {state.error && (
+        <p role="alert" className="mt-1 text-xs text-red-700 dark:text-red-400">{state.error}</p>
+      )}
+    </form>
+  );
+}
+
 export function OfflinePaymentPanel({ plans, bank, pending }: { plans: Plan[]; bank: Bank; pending: Pending }) {
+  const [state, action, submitting] = useActionState(declareOfflinePayment, initial);
+  useSuccessToast(state);
   const [method, setMethod] = useState("bank_transfer");
   const [plan, setPlan] = useState(plans[0]?.code ?? "");
   const hasBank = Boolean(bank?.bank_iban);
@@ -46,18 +71,14 @@ export function OfflinePaymentPanel({ plans, bank, pending }: { plans: Plan[]; b
           {pending.reference ? ` — المرجع ${pending.reference}` : ""}.
           يُفعَّل اشتراكك بعد تأكيد وصول المبلغ.
         </p>
-        <form action={cancelOfflinePayment} className="mt-3">
-          <button className="rounded-lg border border-amber-400 bg-white px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 dark:bg-neutral-900 dark:text-amber-200">
-            إلغاء الطلب
-          </button>
-        </form>
+        <CancelRequestButton />
       </div>
     );
   }
 
   return (
     <form
-      action={declareOfflinePayment}
+      action={action}
       className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900"
     >
       <h2 className="mb-1 font-semibold">الدفع بتحويل بنكي أو نقداً</h2>
@@ -104,12 +125,23 @@ export function OfflinePaymentPanel({ plans, bank, pending }: { plans: Plan[]; b
               {method === "cash" ? "(اسم المستلم أو رقم السند)" : "(يساعدنا على مطابقة الحوالة)"}
             </span>
           </label>
-          <input id="reference" name="reference" className={inputCls} />
+          {/* Copied off a banking app. Handing it back after a refusal is the whole point of this
+              screen's conversion: retyping it means opening another app to look it up again. */}
+          <input id="reference" name="reference" defaultValue={state.values?.reference ?? ""} className={inputCls} />
         </div>
       </div>
 
-      <button className="mt-4 rounded-lg bg-brand px-4 py-2.5 font-medium text-white hover:bg-brand-fg">
-        تسجيل التحويل
+      {state.error && (
+        <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
+          {state.error}
+        </p>
+      )}
+
+      <button
+        disabled={submitting}
+        className="mt-4 rounded-lg bg-brand px-4 py-2.5 font-medium text-white hover:bg-brand-fg disabled:opacity-60"
+      >
+        {submitting ? "جارٍ التسجيل…" : "تسجيل التحويل"}
       </button>
       <p className="mt-2 text-xs text-neutral-500">
         تسجيل التحويل لا يفعّل الاشتراك بنفسه — نراجع وصول المبلغ أولاً.
