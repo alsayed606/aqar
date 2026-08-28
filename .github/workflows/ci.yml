@@ -25,6 +25,12 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: build-time-placeholder
 
+      # Runs here rather than in its own job because it needs exactly what this one just produced:
+      # a build. The suite boots `next start` and asks the money endpoints, over HTTP, whether their
+      # doors are shut — the layer four code reviews in a row found untested.
+      - name: HTTP guard tests
+        run: npm run test:e2e
+
   schema:
     name: generated files are in sync
     runs-on: ubuntu-latest

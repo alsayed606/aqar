@@ -8,6 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "check:rtl": "node scripts/check-rtl.mjs",
+    "test:e2e": "node tests/e2e/http-guards.mjs",
     "build:schema": "node supabase/build-schema.mjs"
   },
   "dependencies": {
