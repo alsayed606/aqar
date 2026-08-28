@@ -49,6 +49,11 @@ export async function GET(request: Request) {
 
   let charged = 0;
   let failed = 0;
+  // Money taken and not accounted for. Counted apart from `failed` on purpose: a declined card is a
+  // normal outcome, this is an office that paid and did not get what it paid for.
+  const stranded: string[] = [];
+  const unrecorded: string[] = [];
+
   for (const r of rows) {
     const result = await chargeToken({
       token: r.token,
@@ -58,16 +63,42 @@ export async function GET(request: Request) {
     });
 
     if (result.ok && result.status === "paid") {
-      await admin.rpc("apply_subscription_payment", { p_intent: r.intent_id, p_gateway_id: result.id, p_raw: result.raw ?? null });
+      // The card HAS been charged by this point. If applying it fails, the subscription is not
+      // extended, claim_due_renewals has already pushed next_charge_at forward so tomorrow's run
+      // will not revisit it, and nothing else in the system is looking. Swallowing this error is
+      // how an office pays and stays locked out in silence.
+      const { error: applyError } = await admin.rpc("apply_subscription_payment", {
+        p_intent: r.intent_id,
+        p_gateway_id: result.id,
+        p_raw: result.raw ?? null,
+      });
+      if (applyError) {
+        console.error("[renew] STRANDED", r.intent_id, r.org_id, result.id, applyError.message);
+        stranded.push(r.intent_id);
+        continue;
+      }
       charged++;
     } else {
       const raw = result.ok ? { status: result.status, raw: result.raw } : { error: result.error };
-      await admin.rpc("record_dunning_failure", { p_intent: r.intent_id, p_raw: raw });
+      const { error: dunningError } = await admin.rpc("record_dunning_failure", {
+        p_intent: r.intent_id,
+        p_raw: raw,
+      });
+      if (dunningError) {
+        // The decline happened whether or not we managed to write it down. An unrecorded one means
+        // the dunning schedule did not advance, so the office is neither charged nor chased.
+        console.error("[renew] dunning not recorded", r.intent_id, dunningError.message);
+        unrecorded.push(r.intent_id);
+        continue;
+      }
       failed++;
     }
   }
 
-  // Declined cards are an outcome of the run, not a failure of it — dunning already recorded each.
-  await record(true, { due: rows.length, charged, failed });
-  return NextResponse.json({ due: rows.length, charged, failed });
+  // Declined cards are an outcome of the run, not a failure of it — dunning recorded each. A
+  // stranded charge is the opposite: the run did its job wrongly, and the operator must see red.
+  const clean = stranded.length === 0 && unrecorded.length === 0;
+  const detail = { due: rows.length, charged, failed, stranded, unrecorded };
+  await record(clean, detail, clean ? undefined : "charged but not applied / not recorded");
+  return NextResponse.json(detail, { status: clean ? 200 : 500 });
 }

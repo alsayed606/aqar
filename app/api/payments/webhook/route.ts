@@ -31,31 +31,57 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "server not configured" }, { status: 500 });
   }
 
-  const orgId = metadata.org_id;
+  // A 500 is not a failure to be hidden here: Moyasar retries on one, and every write below is
+  // idempotent (apply_subscription_payment no-ops on an intent already paid). Answering `ok` to a
+  // write that did not happen is what makes the retry never come.
+  const retryable = (stage: string, message: string) => {
+    console.error("[moyasar]", stage, intentId, message);
+    return NextResponse.json({ error: `${stage} failed` }, { status: 500 });
+  };
+
   if (status === "paid") {
     const { error } = await admin.rpc("apply_subscription_payment", {
       p_intent: intentId,
       p_gateway_id: gatewayId,
       p_raw: body,
     });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return retryable("apply", error.message);
 
     // If the office opted into auto-renew, persist the returned card token (never the card itself).
-    if (metadata.save_card === "1" && orgId) {
+    if (metadata.save_card === "1") {
       const card = extractCardToken(data);
       if (card) {
-        await admin.rpc("save_payment_method", {
-          p_org: orgId,
+        // The org comes from the intent, not from the payload. save_payment_method is not just a
+        // write: it retires whatever card that org had, attaches this one, and switches the
+        // subscription to auto-renew. The authoritative owner is one lookup away, and a privileged
+        // write should not take its target from the message that asked for it.
+        const { data: intent } = await admin
+          .from("subscription_payment")
+          .select("org_id")
+          .eq("id", intentId)
+          .maybeSingle();
+
+        if (!intent?.org_id) return retryable("intent lookup", "no org for intent");
+
+        const { error: cardError } = await admin.rpc("save_payment_method", {
+          p_org: intent.org_id,
           p_token: card.token,
           p_brand: card.brand,
           p_last4: card.last4,
           p_exp_month: null,
           p_exp_year: null,
         });
+        // Silence here meant the office asked for auto-renew, believed it was on, and discovered
+        // otherwise when the next renewal did not happen.
+        if (cardError) return retryable("save card", cardError.message);
       }
     }
   } else if (status === "failed") {
-    await admin.rpc("mark_subscription_payment_failed", { p_intent: intentId, p_raw: body });
+    const { error } = await admin.rpc("mark_subscription_payment_failed", {
+      p_intent: intentId,
+      p_raw: body,
+    });
+    if (error) return retryable("mark failed", error.message);
   }
 
   return NextResponse.json({ ok: true });
