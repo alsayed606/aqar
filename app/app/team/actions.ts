@@ -7,12 +7,20 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { normalizeSaudiPhone } from "@/lib/phone";
 import { translateSubscriptionError } from "@/lib/subscription-errors";
-import { WRITE_REFUSED_AR, writeRefused } from "@/lib/rpc-errors";
+import { WRITE_REFUSED_AR, writeRefused, refusalAr, type Refusals } from "@/lib/rpc-errors";
 import type { FormState } from "@/lib/form-state";
 
 export type InviteState = { error?: string; field?: string; link?: string; role?: string };
 
 const MEMBER_ROLES = ["admin", "manager", "accountant", "staff", "viewer"];
+
+const SCOPE_REFUSALS: Refusals = [
+  [/MEMBERSHIP_NOT_FOUND/i, "العضو غير موجود"],
+  [/SCOPE_UPDATE_REFUSED|FORBIDDEN/i, "تعديل النطاق متاح لمدراء المنشأة فقط."],
+  // The UI only ever offers this org's properties, so reaching this means the request did not come
+  // from the UI. Said plainly rather than as a generic failure.
+  [/PROPERTY_NOT_IN_ORG/i, "أحد العقارات المختارة لا يتبع هذه المنشأة."],
+];
 
 // The row actions below report through their return value, not through `?error=` on the URL.
 //
@@ -132,39 +140,17 @@ export async function setMemberScope(_prev: FormState, formData: FormData): Prom
   const scopeAll = String(formData.get("scope_all") ?? "true") === "true";
   const propertyIds = formData.getAll("property_ids").map(String).filter(Boolean);
 
+  // One call, one transaction (0084). This was three writes with nothing holding them together —
+  // set the flag, delete every scope row, insert the chosen ones — and stopping after the second
+  // left the member scoped to NOTHING: an empty portfolio, while the admin read an error and
+  // reasonably concluded that nothing had changed.
   const supabase = await createClient();
-  const { data: m } = await supabase
-    .from("membership")
-    .select("id")
-    .eq("id", membership_id)
-    .eq("org_id", activeOrg)
-    .maybeSingle();
-  if (!m) redirect("/app/team");
-
-  const { error: uErr, data: uRows } = await supabase
-    .from("membership")
-    .update({ scope_all: scopeAll })
-    .eq("id", membership_id)
-    .select("id");
-  if (uErr) return { error: uErr.message };
-  // Stop before the scope rows are rewritten: writing them after a refused scope_all would leave the
-  // member with grants that no longer match the flag.
-  if (writeRefused(uRows)) return { error: WRITE_REFUSED_AR };
-
-  // Rewrite the scope set: clear, then add the chosen properties (only when scoped). The delete
-  // error is checked because a silent failure here would leave stale grants and WIDEN the member's
-  // access beyond what the admin selected.
-  const { error: dErr } = await supabase
-    .from("membership_property_scope")
-    .delete()
-    .eq("membership_id", membership_id);
-  if (dErr) return { error: dErr.message };
-  if (!scopeAll && propertyIds.length > 0) {
-    const { error: iErr } = await supabase
-      .from("membership_property_scope")
-      .insert(propertyIds.map((property_id) => ({ membership_id, property_id })));
-    if (iErr) return { error: iErr.message };
-  }
+  const { error } = await supabase.rpc("set_member_scope", {
+    p_membership: membership_id,
+    p_scope_all: scopeAll,
+    p_property_ids: scopeAll ? [] : propertyIds,
+  });
+  if (error) return { error: refusalAr(error.message, SCOPE_REFUSALS) };
 
   revalidatePath("/app/team");
   // Back to the team list on success only. A refusal keeps the admin on the page with their

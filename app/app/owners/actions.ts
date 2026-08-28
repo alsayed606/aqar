@@ -9,6 +9,7 @@ import { normalizeSaudiPhone } from "@/lib/phone";
 import { parseArabicNumber } from "@/lib/num";
 import { sarToHalalas } from "@/lib/money";
 import { archiveRecord } from "@/lib/archive";
+import { riyadhToday } from "@/lib/today";
 import { rpcErrorAr, refusalAr, WRITE_REFUSED_AR, writeRefused, type Refusals } from "@/lib/rpc-errors";
 import type { FormState } from "@/lib/form-state";
 
@@ -28,15 +29,6 @@ const FEE_REFUSALS: Refusals = [
   [/FEE_UPDATE_REFUSED/i, "لم تُحفظ النسبة: السجل خارج نطاق صلاحيتك. تواصل مع مدير المنشأة."],
 ];
 
-/**
- * Today, in Riyadh.
- *
- * `new Date().toISOString()` is UTC, and between midnight and 3am local that is still yesterday — so
- * an office recording a payout late at night dated it a day early. Every other place in the product
- * that needs "today" says Asia/Riyadh explicitly (0072 does it in SQL); this one did not.
- */
-const riyadhToday = () =>
-  new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
 
 // Soft-delete an owner. Refused by 0067 while they still hold properties, and refused outright for
 // the org's own self-owner — that one is the office itself, and invoices read its tax identity.

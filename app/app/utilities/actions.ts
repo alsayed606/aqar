@@ -6,6 +6,7 @@ import { getActiveOrg } from "@/lib/supabase/active-org";
 import { parseArabicNumber } from "@/lib/num";
 import { sarToHalalas } from "@/lib/money";
 import { WRITE_REFUSED_AR, writeRefused } from "@/lib/rpc-errors";
+import { riyadhToday } from "@/lib/today";
 import type { FormState } from "@/lib/form-state";
 
 // `ok` used to be a boolean on these three; it is the success sentence now, so the create forms
@@ -91,7 +92,7 @@ export async function setMeterStatus(_prev: FormState, formData: FormData): Prom
 
   const removed_at =
     status === "removed"
-      ? String(formData.get("removed_at") ?? "").trim() || new Date().toISOString().slice(0, 10)
+      ? String(formData.get("removed_at") ?? "").trim() || riyadhToday()
       : null;
 
   const supabase = await createClient();
@@ -287,7 +288,7 @@ async function writePaidAt(formData: FormData, paid_at: string | null): Promise<
 }
 
 export async function markBillPaid(_prev: FormState, formData: FormData): Promise<FormState> {
-  return writePaidAt(formData, new Date().toISOString().slice(0, 10));
+  return writePaidAt(formData, riyadhToday());
 }
 
 export async function clearBillPaid(_prev: FormState, formData: FormData): Promise<FormState> {

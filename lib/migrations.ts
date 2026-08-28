@@ -88,4 +88,5 @@ export const EXPECTED_MIGRATIONS: ExpectedMigration[] = [
   { version: "0081", name: "0081_platform_activity_scope" },
   { version: "0082", name: "0082_abandon_payment_intent" },
   { version: "0083", name: "0083_set_owner_fee" },
+  { version: "0084", name: "0084_set_member_scope" },
 ];
