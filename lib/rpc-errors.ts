@@ -43,3 +43,29 @@ export const WRITE_REFUSED_AR =
 export function writeRefused(rows: { id: string }[] | null): boolean {
   return !rows || rows.length === 0;
 }
+
+/** The refusals one module knows how to translate: a database code, and what it means to the office. */
+export type Refusals = ReadonlyArray<readonly [RegExp, string]>;
+
+/**
+ * Turn whatever the database said into a sentence the office can act on.
+ *
+ * Each module keeps its own table because the codes are its own — `CONTRACT_NOT_ACTIVE` means nothing
+ * to the invoice screen. What is shared is the ORDER and, more importantly, the last step: an
+ * untranslated message is logged and replaced, never shown.
+ *
+ * Before this, an unrecognised failure reached the office as raw English from PostgREST — on an
+ * Arabic screen, naming columns it has never heard of. That is not an error message; it is the
+ * absence of one, and it teaches the reader that the product breaks in a language it does not speak.
+ */
+export function refusalAr(message: string, known: Refusals): string {
+  const said = known.find(([pattern]) => pattern.test(message))?.[1];
+  if (said) return said;
+
+  const infrastructure = rpcErrorAr(message);
+  if (infrastructure) return infrastructure;
+
+  // Kept where an operator can find it. The office gets a sentence; the cause is not thrown away.
+  console.error("[rpc]", message);
+  return "تعذّر إتمام العملية. حدّث الصفحة وحاول مرّة أخرى، وإن تكرّر فأبلغ الدعم.";
+}

@@ -1,10 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
-import { startImport, type ImportState } from "@/app/app/import/actions";
+import { startImport } from "@/app/app/import/actions";
+import type { FormState } from "@/lib/form-state";
 import { IMPORT_KINDS, KIND_LABEL } from "@/lib/import-headers";
 
-const initial: ImportState = {};
+const initial: FormState = {};
 
 export function ImportForm() {
   const [state, action, pending] = useActionState(startImport, initial);

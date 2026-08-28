@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
-import { createContract, type ContractState } from "@/app/app/contracts/actions";
+import { createContract } from "@/app/app/contracts/actions";
+import type { FormState } from "@/lib/form-state";
 import { Combobox } from "@/components/ui";
 import { isEstablishment } from "@/lib/tenant-identity";
 import { UNIT_STATUS_AR } from "@/lib/labels";
@@ -9,7 +10,7 @@ import { halalasToSar, sarToHalalas } from "@/lib/money";
 import { contractFinance, type ContractFinance } from "@/lib/contract-finance";
 import { countAr, INSTALMENT_AR } from "@/lib/plural-ar";
 
-const initial: ContractState = {};
+const initial: FormState = {};
 
 type Option = { id: string; label: string };
 
@@ -109,6 +110,11 @@ export function ContractForm({
   const [kind, setKind] = useState("residential");
   const [frequency, setFrequency] = useState("quarterly");
   const [rent, setRent] = useState("");
+
+  // What was typed, handed back after a refusal. Only the uncontrolled inputs need it: React resets
+  // a form once its action resolves, and the fields above hold their own state and survive on their
+  // own. Twenty fields used to empty because a date was wrong.
+  const held = (name: string) => state.values?.[name] ?? "";
 
   const noUnits = units.length === 0;
   const noTenants = tenants.length === 0;
@@ -225,7 +231,7 @@ export function ContractForm({
         </label>
         <input
           id="start_date"
-          name="start_date"
+          name="start_date" defaultValue={held("start_date")}
           type="date"
           required
           className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700"
@@ -238,7 +244,7 @@ export function ContractForm({
         </label>
         <input
           id="end_date"
-          name="end_date"
+          name="end_date" defaultValue={held("end_date")}
           type="date"
           required
           className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700"
@@ -322,25 +328,25 @@ export function ContractForm({
               <label className="mb-1 block text-sm font-medium" htmlFor="representative_name">
                 اسم ممثل التوقيع
               </label>
-              <input id="representative_name" name="representative_name" defaultValue={tenant?.rep_name ?? ""} className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700" />
+              <input id="representative_name" name="representative_name" defaultValue={state.values?.representative_name ?? tenant?.rep_name ?? ""} className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700" />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium" htmlFor="representative_capacity">
                 صفته
               </label>
-              <input id="representative_capacity" name="representative_capacity" defaultValue={tenant?.rep_capacity ?? ""} placeholder="مثال: مدير عام / مفوّض" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700" />
+              <input id="representative_capacity" name="representative_capacity" defaultValue={state.values?.representative_capacity ?? tenant?.rep_capacity ?? ""} placeholder="مثال: مدير عام / مفوّض" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700" />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium" htmlFor="representative_id">
                 رقم هوية الممثل
               </label>
-              <input id="representative_id" name="representative_id" dir="ltr" defaultValue={tenant?.rep_id_number ?? ""} className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700" />
+              <input id="representative_id" name="representative_id" dir="ltr" defaultValue={state.values?.representative_id ?? tenant?.rep_id_number ?? ""} className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700" />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium" htmlFor="representative_phone">
                 جوال الممثل
               </label>
-              <input id="representative_phone" name="representative_phone" dir="ltr" defaultValue={tenant?.rep_phone ?? ""} placeholder="05XXXXXXXX" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700" />
+              <input id="representative_phone" name="representative_phone" dir="ltr" defaultValue={state.values?.representative_phone ?? tenant?.rep_phone ?? ""} placeholder="05XXXXXXXX" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700" />
             </div>
           </div>
         </details>
@@ -356,31 +362,31 @@ export function ContractForm({
             <label className="mb-1 block text-sm font-medium" htmlFor="ejar_contract_number">
               رقم العقد في منصة إيجار
             </label>
-            <input id="ejar_contract_number" name="ejar_contract_number" dir="ltr" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700" />
+            <input id="ejar_contract_number" name="ejar_contract_number" defaultValue={held("ejar_contract_number")} dir="ltr" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700" />
           </div>
 
           <div className="sm:col-span-2 mt-1 text-xs font-medium text-neutral-500">معلومات الوسيط العقاري</div>
           <div>
             <label className="mb-1 block text-sm font-medium" htmlFor="ejar_broker_office">اسم المكتب</label>
-            <input id="ejar_broker_office" name="ejar_broker_office" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700" />
+            <input id="ejar_broker_office" name="ejar_broker_office" defaultValue={held("ejar_broker_office")} className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700" />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium" htmlFor="ejar_broker_number">رقم المكتب</label>
-            <input id="ejar_broker_number" name="ejar_broker_number" dir="ltr" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700" />
+            <input id="ejar_broker_number" name="ejar_broker_number" defaultValue={held("ejar_broker_number")} dir="ltr" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-right outline-none focus:border-brand dark:border-neutral-700" />
           </div>
           <div className="sm:col-span-2">
             <label className="mb-1 block text-sm font-medium" htmlFor="ejar_broker_representative">ممثل المكتب</label>
-            <input id="ejar_broker_representative" name="ejar_broker_representative" className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700" />
+            <input id="ejar_broker_representative" name="ejar_broker_representative" defaultValue={held("ejar_broker_representative")} className="w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 outline-none focus:border-brand dark:border-neutral-700" />
           </div>
 
           <fieldset className="sm:col-span-2">
             <legend className="mb-1 text-sm font-medium">هل توجد بنود أو شروط إضافية في عقد منصة إيجار؟</legend>
             <div className="flex items-center gap-4 text-sm">
               <label className="flex items-center gap-1.5">
-                <input type="radio" name="ejar_has_extra_terms" value="yes" className="accent-brand" /> نعم
+                <input type="radio" name="ejar_has_extra_terms" value="yes" defaultChecked={held("ejar_has_extra_terms") === "yes"} className="accent-brand" /> نعم
               </label>
               <label className="flex items-center gap-1.5">
-                <input type="radio" name="ejar_has_extra_terms" value="no" className="accent-brand" /> لا
+                <input type="radio" name="ejar_has_extra_terms" value="no" defaultChecked={held("ejar_has_extra_terms") === "no"} className="accent-brand" /> لا
               </label>
             </div>
           </fieldset>

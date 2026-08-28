@@ -6,29 +6,69 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveOrg } from "@/lib/supabase/active-org";
 import { sarToHalalas } from "@/lib/money";
 import { translateSubscriptionError } from "@/lib/subscription-errors";
+import { refusalAr, type Refusals } from "@/lib/rpc-errors";
 import type { FormState } from "@/lib/form-state";
 
-export type ContractState = { error?: string };
+// The fields a refused contract form must not lose. Read once, echoed once — the same list serves the
+// new-contract form and the draft edit, because they are two views of one record.
+const CONTRACT_FIELDS = [
+  "unit_id", "tenant_id", "contract_kind", "payment_frequency", "start_date", "end_date",
+  "annual_rent", "deposit", "service_fees", "deed_number", "trade_name", "representative_name",
+  "representative_capacity", "representative_id", "representative_phone", "ejar_contract_number",
+  "ejar_broker_office", "ejar_broker_number", "ejar_broker_representative", "ejar_has_extra_terms",
+] as const;
 
-export async function createContract(
-  _prev: ContractState,
-  formData: FormData,
-): Promise<ContractState> {
+const contractValues = (formData: FormData): Record<string, string | null> =>
+  Object.fromEntries(CONTRACT_FIELDS.map((f) => [f, String(formData.get(f) ?? "")]));
+
+// One table per lifecycle step, because the codes belong to different functions. They sit together so
+// that adding a refusal to the database has one obvious place to be answered in Arabic.
+const CONTRACT_REFUSALS: Refusals = [
+  [/contract_number|duplicate key/i, "رقم العقد مستخدم بالفعل. أعد المحاولة."],
+];
+
+const AMEND_REFUSALS: Refusals = [
+  [/CONTRACT_NOT_ACTIVE/i, "لا يمكن تعديل عقد غير نشط"],
+  [/REASON_REQUIRED/i, "السبب مطلوب"],
+  [/INVALID_AMOUNT/i, "أدخل مبلغاً صحيحاً"],
+];
+
+const RENEW_REFUSALS: Refusals = [
+  [/ALREADY_RENEWED/i, "لهذا العقد تجديد قائم بالفعل"],
+  [/CONTRACT_NOT_RENEWABLE/i, "يمكن تجديد العقود النشطة أو المنتهية فقط"],
+  [/END_BEFORE_START/i, "تاريخ النهاية قبل البداية"],
+  [/INVALID_AMOUNT/i, "أدخل الإيجار السنوي الجديد"],
+  ...CONTRACT_REFUSALS,
+];
+
+const PAYMENT_REFUSALS: Refusals = [
+  [/INVALID_AMOUNT/i, "أدخل مبلغاً صحيحاً"],
+  [/CHARGE_NOT_FOUND/i, "الاستحقاق غير موجود"],
+  [/ALREADY_SETTLED/i, "هذا الاستحقاق مسدَّد بالكامل"],
+];
+
+export async function createContract(_prev: FormState, formData: FormData): Promise<FormState> {
   const activeOrg = await getActiveOrg();
-  if (!activeOrg) return { error: "اختر منشأة نشطة أولاً" };
+  // Twenty fields, and until now every refusal emptied all of them. The longest form in the product
+  // was the one place the campaign of returning FormState had skipped — the comment below claimed
+  // "every action", and this one sat above it.
+  const values = contractValues(formData);
+  const bad = (error: string, field?: string): FormState => ({ error, field, values });
+  if (!activeOrg) return bad("اختر منشأة نشطة أولاً");
 
   const unit_id = String(formData.get("unit_id") ?? "");
   const tenant_id = String(formData.get("tenant_id") ?? "");
-  if (!unit_id) return { error: "اختر الوحدة" };
-  if (!tenant_id) return { error: "اختر المستأجر" };
+  if (!unit_id) return bad("اختر الوحدة", "unit_id");
+  if (!tenant_id) return bad("اختر المستأجر", "tenant_id");
 
   const start_date = String(formData.get("start_date") ?? "");
   const end_date = String(formData.get("end_date") ?? "");
-  if (!start_date || !end_date) return { error: "حدّد تاريخي البداية والنهاية" };
-  if (end_date < start_date) return { error: "تاريخ النهاية قبل البداية" };
+  if (!start_date) return bad("حدّد تاريخ البداية", "start_date");
+  if (!end_date) return bad("حدّد تاريخ النهاية", "end_date");
+  if (end_date < start_date) return bad("تاريخ النهاية قبل البداية", "end_date");
 
   const annual = sarToHalalas(String(formData.get("annual_rent") ?? ""));
-  if (annual == null || annual < 0) return { error: "أدخل الإيجار السنوي" };
+  if (annual == null || annual < 0) return bad("أدخل الإيجار السنوي", "annual_rent");
 
   const contract_kind = String(formData.get("contract_kind") ?? "residential");
   const payment_frequency = String(formData.get("payment_frequency") ?? "quarterly");
@@ -60,8 +100,8 @@ export async function createContract(
     .select("property_id")
     .eq("id", unit_id)
     .maybeSingle();
-  if (unitErr) return { error: unitErr.message };
-  if (!unit) return { error: "الوحدة غير موجودة" };
+  if (unitErr) return bad(refusalAr(unitErr.message, CONTRACT_REFUSALS));
+  if (!unit) return bad("الوحدة غير موجودة", "unit_id");
 
   // The contract keeps its own copy of the name: the catalogue entry may later be renamed or
   // retired, and a signed contract must still read the way it was signed.
@@ -103,8 +143,7 @@ export async function createContract(
     .single();
 
   if (error) {
-    if (/contract_number/i.test(error.message)) return { error: "تعذّر توليد رقم العقد. أعد المحاولة." };
-    return { error: translateSubscriptionError(error.message) ?? error.message };
+    return bad(translateSubscriptionError(error.message) ?? refusalAr(error.message, CONTRACT_REFUSALS));
   }
 
   redirect(`/app/contracts/${created.id}`);
@@ -117,23 +156,12 @@ export async function createContract(
 // rent amendment, an early termination, and a payment amount. So each action returns a FormState —
 // the message names its field, and the attempt is handed back.
 
-// The fields a refused draft edit must not lose. Read once, echoed once.
-const DRAFT_FIELDS = [
-  "unit_id", "tenant_id", "contract_kind", "payment_frequency", "start_date", "end_date",
-  "annual_rent", "deposit", "service_fees", "deed_number", "trade_name", "representative_name",
-  "representative_capacity", "representative_id", "representative_phone", "ejar_contract_number",
-  "ejar_broker_office", "ejar_broker_number", "ejar_broker_representative", "ejar_has_extra_terms",
-] as const;
-
-const draftValues = (formData: FormData): Record<string, string | null> =>
-  Object.fromEntries(DRAFT_FIELDS.map((f) => [f, String(formData.get(f) ?? "")]));
-
 // Edit a DRAFT contract. The update is scoped to status='draft' (0 rows otherwise), so an active
 // contract stays immutable exactly as tg_contract_immutable enforces at the DB. RLS (manage_data) gates it.
 export async function updateDraftContract(_prev: FormState, formData: FormData): Promise<FormState> {
   const contract_id = String(formData.get("contract_id") ?? "");
   if (!contract_id) return { error: "عقد غير معروف" };
-  const values = draftValues(formData);
+  const values = contractValues(formData);
   const bad = (error: string, field?: string): FormState => ({ error, field, values });
 
   const unit_id = String(formData.get("unit_id") ?? "");
@@ -199,10 +227,7 @@ export async function updateDraftContract(_prev: FormState, formData: FormData):
     .eq("id", contract_id)
     .eq("status", "draft")
     .select("id");
-  if (error) {
-    const msg = /contract_number|duplicate key/i.test(error.message) ? "رقم العقد مستخدم بالفعل" : error.message;
-    return bad(msg);
-  }
+  if (error) return bad(refusalAr(error.message, CONTRACT_REFUSALS));
   // Zero rows is not an error at the database: the status='draft' filter simply matched nothing,
   // which means the contract was activated while this form was open.
   if (!data || data.length === 0) return bad("لا يمكن تعديل عقد بعد تفعيله");
@@ -214,9 +239,10 @@ export async function updateDraftContract(_prev: FormState, formData: FormData):
 // pressed — and the page underneath refreshes into its activated shape.
 export async function activateContract(_prev: FormState, formData: FormData): Promise<FormState> {
   const contract_id = String(formData.get("contract_id") ?? "");
+  if (!contract_id) return { error: "عقد غير معروف" };
   const supabase = await createClient();
   const { error } = await supabase.rpc("activate_contract", { p_contract: contract_id });
-  if (error) return { error: error.message };
+  if (error) return { error: refusalAr(error.message, CONTRACT_REFUSALS) };
   revalidatePath(`/app/contracts/${contract_id}`);
   return { ok: "فُعِّل العقد وتولّد جدول الاستحقاقات." };
 }
@@ -227,21 +253,11 @@ export async function issueInvoice(_prev: FormState, formData: FormData): Promis
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("issue_invoice", { p_charge: charge_id });
   if (error) {
-    const msg = /ALREADY_INVOICED/i.test(error.message)
-      ? "توجد فاتورة لهذا الاستحقاق بالفعل"
-      : error.message;
-    return { error: msg };
+    return { error: refusalAr(error.message, [[/ALREADY_INVOICED/i, "توجد فاتورة لهذا الاستحقاق بالفعل"]]) };
   }
   // The issued invoice is a destination, not a message: the office goes to read it.
   redirect(`/app/invoices/${data}`);
 }
-
-const AMEND_ERRORS: Array<[RegExp, string]> = [
-  [/CONTRACT_NOT_ACTIVE/i, "لا يمكن تعديل عقد غير نشط"],
-  [/REASON_REQUIRED/i, "السبب مطلوب"],
-  [/INVALID_AMOUNT/i, "أدخل مبلغاً صحيحاً"],
-];
-const amendError = (m: string) => AMEND_ERRORS.find(([re]) => re.test(m))?.[1] ?? m;
 
 // A rent amendment is written in three fields — an amount, a date, and a sentence the office composes
 // in its own words. Losing that sentence to a redirect is the whole reason this campaign exists.
@@ -266,7 +282,7 @@ export async function amendRent(_prev: FormState, formData: FormData): Promise<F
     p_effective: effective,
     p_reason: reason,
   });
-  if (error) return bad(amendError(error.message));
+  if (error) return bad(refusalAr(error.message, AMEND_REFUSALS));
   revalidatePath(`/app/contracts/${contract_id}`);
   return { ok: "سُجِّل ملحق تعديل الإيجار وأُعيد تسعير الاستحقاقات المستقبلية." };
 }
@@ -287,19 +303,10 @@ export async function terminateContract(_prev: FormState, formData: FormData): P
     p_effective: effective,
     p_reason: reason,
   });
-  if (error) return bad(amendError(error.message));
+  if (error) return bad(refusalAr(error.message, AMEND_REFUSALS));
   revalidatePath(`/app/contracts/${contract_id}`);
   return { ok: "أُنهي العقد وأُلغيت الاستحقاقات المستقبلية غير المدفوعة." };
 }
-
-const RENEW_ERRORS: Array<[RegExp, string]> = [
-  [/ALREADY_RENEWED/i, "لهذا العقد تجديد قائم بالفعل"],
-  [/CONTRACT_NOT_RENEWABLE/i, "يمكن تجديد العقود النشطة أو المنتهية فقط"],
-  [/END_BEFORE_START/i, "تاريخ النهاية قبل البداية"],
-  [/INVALID_AMOUNT/i, "أدخل الإيجار السنوي الجديد"],
-  [/contract_number|duplicate key/i, "رقم العقد مستخدم بالفعل"],
-];
-const renewError = (m: string) => RENEW_ERRORS.find(([re]) => re.test(m))?.[1] ?? m;
 
 export async function renewContract(_prev: FormState, formData: FormData): Promise<FormState> {
   const source_id = String(formData.get("contract_id") ?? "");
@@ -326,7 +333,7 @@ export async function renewContract(_prev: FormState, formData: FormData): Promi
     p_end: end,
     p_new_annual: newAnnual,
   });
-  if (error) return bad(translateSubscriptionError(error.message) ?? renewError(error.message));
+  if (error) return bad(translateSubscriptionError(error.message) ?? refusalAr(error.message, RENEW_REFUSALS));
   // The renewal draft is a destination: it was created to be reviewed, so we open it.
   redirect(`/app/contracts/${data}`);
 }
@@ -336,7 +343,7 @@ export async function activateRenewal(_prev: FormState, formData: FormData): Pro
   if (!contract_id) return { error: "عقد غير معروف" };
   const supabase = await createClient();
   const { error } = await supabase.rpc("activate_renewal", { p_new: contract_id });
-  if (error) return { error: renewError(error.message) };
+  if (error) return { error: refusalAr(error.message, RENEW_REFUSALS) };
   revalidatePath(`/app/contracts/${contract_id}`);
   return { ok: "فُعِّل التجديد وأُنهي العقد السابق." };
 }
@@ -357,7 +364,7 @@ export async function recordPayment(_prev: FormState, formData: FormData): Promi
     p_amount_halalas: amount,
     p_method: method,
   });
-  if (error) return { error: error.message, values };
+  if (error) return { error: refusalAr(error.message, PAYMENT_REFUSALS), values };
   revalidatePath(`/app/contracts/${contract_id}`);
   return { ok: "سُجِّلت الدفعة." };
 }
