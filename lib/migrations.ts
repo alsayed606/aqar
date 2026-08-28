@@ -87,4 +87,5 @@ export const EXPECTED_MIGRATIONS: ExpectedMigration[] = [
   { version: "0080", name: "0080_photo_erasure_sweep" },
   { version: "0081", name: "0081_platform_activity_scope" },
   { version: "0082", name: "0082_abandon_payment_intent" },
+  { version: "0083", name: "0083_set_owner_fee" },
 ];

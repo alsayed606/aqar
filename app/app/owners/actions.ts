@@ -9,12 +9,34 @@ import { normalizeSaudiPhone } from "@/lib/phone";
 import { parseArabicNumber } from "@/lib/num";
 import { sarToHalalas } from "@/lib/money";
 import { archiveRecord } from "@/lib/archive";
-import { rpcErrorAr } from "@/lib/rpc-errors";
-import { WRITE_REFUSED_AR, writeRefused } from "@/lib/rpc-errors";
+import { rpcErrorAr, refusalAr, WRITE_REFUSED_AR, writeRefused, type Refusals } from "@/lib/rpc-errors";
 import type { FormState } from "@/lib/form-state";
 
 export type OwnerState = { error?: string; ok?: boolean };
 export type OwnerInviteState = { error?: string; link?: string };
+
+const OWNER_REFUSALS: Refusals = [
+  [/owner_iban_chk|iban/i, "الآيبان غير صالح (SA ثم 22 رقماً)"],
+  [/duplicate key/i, "هذا المالك مسجَّل بالفعل"],
+];
+
+const FEE_REFUSALS: Refusals = [
+  [/INVALID_PERCENTAGE/i, "نسبة غير صالحة (0–100)"],
+  [/OWNER_NOT_FOUND/i, "المالك غير موجود"],
+  // The database refused to retire the old agreement, so it undid the new one rather than leave two
+  // live. The office needs to know the fee did NOT change — silence here would be the worse answer.
+  [/FEE_UPDATE_REFUSED/i, "لم تُحفظ النسبة: السجل خارج نطاق صلاحيتك. تواصل مع مدير المنشأة."],
+];
+
+/**
+ * Today, in Riyadh.
+ *
+ * `new Date().toISOString()` is UTC, and between midnight and 3am local that is still yesterday — so
+ * an office recording a payout late at night dated it a day early. Every other place in the product
+ * that needs "today" says Asia/Riyadh explicitly (0072 does it in SQL); this one did not.
+ */
+const riyadhToday = () =>
+  new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
 
 // Soft-delete an owner. Refused by 0067 while they still hold properties, and refused outright for
 // the org's own self-owner — that one is the office itself, and invoices read its tax identity.
@@ -86,7 +108,7 @@ export async function createOwner(
     })
     .select("id")
     .single();
-  if (partyErr) return { error: partyErr.message };
+  if (partyErr) return { error: refusalAr(partyErr.message, []) };
 
   const { error: ownerErr } = await supabase.from("owner").insert({
     org_id: activeOrg,
@@ -96,7 +118,15 @@ export async function createOwner(
     iban,
     bank_name,
   });
-  if (ownerErr) return { error: ownerErr.message };
+  if (ownerErr) {
+    // The party exists and nothing points at it. Worse than the other orphans this codebase has
+    // grown: the owners list joins through `owner`, so the row is reachable from no screen at all —
+    // a name, a national id and a phone number sitting in the database with no way to see or erase
+    // them. Whatever creates a row before a step that can fail owns the cleanup.
+    const { error: cleanupError } = await supabase.from("party").delete().eq("id", party.id);
+    if (cleanupError) console.error("[owners] orphan party", party.id, cleanupError.message);
+    return { error: refusalAr(ownerErr.message, OWNER_REFUSALS) };
+  }
 
   revalidatePath("/app/owners");
   return { ok: true };
@@ -124,7 +154,7 @@ export async function recordRemittance(_prev: FormState, formData: FormData): Pr
   }
 
   const method = String(formData.get("method") ?? "bank_transfer");
-  const remitted_at = typed.remitted_at.trim() || new Date().toISOString().slice(0, 10);
+  const remitted_at = typed.remitted_at.trim() || riyadhToday();
 
   const supabase = await createClient();
   const { error } = await supabase.from("owner_remittance").insert({
@@ -183,22 +213,18 @@ export async function setOwnerFee(_prev: FormState, formData: FormData): Promise
   }
   const fraction = Math.round((pct / 100) * 10000) / 10000; // numeric(5,4)
 
+  // One call, one transaction (0083). This used to retire the old agreement and insert the new one
+  // as two separate statements with nothing between them: whichever half failed alone left the owner
+  // with two live fee agreements or none, and the retire was never even checked — an RLS refusal
+  // matches zero rows and raises nothing.
   const supabase = await createClient();
-  await supabase
-    .from("management_agreement")
-    .update({ deleted_at: new Date().toISOString(), deleted_reason: "fee_update" })
-    .eq("owner_id", owner_id)
-    .eq("fee_model", "percentage_of_collection")
-    .is("deleted_at", null);
-
-  const { error } = await supabase.from("management_agreement").insert({
-    org_id: activeOrg,
-    owner_id,
-    valid_from: new Date().toISOString().slice(0, 10),
-    fee_model: "percentage_of_collection",
-    fee_percentage: fraction,
+  const { error } = await supabase.rpc("set_owner_fee", {
+    p_owner: owner_id,
+    p_percentage: fraction,
   });
-  if (error) return { error: error.message, values: { percent: raw } };
+  if (error) {
+    return { error: refusalAr(error.message, FEE_REFUSALS), field: "percent", values: { percent: raw } };
+  }
 
   revalidatePath(`/app/owners/${owner_id}`);
   return { ok: "حُفظت نسبة الأتعاب." };
