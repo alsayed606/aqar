@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Badge } from "@/components/ui";
-import { OwnerPortalInvite } from "@/components/owner-portal-invite";
 
 export type OwnerCardData = {
   id: string;
@@ -113,7 +112,9 @@ export function OwnerCard({ owner }: { owner: OwnerCardData }) {
           <Icon path={<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></>} />
           كشف الحساب
         </Link>
-        {!owner.is_self && <OwnerPortalInvite ownerId={owner.id} />}
+        {/* The portal invitation moved to the owner's own page (0085), where the tenant's has always
+            lived. It is no longer one button but a state — sent, opened, linked, expired — and a
+            list card is the wrong place to read a lifecycle. The card already links there. */}
       </div>
     </article>
   );

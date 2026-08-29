@@ -15,7 +15,8 @@ import { FormDrawer } from "@/components/form-drawer";
 import { Badge } from "@/components/ui";
 import { EntityTimeline, type TimelineEvent } from "@/components/entity-timeline";
 import { isoDaysAgo } from "@/lib/dates";
-import { OwnerPortalInvite } from "@/components/owner-portal-invite";
+import { PortalInvitePanel, type InviteState } from "@/components/portal-invite-panel";
+import { getCapabilities } from "@/lib/capabilities";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,7 @@ export default async function OwnerDetail({
 
   const { data: owner } = await supabase
     .from("owner")
-    .select("id, is_self, iban, bank_name, vat_number, cr_number, party:party_id(display_name, national_id, phone_e164)")
+    .select("id, is_self, iban, bank_name, vat_number, cr_number, party:party_id(id, display_name, national_id, phone_e164, email)")
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();
@@ -89,6 +90,19 @@ export default async function OwnerDetail({
 
   const party = first((owner as any).party);
   const ownerName = owner.is_self ? "المنشأة (مالك ذاتي)" : party?.display_name;
+
+  // Portal access (0074/0075), read exactly as the tenant page reads it. It degrades to "no
+  // invitation" rather than breaking the page, because this call is new here and an older database
+  // is a state the office should be able to look at, not a crash.
+  const caps = await getCapabilities(activeOrg);
+  const canEdit = caps.has("manage_data");
+  const { data: inviteRows } = await supabase.rpc("portal_invitation_state", {
+    p_party: party?.id ?? "",
+  });
+  const invite: InviteState = (first(inviteRows as any) as InviteState | undefined) ?? {
+    state: "none", sent_at: null, sent_channel: null, sent_to: null, sent_message_id: null,
+    opened_at: null, expires_at: null, linked: false,
+  };
   const currentPct = feeAgr?.fee_percentage != null ? Number(feeAgr.fee_percentage) * 100 : 0;
   const rows = (stmt ?? []) as StmtRow[];
 
@@ -182,10 +196,19 @@ export default async function OwnerDetail({
           />
         )}
 
+        {/* The same panel the tenant screen uses. It was written against a PARTY, not a tenant, so
+            the owner side needed no second version of it — only a caller. And the lifecycle behind
+            it (0074/0075) always covered owner_portal; it was this page that kept knocking on the
+            old door from 0028. */}
         {!owner.is_self && (
           <div className="mt-4 border-t border-neutral-100 pt-4 dark:border-neutral-800">
             <p className="mb-2 text-xs text-neutral-500">بوابة المالك — دخول ذاتي للاطّلاع على الكشوف والتوريدات</p>
-            <OwnerPortalInvite ownerId={owner.id} />
+            <PortalInvitePanel
+              partyId={party?.id ?? ""}
+              invite={invite}
+              canManage={canEdit}
+              hasEmail={!!party?.email}
+            />
           </div>
         )}
               </div>

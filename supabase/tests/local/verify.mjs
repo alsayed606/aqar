@@ -153,6 +153,16 @@ try {
      where ns.nspname = 'app' and pr.proname = 'link_party_identity'`);
   ok('10 link_party_identity no longer exists', backDoor.n === 0);
 
+  // Its twin, removed by 0085. 0074 shut one door into app.party.identity_id and left this one
+  // standing: accept_owner_invitation was SECURITY DEFINER, granted to `authenticated`, callable
+  // straight through PostgREST, and asked only whether the party was already linked to SOMEONE —
+  // never whether the account accepting was the one invited. An owner's link in the wrong hands
+  // bought that owner's statements, remittances and IBAN.
+  const ownerDoor = await one(`select count(*)::int as n from pg_proc pr
+     join pg_namespace ns on ns.oid = pr.pronamespace
+     where ns.nspname = 'app' and pr.proname in ('accept_owner_invitation', 'create_owner_invitation')`);
+  ok('10 the owner-portal invite door from 0028 no longer exists', ownerDoor.n === 0);
+
   // Accept as a given login, with the contact claims the auth provider would have verified.
   // Committed rather than rolled back: later assertions read the link that acceptance wrote.
   const acceptAs = async (sub, claims, token) => {
