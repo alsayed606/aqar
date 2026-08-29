@@ -13665,8 +13665,11 @@ update app.owner
  where iban is not null
    and iban <> upper(regexp_replace(iban, '\s', '', 'g'));
 
+-- search_path pinned like every other trigger function here (0067, 0078). Nothing in this body
+-- resolves outside pg_catalog today, which is exactly why it would be easy to leave off and easy to
+-- regret: the next line someone adds to it inherits whatever path the caller happened to have.
 create or replace function app.tg_owner_normalise_iban() returns trigger
-language plpgsql as $$
+language plpgsql security definer set search_path = app, pg_temp as $$
 begin
   if new.iban is not null then
     new.iban := upper(regexp_replace(new.iban, '\s', '', 'g'));

@@ -83,6 +83,18 @@ try {
   await q("update app.owner set iban = 'sa03 8000 0000 6080 1016 7519' where id = $1", [clean.id]);
   ok("an edit is normalised the same way an insert is",
     (await one("select iban from app.owner where id=$1", [clean.id])).iban === GOOD);
+
+  // ---------------- 4. The property the migration's whole risk profile rests on ----------------
+  // NOT VALID is why 0086 applies to a live database at all: it does not scan what is already there,
+  // so one owner recorded years ago with a wrong number cannot stop the migration. The harness
+  // reaches this table empty and can never demonstrate that by inserting — but the flag that grants
+  // it is readable, and it is the thing that would be silently wrong if the `not valid` were ever
+  // dropped from the ALTER during an edit.
+  const constraint = await one(
+    `select convalidated from pg_constraint where conname = 'owner_iban_chk'`);
+  ok("the check exists", constraint !== undefined);
+  ok("and it is NOT VALID, so existing rows were never scanned",
+    constraint?.convalidated === false, String(constraint?.convalidated));
 } catch (e) {
   fail++;
   console.log("  FAIL  suite aborted -> " + (e?.message ?? e));
