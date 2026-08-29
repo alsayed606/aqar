@@ -91,18 +91,22 @@ export default async function OwnerDetail({
   const party = first((owner as any).party);
   const ownerName = owner.is_self ? "المنشأة (مالك ذاتي)" : party?.display_name;
 
-  // Portal access (0074/0075), read exactly as the tenant page reads it. It degrades to "no
-  // invitation" rather than breaking the page, because this call is new here and an older database
-  // is a state the office should be able to look at, not a crash.
+  // Portal access (0074/0075). Asked only when there is a panel to fill: the self-owner is the
+  // office itself and never gets one, and an id-less party would send "" to a uuid argument — a
+  // guaranteed failure on every visit, swallowed, to populate something nobody renders.
   const caps = await getCapabilities(activeOrg);
   const canEdit = caps.has("manage_data");
-  const { data: inviteRows } = await supabase.rpc("portal_invitation_state", {
-    p_party: party?.id ?? "",
-  });
-  const invite: InviteState = (first(inviteRows as any) as InviteState | undefined) ?? {
+  const noInvite: InviteState = {
     state: "none", sent_at: null, sent_channel: null, sent_to: null, sent_message_id: null,
     opened_at: null, expires_at: null, linked: false,
   };
+  let invite = noInvite;
+  if (!owner.is_self && party?.id) {
+    // Degrades to "no invitation" rather than breaking the page: this call is new here, and an
+    // older database is a state the office should be able to look at, not a crash.
+    const { data: inviteRows } = await supabase.rpc("portal_invitation_state", { p_party: party.id });
+    invite = (first(inviteRows as any) as InviteState | undefined) ?? noInvite;
+  }
   const currentPct = feeAgr?.fee_percentage != null ? Number(feeAgr.fee_percentage) * 100 : 0;
   const rows = (stmt ?? []) as StmtRow[];
 

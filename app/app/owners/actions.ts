@@ -14,9 +14,17 @@ import type { FormState } from "@/lib/form-state";
 
 export type OwnerState = { error?: string; ok?: boolean };
 
+// One entry, and it names a constraint that exists: `unique (org_id, party_id)` on app.owner, which
+// Postgres calls owner_org_id_party_id_key.
+//
+// It had two. The other matched /iban/i and would have claimed any message merely mentioning the
+// column — a permission error, a network failure quoting the query — and told the office their IBAN
+// was malformed when it was not. Worse, app.owner has no IBAN check at all (0066 added one to
+// app.organization only), so it guarded nothing while being able to mistranslate anything. A
+// refusal table that guesses is worse than one that falls through: a confident wrong answer is the
+// one nobody questions.
 const OWNER_REFUSALS: Refusals = [
-  [/owner_iban_chk|iban/i, "الآيبان غير صالح (SA ثم 22 رقماً)"],
-  [/duplicate key/i, "هذا المالك مسجَّل بالفعل"],
+  [/owner_org_id_party_id/i, "هذا المالك مسجَّل بالفعل"],
 ];
 
 const FEE_REFUSALS: Refusals = [
@@ -38,12 +46,6 @@ export async function deleteOwner(formData: FormData) {
   revalidatePath("/app/owners");
   redirect("/app/owners");
 }
-
-// createOwnerInvite is gone (0085). It called create_owner_invitation, which minted a token without
-// retiring the live one — so 0075's one-live-invitation index refused the second click outright —
-// and handed back a link for the office to copy by hand. The owners screen now uses the same actions
-// the tenant screen does: sendPortalInvite / revokePortalInvite / unlinkPortalAccount, keyed on the
-// party. Nothing needed writing for that; the panel and the lifecycle were already party-shaped.
 
 export async function createOwner(
   _prev: OwnerState,
@@ -82,7 +84,10 @@ export async function createOwner(
     })
     .select("id")
     .single();
-  if (partyErr) return { error: refusalAr(partyErr.message, []) };
+  // The same table: this insert carries the national id and the phone, and its constraints are the
+  // ones the office is most likely to trip. Passing an empty list here would have sent a duplicate
+  // national id back as "تعذّر إتمام العملية" while the very next call knew how to name it.
+  if (partyErr) return { error: refusalAr(partyErr.message, OWNER_REFUSALS) };
 
   const { error: ownerErr } = await supabase.from("owner").insert({
     org_id: activeOrg,
