@@ -14,16 +14,16 @@ import type { FormState } from "@/lib/form-state";
 
 export type OwnerState = { error?: string; ok?: boolean };
 
-// One entry, and it names a constraint that exists: `unique (org_id, party_id)` on app.owner, which
-// Postgres calls owner_org_id_party_id_key.
-//
-// It had two. The other matched /iban/i and would have claimed any message merely mentioning the
-// column — a permission error, a network failure quoting the query — and told the office their IBAN
-// was malformed when it was not. Worse, app.owner has no IBAN check at all (0066 added one to
-// app.organization only), so it guarded nothing while being able to mistranslate anything. A
-// refusal table that guesses is worse than one that falls through: a confident wrong answer is the
-// one nobody questions.
+// Every pattern here names a constraint that exists. That is not pedantry: this table briefly held
+// `/iban/i`, which would have claimed any message merely mentioning the column — a permission error,
+// a network failure quoting the query — and told the office their IBAN was malformed when it was
+// not, while guarding a constraint that did not yet exist. A refusal table that guesses is worse
+// than one that falls through to the generic sentence: a confident wrong answer is not questioned.
 const OWNER_REFUSALS: Refusals = [
+  // 0086. NOT VALID, so this also fires when an owner recorded before it is edited at all — the
+  // message has to send the reader to the IBAN even when they came to change a name.
+  [/owner_iban_chk/i, "الآيبان غير صالح — يبدأ بـSA ويليه ٢٢ رقماً. صحّحه قبل حفظ بقية البيانات."],
+  // unique (org_id, party_id) on app.owner; Postgres names it owner_org_id_party_id_key.
   [/owner_org_id_party_id/i, "هذا المالك مسجَّل بالفعل"],
 ];
 

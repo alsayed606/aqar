@@ -90,4 +90,5 @@ export const EXPECTED_MIGRATIONS: ExpectedMigration[] = [
   { version: "0083", name: "0083_set_owner_fee" },
   { version: "0084", name: "0084_set_member_scope" },
   { version: "0085", name: "0085_close_owner_invite_door" },
+  { version: "0086", name: "0086_owner_iban_check" },
 ];
